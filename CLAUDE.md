@@ -354,9 +354,30 @@ Full spec: `/Users/gowthambandi/flutters/trainersHQ/DESIGN_SYSTEM.md`.
      fixed SubscriptionPlanModel.toMap() (nested `limits` map + title/months/duration
      + flat back-compat), which trainersHQ + the verifyAndActivateSubscription CF read
      correctly. Plan writes allowed by the `subscription_plans` rule (super-admin).
-  ⏳ Migrate the remaining PAGE screens onto the tokens (nav order): Trainers,
-     Clients, Payments, Coupons — still default Material/greys.
-  ⏳ Resolve super-admin overlap with trainersHQ
+  ✅ TRAINERS screen rebuilt — READ-ONLY observer (search, status-filter chips with
+     counts, org via getAdminName, details dialog). Founder doesn't create trainers
+     (that's the createTrainer CF). Deleted trainer_form_dialog.dart.
+  ✅ MEMBERS (Clients) screen rebuilt — READ-ONLY observer (search, active/inactive
+     filter, trainer+org names, active/verified pills, details dialog). Founder can't
+     write clients per rules.
+  ✅ PAYMENTS screen rebuilt — revenue ledger from admin_payments_history: KPI cards
+     (total/this-month+growth/week/today), plan filter, search, transaction list.
+  ✅ COUPONS screen rebuilt — full CRUD (create/edit dialog, %/₹ toggle, date pickers,
+     activate switch, disable). FIXED drift: collection master_coupons -> `coupon_codes`
+     (rules-allowed + read by trainersHQ previewCoupon CF); CouponModel now also writes
+     canonical type/value/expiresAt alongside its own fields.
+  ✅ WHOLE PROJECT lint-clean: `flutter analyze lib` -> No issues found.
+  ⏳ Resolve super-admin overlap with trainersHQ (in-app console vs this web console).
+  ⏳ (Later) Move privileged writes behind Cloud Functions where applicable; auto-expire
+     scheduled CF; Tier-2 membership design.
+
+## CONSOLE STATUS: all 7 nav sections built on the design system with real data.
+   Dashboard · Organizations(+moderation) · Trainers · Members · Subscriptions ·
+   Payments · Coupons. Secure claims-based login + shell. Remaining items are
+   platform-wide (CFs, Tier-2), not console screens.
+   ⚠️ main.dart MasterAdminBootstrap MUST Get.put ALL page controllers permanent
+   (AdminRoot, Dashboard, Admin, Trainer, Client, Coupon, Subscription, Payments) —
+   the page factory uses Get.find, so a missing one crashes that page on open.
 
 ---
 

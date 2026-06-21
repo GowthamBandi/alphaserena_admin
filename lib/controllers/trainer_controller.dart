@@ -216,7 +216,7 @@ class TrainerController extends GetxController {
   void _syncAdminCache() {
     final ids = trainers
         .map((e) => e.assignedBy)
-        .where((e) => e != null && e!.isNotEmpty)
+        .where((e) => e != null && e.isNotEmpty)
         .cast<String>()
         .toSet()
         .toList();

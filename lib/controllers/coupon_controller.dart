@@ -32,8 +32,9 @@ class CouponController extends GetxController {
   // TRACK WHICH DOCUMENT IS BEING EDITED
   RxString editDocId = "".obs;
 
-  // FIRESTORE COLLECTION NAME
-  final String collectionName = "master_coupons";
+  // FIRESTORE COLLECTION NAME — canonical, shared with trainersHQ (previewCoupon CF)
+  // and allowed by the security rules (super-admin read/write).
+  final String collectionName = "coupon_codes";
 
   @override
   void onInit() {

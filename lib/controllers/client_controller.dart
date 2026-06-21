@@ -110,14 +110,14 @@ class ClientController extends GetxController {
   void _syncCaches() {
     final trainerIds = clients
         .map((c) => c.trainerId)
-        .where((e) => e != null && e!.isNotEmpty)
+        .where((e) => e != null && e.isNotEmpty)
         .cast<String>()
         .toSet()
         .toList();
 
     final adminIds = clients
         .map((c) => c.adminId)
-        .where((e) => e != null && e!.isNotEmpty)
+        .where((e) => e != null && e.isNotEmpty)
         .cast<String>()
         .toSet()
         .toList();

@@ -1,387 +1,417 @@
-// lib/screens/coupon/coupon_code_screen.dart
+// lib/screens/coupon_code_screen.dart
+//
+// Founder-managed discount codes (collection: coupon_codes). Full CRUD —
+// allowed by the security rules (super-admin read/write).
 
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:alphaserena_admin_portel/core/theme/app_colors.dart';
+import 'package:alphaserena_admin_portel/core/theme/app_radii.dart';
+import 'package:alphaserena_admin_portel/core/theme/app_shadows.dart';
+import 'package:alphaserena_admin_portel/core/theme/app_text.dart';
+import 'package:alphaserena_admin_portel/core/widgets/app_text_field.dart';
+import 'package:alphaserena_admin_portel/core/widgets/primary_button.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../controllers/coupon_controller.dart';
-import '../../models/coupon_model.dart';
+import 'package:intl/intl.dart';
+
+import '../controllers/coupon_controller.dart';
+import '../models/coupon_model.dart';
+import '../widgets/page_shell.dart';
+
+const _cActive = Color(0xFF1A7F5A);
+const _cInactive = Color(0xFF9AA0A6);
+const _cExpired = Color(0xFFD4341F);
 
 class CouponCodeScreen extends StatelessWidget {
   CouponCodeScreen({super.key});
 
-  final ctrl = Get.find<CouponController>();
-  final String adminUid =
-      FirebaseAuth.instance.currentUser!.uid; // Replace with real admin UID
+  final CouponController ctrl = Get.find<CouponController>();
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  String _discountText(CouponModel c) => c.isPercentage
+      ? "${c.discountValue.toStringAsFixed(0)}% off"
+      : "₹${c.discountValue.toStringAsFixed(0)} off";
+
+  bool _isExpired(CouponModel c) => c.validTo.isBefore(DateTime.now());
+
+  void _create() {
+    ctrl.clearForm();
+    _openDialog(Get.context!, isEdit: false);
+  }
+
+  void _edit(BuildContext context, CouponModel c) {
+    ctrl.loadForEdit(c);
+    _openDialog(context, isEdit: true);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xfff7f8fa),
-      body: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _header(),
-            const SizedBox(height: 20),
-
-            _searchBar(),
-            const SizedBox(height: 20),
-
-            Expanded(child: _couponTable()),
-          ],
-        ),
+    return PageShell(
+      title: "Coupons",
+      icon: Icons.discount_outlined,
+      trailing: ElevatedButton.icon(
+        onPressed: _create,
+        icon: const Icon(Icons.add, size: 18),
+        label: const Text("New coupon"),
+        style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
       ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  Widget _header() {
-    return Row(
-      children: [
-        const Text(
-          "Coupon Codes",
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-        ),
-        const Spacer(),
-        ElevatedButton.icon(
-          onPressed: () => _openCreate(),
-          icon: const Icon(Icons.add),
-          label: const Text("Create Coupon"),
-        ),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  Widget _searchBar() {
-    return SizedBox(
-      width: 300,
-      child: TextField(
-        decoration: InputDecoration(
-          prefixIcon: const Icon(Icons.search),
-          hintText: "Search coupon...",
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        onChanged: (v) => ctrl.searchQuery.value = v,
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  Widget _couponTable() {
-    return Obx(() {
-      if (ctrl.isLoading.value) {
-        return const Center(child: CircularProgressIndicator());
-      }
-
-      final data = ctrl.coupons.where((c) {
-        final q = ctrl.searchQuery.value.toLowerCase();
-        return c.code.toLowerCase().contains(q) ||
-            c.description.toLowerCase().contains(q);
-      }).toList();
-
-      if (data.isEmpty) {
-        return const Center(child: Text("No coupons found"));
-      }
-
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: _card(),
-        child: Column(
-          children: [
-            _tableHeader(),
-            const Divider(),
-
-            Expanded(
-              child: ListView.builder(
-                itemCount: data.length,
-                itemBuilder: (_, i) => _row(data[i]),
-              ),
-            ),
-          ],
-        ),
-      );
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  Widget _tableHeader() {
-    return Row(
-      children: const [
-        Expanded(child: Text("Code", style: _hdr)),
-        Expanded(child: Text("Discount", style: _hdr)),
-        Expanded(child: Text("Usage", style: _hdr)),
-        Expanded(child: Text("Validity", style: _hdr)),
-        Expanded(child: Text("Status", style: _hdr)),
-        SizedBox(width: 80),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  Widget _row(CouponModel c) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: Text(c.code, style: _rowTxt)),
-          Expanded(child: Text(_discountText(c), style: _rowTxt)),
-          Expanded(child: Text("${c.usedCount}/${c.maxUsage}", style: _rowTxt)),
-          Expanded(
-            child: Text(
-              "${_fmt(c.validFrom)} → ${_fmt(c.validTo)}",
-              style: _rowTxt,
+          TextField(
+            controller: _searchCtrl,
+            onChanged: (v) => ctrl.searchQuery.value = v,
+            decoration: InputDecoration(
+              hintText: "Search coupon codes…",
+              prefixIcon:
+                  Icon(Icons.search, color: context.palette.textMuted),
+              filled: true,
+              fillColor: context.palette.surface,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: AppRadii.smR,
+                  borderSide: BorderSide(color: context.palette.border)),
             ),
           ),
-          Expanded(child: _statusBadge(c)),
-          Row(
-            children: [
-              IconButton(
-                onPressed: () => _openEdit(c),
-                icon: const Icon(Icons.edit),
-              ),
-              IconButton(
-                onPressed: () => ctrl.deleteCoupon(c.id),
-                icon: const Icon(Icons.delete, color: Colors.red),
-              ),
-            ],
-          ),
+          const SizedBox(height: 16),
+          Obx(() {
+            if (ctrl.isLoading.value && ctrl.coupons.isEmpty) {
+              return const SizedBox(
+                  height: 220,
+                  child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2.4)));
+            }
+            final q = ctrl.searchQuery.value.toLowerCase();
+            final list = ctrl.coupons
+                .where((c) =>
+                    q.isEmpty ||
+                    c.code.toLowerCase().contains(q) ||
+                    c.description.toLowerCase().contains(q))
+                .toList();
+            if (list.isEmpty) return _empty(context);
+            return Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                for (final c in list)
+                  SizedBox(width: 360, child: _card(context, c)),
+              ],
+            );
+          }),
         ],
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  Widget _statusBadge(CouponModel c) {
-    bool expired = DateTime.now().isAfter(c.validTo);
-    final active = c.isActive && !expired;
+  Widget _card(BuildContext context, CouponModel c) {
+    final p = context.palette;
+    final expired = _isExpired(c);
+    final stateColor =
+        !c.isActive ? _cInactive : (expired ? _cExpired : _cActive);
+    final stateText =
+        !c.isActive ? "Disabled" : (expired ? "Expired" : "Active");
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: active ? Colors.green.shade100 : Colors.red.shade100,
-        borderRadius: BorderRadius.circular(12),
+        color: p.surface,
+        borderRadius: AppRadii.cardR,
+        border: Border.all(color: p.border),
+        boxShadow: AppShadows.card(p.isDark),
       ),
-      child: Text(
-        active ? "Active" : "Inactive",
-        style: TextStyle(
-          color: active ? Colors.green.shade700 : Colors.red.shade700,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                  color: p.accent.withValues(alpha: 0.12),
+                  borderRadius: AppRadii.smR),
+              child: Icon(Icons.local_offer_outlined,
+                  color: p.accent, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(c.code,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.title(size: 18)
+                          .copyWith(color: p.textPrimary, letterSpacing: 1)),
+                  Text(_discountText(c),
+                      style: AppText.label(size: 13)
+                          .copyWith(color: p.accent)),
+                ],
+              ),
+            ),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              decoration: BoxDecoration(
+                  color: stateColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999)),
+              child: Text(stateText,
+                  style:
+                      AppText.label(size: 11).copyWith(color: stateColor)),
+            ),
+          ]),
+          if (c.description.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(c.description,
+                style: AppText.body(size: 13).copyWith(color: p.textSecondary)),
+          ],
+          const SizedBox(height: 14),
+          Row(children: [
+            Icon(Icons.event_outlined, size: 14, color: p.textMuted),
+            const SizedBox(width: 6),
+            Text("Till ${DateFormat('d MMM yyyy').format(c.validTo)}",
+                style: AppText.body(size: 12).copyWith(color: p.textMuted)),
+            const Spacer(),
+            Icon(Icons.confirmation_number_outlined,
+                size: 14, color: p.textMuted),
+            const SizedBox(width: 6),
+            Text("${c.usedCount}/${c.maxUsage} used",
+                style: AppText.body(size: 12).copyWith(color: p.textMuted)),
+          ]),
+          const SizedBox(height: 8),
+          Divider(height: 1, color: p.border),
+          Row(children: [
+            const Spacer(),
+            Obx(() {
+              // keep the switch reactive to list updates
+              ctrl.coupons.length;
+              return Switch(
+                value: c.isActive,
+                activeThumbColor: p.accent,
+                onChanged: (_) => ctrl.toggleCoupon(c.docId, c.isActive),
+              );
+            }),
+            IconButton(
+              tooltip: 'Edit',
+              icon: Icon(Icons.edit_outlined, color: p.textMuted, size: 20),
+              onPressed: () => _edit(context, c),
+            ),
+            IconButton(
+              tooltip: 'Disable',
+              icon: const Icon(Icons.delete_outline,
+                  color: _cExpired, size: 20),
+              onPressed: () => _confirmDelete(context, c),
+            ),
+          ]),
+        ],
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  void _openCreate() {
-    ctrl.clearForm();
-    _openFormDialog(isEdit: false);
+  void _confirmDelete(BuildContext context, CouponModel c) {
+    final p = context.palette;
+    Get.dialog(AlertDialog(
+      backgroundColor: p.surface,
+      shape: const RoundedRectangleBorder(borderRadius: AppRadii.lgR),
+      title: const Text("Disable coupon?"),
+      content: Text("“${c.code}” will be turned off and stop working.",
+          style: AppText.body(size: 13).copyWith(color: p.textSecondary)),
+      actions: [
+        TextButton(
+            onPressed: () => Get.back(),
+            child: Text("Cancel", style: TextStyle(color: p.textMuted))),
+        ElevatedButton(
+          onPressed: () {
+            Get.back();
+            ctrl.deleteCoupon(c.docId);
+          },
+          style: ElevatedButton.styleFrom(
+              backgroundColor: _cExpired,
+              foregroundColor: Colors.white,
+              shape:
+                  const RoundedRectangleBorder(borderRadius: AppRadii.mdR)),
+          child: const Text("Disable"),
+        ),
+      ],
+    ));
   }
 
-  void _openEdit(CouponModel c) {
-    ctrl.loadForEdit(c);
-    _openFormDialog(isEdit: true);
-  }
-
-  void _openFormDialog({required bool isEdit}) {
-    Get.dialog(
-      Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
-        child: Container(
-          width: 650,
-          padding: const EdgeInsets.all(28),
-          child: Obx(() {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // TITLE
-                Text(
-                  isEdit ? "Edit Coupon" : "Create Coupon",
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
+  // ── CREATE / EDIT DIALOG ────────────────────────────────────────────
+  void _openDialog(BuildContext context, {required bool isEdit}) {
+    final p = context.palette;
+    Get.dialog(Dialog(
+      backgroundColor: p.background,
+      insetPadding: const EdgeInsets.all(20),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadii.lgR),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(isEdit ? "Edit coupon" : "Create coupon",
+                  style:
+                      AppText.title(size: 20).copyWith(color: p.textPrimary)),
+              const SizedBox(height: 18),
+              AppTextField(
+                controller: ctrl.codeCtrl,
+                label: "Coupon code",
+                icon: Icons.local_offer_outlined,
+                textCapitalization: TextCapitalization.characters,
+              ),
+              const SizedBox(height: 14),
+              AppTextField(
+                controller: ctrl.descCtrl,
+                label: "Description (optional)",
+                icon: Icons.notes,
+              ),
+              const SizedBox(height: 14),
+              Row(children: [
+                Expanded(
+                  child: AppTextField(
+                    controller: ctrl.discountCtrl,
+                    label: "Discount value",
+                    icon: Icons.percent,
+                    keyboardType: TextInputType.number,
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                // FORM FIELDS IN TWO COLUMN GRID
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: ctrl.codeCtrl,
-                        decoration: const InputDecoration(
-                          labelText: "Coupon Code",
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: TextField(
-                        controller: ctrl.discountCtrl,
-                        decoration: const InputDecoration(
-                          labelText: "Discount Value",
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(child: _typeToggle(context)),
+              ]),
+              const SizedBox(height: 14),
+              AppTextField(
+                controller: ctrl.maxUsageCtrl,
+                label: "Max usage",
+                icon: Icons.confirmation_number_outlined,
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 14),
+              Row(children: [
+                Expanded(
+                    child: _dateField(context, "Valid from", ctrl.validFrom)),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: _dateField(context, "Valid to", ctrl.validTo)),
+              ]),
+              const SizedBox(height: 22),
+              Row(children: [
+                TextButton(
+                    onPressed: () => Get.back(),
+                    child: Text("Cancel",
+                        style: TextStyle(color: p.textMuted))),
+                const Spacer(),
+                SizedBox(
+                  width: 170,
+                  child: Obx(() => PrimaryButton(
+                        label: isEdit ? "Update" : "Create",
+                        icon: Icons.check,
+                        isLoading: ctrl.isSaving.value,
+                        onPressed: ctrl.saveCoupon,
+                      )),
                 ),
-                const SizedBox(height: 16),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: ctrl.maxUsageCtrl,
-                        decoration: const InputDecoration(
-                          labelText: "Max Usage Count",
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: TextField(
-                        controller: ctrl.descCtrl,
-                        decoration: const InputDecoration(
-                          labelText: "Description",
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // PERCENTAGE SWITCH
-                SwitchListTile(
-                  title: const Text("Percentage Discount?"),
-                  value: ctrl.isPercentage.value,
-                  onChanged: (v) => ctrl.isPercentage.value = v,
-                  contentPadding: EdgeInsets.zero,
-                ),
-
-                const SizedBox(height: 16),
-
-                // ACTIVE / INACTIVE TOGGLE (NEW)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      "Coupon Active?",
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    Switch(
-                      value: isEdit
-                          ? ctrl.coupons
-                                .firstWhere(
-                                  (x) => x.docId == ctrl.editDocId.value,
-                                )
-                                .isActive
-                          : true,
-                      onChanged: isEdit
-                          ? (value) {
-                              ctrl.toggleCoupon(ctrl.editDocId.value, !value);
-                            }
-                          : null, // disable toggle for new coupon
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // DATE PICKERS
-                Row(
-                  children: [
-                    Expanded(
-                      child: ListTile(
-                        title: Text(
-                          "Valid From: ${_fmt(ctrl.validFrom.value)}",
-                        ),
-                        trailing: const Icon(Icons.calendar_today),
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: Get.context!,
-                            initialDate: ctrl.validFrom.value,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime(2100),
-                          );
-                          if (picked != null) ctrl.validFrom.value = picked;
-                        },
-                      ),
-                    ),
-                    Expanded(
-                      child: ListTile(
-                        title: Text("Valid To: ${_fmt(ctrl.validTo.value)}"),
-                        trailing: const Icon(Icons.calendar_today),
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: Get.context!,
-                            initialDate: ctrl.validTo.value,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime(2100),
-                          );
-                          if (picked != null) ctrl.validTo.value = picked;
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 28),
-
-                // BUTTONS
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Get.back(),
-                      child: const Text("Cancel"),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
-                      onPressed: () => ctrl.saveCoupon(),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 30,
-                          vertical: 14,
-                        ),
-                      ),
-                      child: Text(isEdit ? "Save Changes" : "Create Coupon"),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          }),
+              ]),
+            ],
+          ),
         ),
       ),
+    ));
+  }
+
+  Widget _typeToggle(BuildContext context) {
+    final p = context.palette;
+    Widget opt(String label, bool percent) {
+      return Expanded(
+        child: Obx(() {
+          final sel = ctrl.isPercentage.value == percent;
+          return InkWell(
+            onTap: () => ctrl.isPercentage.value = percent,
+            borderRadius: AppRadii.smR,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: sel ? p.accent.withValues(alpha: 0.12) : p.surface,
+                borderRadius: AppRadii.smR,
+                border: Border.all(color: sel ? p.accent : p.border),
+              ),
+              child: Text(label,
+                  style: AppText.label(size: 13).copyWith(
+                      color: sel ? p.accent : p.textSecondary)),
+            ),
+          );
+        }),
+      );
+    }
+
+    return Row(children: [opt("%", true), const SizedBox(width: 8), opt("₹", false)]);
+  }
+
+  Widget _dateField(BuildContext context, String label, Rx<DateTime> rx) {
+    final p = context.palette;
+    return Obx(() => InkWell(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: rx.value,
+              firstDate: DateTime(2024),
+              lastDate: DateTime(2100),
+            );
+            if (picked != null) rx.value = picked;
+          },
+          borderRadius: AppRadii.smR,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: p.inputFill,
+              borderRadius: AppRadii.smR,
+              border: Border.all(color: p.border),
+            ),
+            child: Row(children: [
+              Icon(Icons.event_outlined, size: 18, color: p.accent),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: AppText.body(size: 11)
+                          .copyWith(color: p.textMuted)),
+                  Text(DateFormat('d MMM yyyy').format(rx.value),
+                      style: AppText.label(size: 13)
+                          .copyWith(color: p.textPrimary)),
+                ],
+              ),
+            ]),
+          ),
+        ));
+  }
+
+  Widget _empty(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 60),
+      alignment: Alignment.center,
+      child: Column(children: [
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: p.accent.withValues(alpha: 0.10)),
+          child: Icon(Icons.discount_outlined, size: 34, color: p.accent),
+        ),
+        const SizedBox(height: 16),
+        Text("No coupons yet",
+            style: AppText.title(size: 18).copyWith(color: p.textPrimary)),
+        const SizedBox(height: 6),
+        Text("Create discount codes gyms can use at checkout.",
+            style: AppText.body(size: 13).copyWith(color: p.textMuted)),
+        const SizedBox(height: 18),
+        ElevatedButton.icon(
+            onPressed: _create,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text("Create coupon")),
+      ]),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  String _discountText(CouponModel c) {
-    return c.isPercentage ? "${c.discountValue}%" : "₹${c.discountValue}";
-  }
-
-  String _fmt(DateTime d) => "${d.day}/${d.month}/${d.year}";
-
-  BoxDecoration _card() => BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(14),
-    boxShadow: [
-      BoxShadow(
-        blurRadius: 12,
-        offset: const Offset(0, 4),
-        color: Colors.black.withOpacity(.06),
-      ),
-    ],
-  );
-
-  static const _hdr = TextStyle(fontWeight: FontWeight.bold, fontSize: 14);
-
-  final _rowTxt = const TextStyle(fontSize: 14);
 }

@@ -50,8 +50,12 @@ class CouponModel {
       code: map["code"] ?? "",
       description: map["description"] ?? "",
 
-      isPercentage: map["isPercentage"] ?? false,
-      discountValue: double.tryParse(map["discountValue"].toString()) ?? 0.0,
+      // Accept either shape: console fields OR trainersHQ canonical (type/value).
+      isPercentage:
+          map["isPercentage"] ?? (map["type"]?.toString() == "percent"),
+      discountValue:
+          double.tryParse((map["discountValue"] ?? map["value"]).toString()) ??
+              0.0,
 
       maxUsage: map["maxUsage"] ?? 0,
       usedCount: map["usedCount"] ?? 0,
@@ -59,7 +63,7 @@ class CouponModel {
       isActive: map["isActive"] ?? true,
 
       validFrom: _toDate(map["validFrom"]),
-      validTo: _toDate(map["validTo"]),
+      validTo: _toDate(map["validTo"] ?? map["expiresAt"]),
 
       createdAt: _toDate(map["createdAt"]),
       updatedAt: _toDate(map["updatedAt"]),
@@ -79,6 +83,8 @@ class CouponModel {
       "uid": uid,
       "code": code,
       "description": description,
+
+      // ── Console fields ──
       "isPercentage": isPercentage,
       "discountValue": discountValue,
       "maxUsage": maxUsage,
@@ -88,6 +94,11 @@ class CouponModel {
       "validTo": validTo.toIso8601String(),
       "createdAt": createdAt.toIso8601String(),
       "updatedAt": updatedAt.toIso8601String(),
+
+      // ── Canonical fields read by trainersHQ's previewCoupon CF ──
+      "type": isPercentage ? "percent" : "flat",
+      "value": discountValue,
+      "expiresAt": Timestamp.fromDate(validTo),
     };
   }
 }
