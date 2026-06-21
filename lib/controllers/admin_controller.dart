@@ -1,15 +1,30 @@
 // lib/controllers/admin_controller.dart
+
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
-import '../models/admin_model.dart';
 import 'package:flutter/material.dart';
+import '../models/admin_model.dart';
 
 class AdminController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // -----------------------------------------------------------
-  // TEXT CONTROLLERS FOR FORM
-  // -----------------------------------------------------------
+  // ============================================================
+  // 🧠 STATE
+  // ============================================================
+  final RxList<AdminModel> admins = <AdminModel>[].obs;
+
+  final RxBool isLoading = false.obs;
+  final RxBool isProcessing = false.obs;
+
+  final RxString search = ''.obs;
+  final RxString statusFilter = 'all'.obs;
+
+  StreamSubscription? _sub;
+
+  // ============================================================
+  // 🧾 FORM CONTROLLERS
+  // ============================================================
   final nameCtrl = TextEditingController();
   final emailCtrl = TextEditingController();
   final phoneCtrl = TextEditingController();
@@ -18,67 +33,92 @@ class AdminController extends GetxController {
   final gstCtrl = TextEditingController();
   final panCtrl = TextEditingController();
 
-  // -----------------------------------------------------------
-  // DROPDOWNS
-  // -----------------------------------------------------------
-  RxString selectedRole = "admin".obs;
-  RxString selectedStatus = "pending".obs;
+  final RxString selectedStatus = "pending".obs;
 
-  // Allowed values (future expandable)
-  final allowedRoles = ["admin", "superAdmin", "owner", "masterAdmin"];
-  final allowedStatus = ["pending", "approved", "blocked", "active"];
+  final List<String> allowedStatus = const [
+    "pending",
+    "active",
+    "blocked",
+    "deleted",
+  ];
 
-  String safeRole(String v) => allowedRoles.contains(v) ? v : allowedRoles.first;
-  String safeStatus(String v) =>
-      allowedStatus.contains(v) ? v : allowedStatus.first;
-
-  // -----------------------------------------------------------
-  // MAIN DATA STREAM
-  // -----------------------------------------------------------
-  RxList<AdminModel> admins = <AdminModel>[].obs;
-  RxBool isLoading = false.obs;
-  RxBool isProcessing = false.obs;
-  RxString search = ''.obs;
-
+  // ============================================================
+  // 🚀 INIT
+  // ============================================================
   @override
   void onInit() {
     super.onInit();
-    listenToAdmins();
+    _listenAdmins();
   }
 
-  void listenToAdmins() {
+  @override
+  void onClose() {
+    _sub?.cancel();
+
+    nameCtrl.dispose();
+    emailCtrl.dispose();
+    phoneCtrl.dispose();
+    orgCtrl.dispose();
+    addressCtrl.dispose();
+    gstCtrl.dispose();
+    panCtrl.dispose();
+
+    super.onClose();
+  }
+
+  // ============================================================
+  // 🔥 REAL-TIME LISTENER
+  // ============================================================
+  void _listenAdmins() {
     isLoading.value = true;
 
-    _db.collection("admins").snapshots().listen((snapshot) {
-      admins.value =
-          snapshot.docs.map((s) => AdminModel.fromSnapshot(s)).toList();
-      isLoading.value = false;
-    });
+    _sub = _db
+        .collection("admins")
+        .orderBy("createdAt", descending: true)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            try {
+              admins.value = snapshot.docs
+                  .map((e) => AdminModel.fromSnapshot(e))
+                  .toList();
+            } catch (e) {
+              debugPrint("Admin parse error: $e");
+            } finally {
+              isLoading.value = false;
+            }
+          },
+          onError: (e) {
+            isLoading.value = false;
+            Get.snackbar("Error", "Failed to load admins");
+          },
+        );
   }
 
-  // -----------------------------------------------------------
-  // FILTERED ADMINS
-  // -----------------------------------------------------------
+  // ============================================================
+  // 🔍 FILTER LOGIC
+  // ============================================================
   List<AdminModel> get filteredAdmins {
-    return admins.where((a) {
-      final q = search.value.toLowerCase();
+    final q = search.value.trim().toLowerCase();
 
-      final matchesSearch = q.isEmpty ||
+    return admins.where((a) {
+      final matchesSearch =
+          q.isEmpty ||
           a.name.toLowerCase().contains(q) ||
           a.email.toLowerCase().contains(q) ||
           a.organizationName.toLowerCase().contains(q);
 
       final matchesStatus =
-          selectedStatus.value == 'all' || a.status == selectedStatus.value;
+          statusFilter.value == "all" || a.status == statusFilter.value;
 
       return matchesSearch && matchesStatus;
     }).toList();
   }
 
-  // -----------------------------------------------------------
-  // FORM HELPERS
-  // -----------------------------------------------------------
-  void loadAdminToForm(AdminModel a) {
+  // ============================================================
+  // 🧾 FORM HELPERS
+  // ============================================================
+  void loadToForm(AdminModel a) {
     nameCtrl.text = a.name;
     emailCtrl.text = a.email;
     phoneCtrl.text = a.phone;
@@ -87,8 +127,9 @@ class AdminController extends GetxController {
     gstCtrl.text = a.gstNumber ?? "";
     panCtrl.text = a.panNumber ?? "";
 
-    selectedRole.value = safeRole(a.role);
-    selectedStatus.value = safeStatus(a.status);
+    selectedStatus.value = allowedStatus.contains(a.status)
+        ? a.status
+        : "pending";
   }
 
   void clearForm() {
@@ -100,52 +141,175 @@ class AdminController extends GetxController {
     gstCtrl.clear();
     panCtrl.clear();
 
-    selectedRole.value = "admin";
     selectedStatus.value = "pending";
   }
 
-  // -----------------------------------------------------------
-  // CRUD
-  // -----------------------------------------------------------
-  Future<void> createAdmin(AdminModel admin) async {
+  String _generateId() => _db.collection("admins").doc().id;
+
+  // ============================================================
+  // ✅ VALIDATION
+  // ============================================================
+  String? _validateForm() {
+    if (nameCtrl.text.trim().isEmpty) return "Name required";
+    if (emailCtrl.text.trim().isEmpty) return "Email required";
+    if (phoneCtrl.text.trim().isEmpty) return "Phone required";
+    if (orgCtrl.text.trim().isEmpty) return "Organization required";
+    return null;
+  }
+
+  // ============================================================
+  // ➕ CREATE ADMIN
+  // ============================================================
+  Future<void> createAdminFromForm() async {
+    final error = _validateForm();
+    if (error != null) {
+      Get.snackbar("Validation", error);
+      return;
+    }
+
     try {
       isProcessing.value = true;
 
-      await _db.collection("admins").doc(admin.docId).set(admin.toMap());
+      final id = _generateId();
+      final now = DateTime.now();
 
-      Get.snackbar("Success", "Admin created successfully");
+      final admin = AdminModel(
+        docId: id,
+        uid: id,
+
+        name: nameCtrl.text.trim(),
+        email: emailCtrl.text.trim(),
+        phone: phoneCtrl.text.trim(),
+        organizationName: orgCtrl.text.trim(),
+
+        role: "admin",
+        status: "pending",
+
+        address: addressCtrl.text.trim(),
+        gstNumber: gstCtrl.text.trim(),
+        panNumber: panCtrl.text.trim(),
+
+        subscription: null,
+
+        subscriptionLimits: AdminSubscriptionLimits.empty(),
+
+        planName: null,
+        planExpiry: null,
+        isSubscriptionActive: false,
+
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await _db.collection("admins").doc(id).set(admin.toMap());
+
+      clearForm();
+      Get.back();
+
+      Get.snackbar("Success", "Admin created");
     } catch (e) {
-      Get.snackbar("Error", "Create failed: $e");
+      Get.snackbar("Error", "$e");
     } finally {
       isProcessing.value = false;
     }
   }
 
-  Future<void> updateAdmin(String id, Map<String, dynamic> data) async {
+  // ============================================================
+  // ✏️ UPDATE ADMIN
+  // ============================================================
+  Future<void> updateAdminFromForm(String docId) async {
+    final error = _validateForm();
+    if (error != null) {
+      Get.snackbar("Validation", error);
+      return;
+    }
+
     try {
       isProcessing.value = true;
 
-      await _db.collection("admins").doc(id).update(data);
+      await _db.collection("admins").doc(docId).update({
+        "name": nameCtrl.text.trim(),
+        "email": emailCtrl.text.trim(),
+        "phone": phoneCtrl.text.trim(),
+        "organizationName": orgCtrl.text.trim(),
+        "address": addressCtrl.text.trim(),
+        "gstNumber": gstCtrl.text.trim(),
+        "panNumber": panCtrl.text.trim(),
+        "status": selectedStatus.value,
+        "updatedAt": DateTime.now().toIso8601String(),
+      });
 
+      Get.back();
       Get.snackbar("Updated", "Admin updated");
     } catch (e) {
-      Get.snackbar("Error", "Update failed: $e");
+      Get.snackbar("Error", "$e");
     } finally {
       isProcessing.value = false;
     }
   }
 
-  Future<void> deleteAdmin(String id) async {
+  // ============================================================
+  // ❌ SOFT DELETE
+  // ============================================================
+  Future<void> deleteAdmin(String docId) async {
     try {
       isProcessing.value = true;
 
-      await _db.collection("admins").doc(id).delete();
+      await _db.collection("admins").doc(docId).update({
+        "status": "deleted",
+        "updatedAt": DateTime.now().toIso8601String(),
+      });
 
-      Get.snackbar("Deleted", "Admin removed");
+      Get.snackbar("Archived", "Admin moved to deleted");
     } catch (e) {
-      Get.snackbar("Error", "Delete failed: $e");
+      Get.snackbar("Error", "$e");
     } finally {
       isProcessing.value = false;
     }
+  }
+
+  // ============================================================
+  // 🔁 STATUS UPDATE
+  // ============================================================
+  Future<void> updateStatus(String docId, String status) async {
+    try {
+      await _db.collection("admins").doc(docId).update({
+        "status": status,
+        "updatedAt": DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      Get.snackbar("Error", "$e");
+    }
+  }
+
+  // ============================================================
+  // 🔥 BULK OPERATIONS (ENTERPRISE)
+  // ============================================================
+  Future<void> bulkUpdateStatus(List<String> ids, String status) async {
+    final batch = _db.batch();
+
+    for (final id in ids) {
+      final ref = _db.collection("admins").doc(id);
+      batch.update(ref, {
+        "status": status,
+        "updatedAt": DateTime.now().toIso8601String(),
+      });
+    }
+
+    await batch.commit();
+  }
+
+  Future<void> bulkDelete(List<String> ids) async {
+    final batch = _db.batch();
+
+    for (final id in ids) {
+      final ref = _db.collection("admins").doc(id);
+      batch.update(ref, {
+        "status": "deleted",
+        "updatedAt": DateTime.now().toIso8601String(),
+      });
+    }
+
+    await batch.commit();
   }
 }

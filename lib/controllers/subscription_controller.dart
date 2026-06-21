@@ -1,122 +1,70 @@
 // lib/controllers/subscription_controller.dart
 
+import 'package:alphaserena_admin_portel/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/subscription_plan_model.dart';
 
 class SubscriptionController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // ---------------------------------------------------------
-  // UI STATE
-  // ---------------------------------------------------------
+  // =========================================================
+  // STATE
+  // =========================================================
   final RxList<SubscriptionPlanModel> plans = <SubscriptionPlanModel>[].obs;
   final RxBool isLoading = false.obs;
   final RxBool isSaving = false.obs;
 
-  // ---------------------------------------------------------
-  // FORM STATE
-  // ---------------------------------------------------------
-  /// Firestore document ID (empty = create mode)
+  // =========================================================
+  // EDIT MODE
+  // =========================================================
   final RxString editingDocId = ''.obs;
-
   bool get isEditMode => editingDocId.value.isNotEmpty;
 
-  /// Stored createdAt for edit mode (must be preserved)
   DateTime? _editingCreatedAt;
 
-  // ---------------------------------------------------------
-  // TEXT CONTROLLERS
-  // ---------------------------------------------------------
-  final titleCtrl = TextEditingController();
+  // =========================================================
+  // FORM CONTROLLERS
+  // =========================================================
+  final planNameCtrl = TextEditingController();
   final priceCtrl = TextEditingController();
   final oldPriceCtrl = TextEditingController();
 
-  final clientLimitCtrl = TextEditingController(text: '0');
-  final trainerLimitCtrl = TextEditingController(text: '0');
-  final exerciseLimitCtrl = TextEditingController(text: '0');
-  final workoutLimitCtrl = TextEditingController(text: '0');
+  // 🔥 LIMITS (FLAT)
+  final maxAdminsCtrl = TextEditingController(text: '1');
+  final maxClientsCtrl = TextEditingController(text: '0');
+  final maxTrainersCtrl = TextEditingController(text: '0');
+  final maxWorkoutPlansCtrl = TextEditingController(text: '0');
+  final maxWorkoutsCtrl = TextEditingController(text: '0');
+  final maxDietPlansCtrl = TextEditingController(text: '0');
 
-  // ---------------------------------------------------------
-  // BILLING DURATION
-  // ---------------------------------------------------------
-  final RxString duration = '1 Month'.obs;
+  // =========================================================
+  // DURATION (INT BASED)
+  // =========================================================
+  final RxInt durationMonths = 1.obs;
 
-  final List<String> durationOptions = const [
-    '1 Month',
-    '3 Months',
-    '6 Months',
-    '12 Months',
-  ];
+  final List<int> durationOptions = const [1, 3, 6, 12];
 
-  // ---------------------------------------------------------
+  // =========================================================
   // FEATURES
-  // ---------------------------------------------------------
+  // =========================================================
   final RxList<String> points = <String>[].obs;
-  final RxList<String> benefits = <String>[].obs;
-
   final RxString pointInput = ''.obs;
-  final RxString benefitInput = ''.obs;
 
+  // =========================================================
+  // INIT
+  // =========================================================
   @override
   void onInit() {
     super.onInit();
     fetchPlans();
   }
 
-  // ---------------------------------------------------------
-  // CLEAR FORM (CREATE MODE)
-  // ---------------------------------------------------------
-  void clearForm() {
-    editingDocId.value = '';
-    _editingCreatedAt = null;
-
-    titleCtrl.clear();
-    priceCtrl.clear();
-    oldPriceCtrl.clear();
-
-    clientLimitCtrl.text = '0';
-    trainerLimitCtrl.text = '0';
-    exerciseLimitCtrl.text = '0';
-    workoutLimitCtrl.text = '0';
-
-    duration.value = '1 Month';
-
-    points.clear();
-    benefits.clear();
-  }
-
-  // ---------------------------------------------------------
-  // LOAD PLAN FOR EDIT
-  // ---------------------------------------------------------
-  void loadPlanForEdit(SubscriptionPlanModel plan) {
-    editingDocId.value = plan.docId;
-    _editingCreatedAt = plan.createdAt;
-
-    titleCtrl.text = plan.title;
-    priceCtrl.text = plan.price.toString();
-    oldPriceCtrl.text = plan.oldPrice?.toString() ?? '';
-
-    clientLimitCtrl.text = plan.limits['clients']?.toString() ?? '0';
-    trainerLimitCtrl.text = plan.limits['trainers']?.toString() ?? '0';
-    exerciseLimitCtrl.text =
-        plan.limits['exerciseLibrary']?.toString() ?? '0';
-    workoutLimitCtrl.text =
-        plan.limits['workoutPlans']?.toString() ?? '0';
-
-    duration.value = plan.duration;
-
-    points.assignAll(plan.points);
-    benefits.assignAll(plan.benefits);
-  }
-
-  // ---------------------------------------------------------
+  // =========================================================
   // FETCH PLANS (REALTIME)
-  // ---------------------------------------------------------
+  // =========================================================
   void fetchPlans() {
     isLoading.value = true;
 
@@ -125,62 +73,110 @@ class SubscriptionController extends GetxController {
         .orderBy('price')
         .snapshots()
         .listen(
-      (snapshot) {
-        plans.value = snapshot.docs
-            .map((d) => SubscriptionPlanModel.fromMap(d.data(), d.id))
-            .toList();
-        isLoading.value = false;
-      },
-      onError: (_) {
-        isLoading.value = false;
-        Get.snackbar('Error', 'Failed to fetch subscription plans');
-      },
-    );
+          (snapshot) {
+            plans.value = snapshot.docs
+                .map((d) => SubscriptionPlanModel.fromMap(d.data(), d.id))
+                .toList();
+
+            isLoading.value = false;
+          },
+          onError: (e) {
+            isLoading.value = false;
+
+            AppSnackbar.show(title: "Error", message: "Failed to load plans");
+          },
+        );
   }
 
-  // ---------------------------------------------------------
-  // CREATE OR UPDATE PLAN
-  // ---------------------------------------------------------
+  // =========================================================
+  // CLEAR FORM
+  // =========================================================
+  void clearForm() {
+    editingDocId.value = '';
+    _editingCreatedAt = null;
+
+    planNameCtrl.clear();
+    priceCtrl.clear();
+    oldPriceCtrl.clear();
+
+    maxAdminsCtrl.text = '1';
+    maxClientsCtrl.text = '0';
+    maxTrainersCtrl.text = '0';
+    maxWorkoutPlansCtrl.text = '0';
+    maxWorkoutsCtrl.text = '0';
+    maxDietPlansCtrl.text = '0';
+
+    durationMonths.value = 1;
+
+    points.clear();
+    pointInput.value = '';
+  }
+
+  // =========================================================
+  // LOAD PLAN (EDIT MODE)
+  // =========================================================
+  void loadPlanForEdit(SubscriptionPlanModel plan) {
+    editingDocId.value = plan.docId;
+    _editingCreatedAt = plan.createdAt;
+
+    planNameCtrl.text = plan.planName;
+    priceCtrl.text = plan.price.toString();
+    oldPriceCtrl.text = plan.oldPrice?.toString() ?? '';
+
+    maxAdminsCtrl.text = plan.maxAdmins.toString();
+    maxClientsCtrl.text = plan.maxClients.toString();
+    maxTrainersCtrl.text = plan.maxTrainers.toString();
+    maxWorkoutPlansCtrl.text = plan.maxWorkoutPlans.toString();
+    maxWorkoutsCtrl.text = plan.maxWorkouts.toString();
+    maxDietPlansCtrl.text = plan.maxDietPlans.toString();
+
+    durationMonths.value = plan.durationMonths;
+
+    points.assignAll(plan.points);
+  }
+
+  // =========================================================
+  // SAVE PLAN (CREATE / UPDATE)
+  // =========================================================
   Future<void> savePlan() async {
-    final title = titleCtrl.text.trim();
+    final name = planNameCtrl.text.trim();
     final price = double.tryParse(priceCtrl.text);
 
-    if (title.isEmpty || price == null || price <= 0) {
-      Get.snackbar('Validation', 'Title and valid price are required');
+    if (name.isEmpty || price == null || price <= 0) {
+      AppSnackbar.show(
+        title: "Validation Error",
+        message: "Enter valid plan name & price",
+      );
       return;
     }
 
-    final String uid = _auth.currentUser?.uid ?? 'system';
-    final DateTime now = DateTime.now();
+    final now = DateTime.now();
 
-    final String docId = isEditMode
+    final docId = isEditMode
         ? editingDocId.value
         : _db.collection('subscription_plans').doc().id;
 
     final plan = SubscriptionPlanModel(
       id: docId,
       docId: docId,
-      uid: uid,
 
-      title: title,
+      planName: name,
       price: price,
       oldPrice: double.tryParse(oldPriceCtrl.text),
 
-      duration: duration.value,
+      durationMonths: durationMonths.value,
+
+      maxAdmins: int.tryParse(maxAdminsCtrl.text) ?? 1,
+      maxClients: int.tryParse(maxClientsCtrl.text) ?? 0,
+      maxTrainers: int.tryParse(maxTrainersCtrl.text) ?? 0,
+      maxWorkoutPlans: int.tryParse(maxWorkoutPlansCtrl.text) ?? 0,
+      maxWorkouts: int.tryParse(maxWorkoutsCtrl.text) ?? 0,
+      maxDietPlans: int.tryParse(maxDietPlansCtrl.text) ?? 0,
+
       points: points.toList(),
-      benefits: benefits.toList(),
 
-      limits: {
-        'clients': int.tryParse(clientLimitCtrl.text) ?? 0,
-        'trainers': int.tryParse(trainerLimitCtrl.text) ?? 0,
-        'exerciseLibrary': int.tryParse(exerciseLimitCtrl.text) ?? 0,
-        'workoutPlans': int.tryParse(workoutLimitCtrl.text) ?? 0,
-      },
-
-      badge: null,
       isActive: true,
 
-      // 🔐 never nullable
       createdAt: isEditMode ? _editingCreatedAt! : now,
       updatedAt: now,
     );
@@ -191,78 +187,74 @@ class SubscriptionController extends GetxController {
       await _db
           .collection('subscription_plans')
           .doc(docId)
-          .set(plan.toMap(), SetOptions(merge: true));
+          .set(plan.toMap()); // 🔥 no merge (clean write)
 
       Get.back();
-      Get.snackbar(
-        'Success',
-        isEditMode ? 'Subscription updated' : 'Subscription created',
+
+      AppSnackbar.show(
+        title: "Success",
+        message: isEditMode
+            ? "Plan updated successfully"
+            : "Plan created successfully",
+        background: Colors.green,
       );
 
       clearForm();
     } catch (e) {
-      Get.snackbar('Error', 'Failed to save subscription plan');
+      AppSnackbar.show(title: "Error", message: "Failed to save plan");
     } finally {
       isSaving.value = false;
     }
   }
 
-  // ---------------------------------------------------------
+  // =========================================================
   // DELETE PLAN
-  // ---------------------------------------------------------
+  // =========================================================
   Future<void> deletePlan(String docId) async {
-    await _db.collection('subscription_plans').doc(docId).delete();
-    Get.snackbar('Deleted', 'Subscription plan removed');
+    try {
+      await _db.collection('subscription_plans').doc(docId).delete();
+
+      AppSnackbar.show(title: "Deleted", message: "Plan removed");
+    } catch (e) {
+      AppSnackbar.show(title: "Error", message: "Delete failed");
+    }
   }
 
-  // ---------------------------------------------------------
-  // ADD POINT / BENEFIT
-  // ---------------------------------------------------------
+  // =========================================================
+  // ADD POINT
+  // =========================================================
   void addPoint() {
     final text = pointInput.value.trim();
     if (text.isEmpty) return;
+
     points.add(text);
     pointInput.value = '';
   }
 
-  void addBenefit() {
-    final text = benefitInput.value.trim();
-    if (text.isEmpty) return;
-    benefits.add(text);
-    benefitInput.value = '';
+  // =========================================================
+  // REMOVE POINT
+  // =========================================================
+  void removePoint(int index) {
+    if (index < 0 || index >= points.length) return;
+    points.removeAt(index);
   }
 
-  // ---------------------------------------------------------
-  // UPDATE LIMIT
-  // ---------------------------------------------------------
-  void updateLimit(String key, String value) {
-    final parsed = int.tryParse(value) ?? 0;
-
-    switch (key) {
-      case 'clients':
-        clientLimitCtrl.text = parsed.toString();
-        break;
-      case 'trainers':
-        trainerLimitCtrl.text = parsed.toString();
-        break;
-      case 'exerciseLibrary':
-        exerciseLimitCtrl.text = parsed.toString();
-        break;
-      case 'workoutPlans':
-        workoutLimitCtrl.text = parsed.toString();
-        break;
-    }
-  }
-
+  // =========================================================
+  // CLEANUP
+  // =========================================================
   @override
   void onClose() {
-    titleCtrl.dispose();
+    planNameCtrl.dispose();
     priceCtrl.dispose();
     oldPriceCtrl.dispose();
-    clientLimitCtrl.dispose();
-    trainerLimitCtrl.dispose();
-    exerciseLimitCtrl.dispose();
-    workoutLimitCtrl.dispose();
+
+    maxAdminsCtrl.dispose();
+    maxClientsCtrl.dispose();
+    maxTrainersCtrl.dispose();
+    maxWorkoutPlansCtrl.dispose();
+    maxWorkoutsCtrl.dispose();
+    maxDietPlansCtrl.dispose();
+
     super.onClose();
   }
 }

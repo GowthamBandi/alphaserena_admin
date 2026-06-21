@@ -9,8 +9,9 @@ import '../../models/coupon_model.dart';
 class CouponCodeScreen extends StatelessWidget {
   CouponCodeScreen({super.key});
 
-  final ctrl = Get.put(CouponController());
-  final String adminUid = FirebaseAuth.instance.currentUser!.uid; // Replace with real admin UID
+  final ctrl = Get.find<CouponController>();
+  final String adminUid =
+      FirebaseAuth.instance.currentUser!.uid; // Replace with real admin UID
 
   @override
   Widget build(BuildContext context) {
@@ -126,11 +127,13 @@ class CouponCodeScreen extends StatelessWidget {
         children: [
           Expanded(child: Text(c.code, style: _rowTxt)),
           Expanded(child: Text(_discountText(c), style: _rowTxt)),
+          Expanded(child: Text("${c.usedCount}/${c.maxUsage}", style: _rowTxt)),
           Expanded(
-              child: Text("${c.usedCount}/${c.maxUsage}", style: _rowTxt)),
-          Expanded(
-              child: Text("${_fmt(c.validFrom)} → ${_fmt(c.validTo)}",
-                  style: _rowTxt)),
+            child: Text(
+              "${_fmt(c.validFrom)} → ${_fmt(c.validTo)}",
+              style: _rowTxt,
+            ),
+          ),
           Expanded(child: _statusBadge(c)),
           Row(
             children: [
@@ -182,190 +185,203 @@ class CouponCodeScreen extends StatelessWidget {
     _openFormDialog(isEdit: true);
   }
 
- void _openFormDialog({required bool isEdit}) {
-  Get.dialog(
-    Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
-      child: Container(
-        width: 650,
-        padding: const EdgeInsets.all(28),
-        child: Obx(() {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              
-              // TITLE
-              Text(
-                isEdit ? "Edit Coupon" : "Create Coupon",
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
+  void _openFormDialog({required bool isEdit}) {
+    Get.dialog(
+      Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
+        child: Container(
+          width: 650,
+          padding: const EdgeInsets.all(28),
+          child: Obx(() {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // TITLE
+                Text(
+                  isEdit ? "Edit Coupon" : "Create Coupon",
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // FORM FIELDS IN TWO COLUMN GRID
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: ctrl.codeCtrl,
-                      decoration: const InputDecoration(labelText: "Coupon Code"),
+                // FORM FIELDS IN TWO COLUMN GRID
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: ctrl.codeCtrl,
+                        decoration: const InputDecoration(
+                          labelText: "Coupon Code",
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextField(
-                      controller: ctrl.discountCtrl,
-                      decoration: const InputDecoration(labelText: "Discount Value"),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: ctrl.discountCtrl,
+                        decoration: const InputDecoration(
+                          labelText: "Discount Value",
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
+                  ],
+                ),
+                const SizedBox(height: 16),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: ctrl.maxUsageCtrl,
-                      decoration: const InputDecoration(labelText: "Max Usage Count"),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: ctrl.maxUsageCtrl,
+                        decoration: const InputDecoration(
+                          labelText: "Max Usage Count",
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextField(
-                      controller: ctrl.descCtrl,
-                      decoration: const InputDecoration(labelText: "Description"),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: ctrl.descCtrl,
+                        decoration: const InputDecoration(
+                          labelText: "Description",
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // PERCENTAGE SWITCH
-              SwitchListTile(
-                title: const Text("Percentage Discount?"),
-                value: ctrl.isPercentage.value,
-                onChanged: (v) => ctrl.isPercentage.value = v,
-                contentPadding: EdgeInsets.zero,
-              ),
+                // PERCENTAGE SWITCH
+                SwitchListTile(
+                  title: const Text("Percentage Discount?"),
+                  value: ctrl.isPercentage.value,
+                  onChanged: (v) => ctrl.isPercentage.value = v,
+                  contentPadding: EdgeInsets.zero,
+                ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // ACTIVE / INACTIVE TOGGLE (NEW)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Coupon Active?", style: TextStyle(fontSize: 16)),
-                  Switch(
-                    value: isEdit
-                        ? ctrl.coupons.firstWhere((x) => x.docId == ctrl.editDocId.value).isActive
-                        : true,
-                    onChanged: isEdit
-                        ? (value) {
-                            ctrl.toggleCoupon(ctrl.editDocId.value, !value);
-                          }
-                        : null, // disable toggle for new coupon
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // DATE PICKERS
-              Row(
-                children: [
-                  Expanded(
-                    child: ListTile(
-                      title: Text("Valid From: ${_fmt(ctrl.validFrom.value)}"),
-                      trailing: const Icon(Icons.calendar_today),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: Get.context!,
-                          initialDate: ctrl.validFrom.value,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) ctrl.validFrom.value = picked;
-                      },
+                // ACTIVE / INACTIVE TOGGLE (NEW)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Coupon Active?",
+                      style: TextStyle(fontSize: 16),
                     ),
-                  ),
-                  Expanded(
-                    child: ListTile(
-                      title: Text("Valid To: ${_fmt(ctrl.validTo.value)}"),
-                      trailing: const Icon(Icons.calendar_today),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: Get.context!,
-                          initialDate: ctrl.validTo.value,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) ctrl.validTo.value = picked;
-                      },
+                    Switch(
+                      value: isEdit
+                          ? ctrl.coupons
+                                .firstWhere(
+                                  (x) => x.docId == ctrl.editDocId.value,
+                                )
+                                .isActive
+                          : true,
+                      onChanged: isEdit
+                          ? (value) {
+                              ctrl.toggleCoupon(ctrl.editDocId.value, !value);
+                            }
+                          : null, // disable toggle for new coupon
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
 
-              const SizedBox(height: 28),
+                const SizedBox(height: 16),
 
-              // BUTTONS
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Get.back(),
-                    child: const Text("Cancel"),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton(
-                    onPressed: () => ctrl.saveCoupon(),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
+                // DATE PICKERS
+                Row(
+                  children: [
+                    Expanded(
+                      child: ListTile(
+                        title: Text(
+                          "Valid From: ${_fmt(ctrl.validFrom.value)}",
+                        ),
+                        trailing: const Icon(Icons.calendar_today),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: Get.context!,
+                            initialDate: ctrl.validFrom.value,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) ctrl.validFrom.value = picked;
+                        },
+                      ),
                     ),
-                    child: Text(isEdit ? "Save Changes" : "Create Coupon"),
-                  ),
-                ],
-              ),
-            ],
-          );
-        }),
+                    Expanded(
+                      child: ListTile(
+                        title: Text("Valid To: ${_fmt(ctrl.validTo.value)}"),
+                        trailing: const Icon(Icons.calendar_today),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: Get.context!,
+                            initialDate: ctrl.validTo.value,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) ctrl.validTo.value = picked;
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 28),
+
+                // BUTTONS
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Get.back(),
+                      child: const Text("Cancel"),
+                    ),
+                    const SizedBox(width: 16),
+                    ElevatedButton(
+                      onPressed: () => ctrl.saveCoupon(),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 14,
+                        ),
+                      ),
+                      child: Text(isEdit ? "Save Changes" : "Create Coupon"),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          }),
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // ---------------------------------------------------------------------------
   String _discountText(CouponModel c) {
-    return c.isPercentage
-        ? "${c.discountValue}%"
-        : "₹${c.discountValue}";
+    return c.isPercentage ? "${c.discountValue}%" : "₹${c.discountValue}";
   }
 
-  String _fmt(DateTime d) =>
-      "${d.day}/${d.month}/${d.year}";
+  String _fmt(DateTime d) => "${d.day}/${d.month}/${d.year}";
 
   BoxDecoration _card() => BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-            color: Colors.black.withOpacity(.06),
-          ),
-        ],
-      );
-
-  static const _hdr = TextStyle(
-    fontWeight: FontWeight.bold,
-    fontSize: 14,
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(14),
+    boxShadow: [
+      BoxShadow(
+        blurRadius: 12,
+        offset: const Offset(0, 4),
+        color: Colors.black.withOpacity(.06),
+      ),
+    ],
   );
+
+  static const _hdr = TextStyle(fontWeight: FontWeight.bold, fontSize: 14);
 
   final _rowTxt = const TextStyle(fontSize: 14);
 }

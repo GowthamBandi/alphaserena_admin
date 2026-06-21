@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// =============================================================
-/// SUBSCRIPTION LIMITS MODEL
+/// SUBSCRIPTION LIMITS MODEL (SINGLE SOURCE OF TRUTH)
 /// =============================================================
 class AdminSubscriptionLimits {
   final int maxAdmins;
@@ -18,84 +18,111 @@ class AdminSubscriptionLimits {
     required this.maxDietPlans,
   });
 
+  /// Empty limits → blocks everything (SAFE DEFAULT)
+  factory AdminSubscriptionLimits.empty() {
+    return const AdminSubscriptionLimits(
+      maxAdmins: 0,
+      maxTrainers: 0,
+      maxClients: 0,
+      maxWorkoutPlans: 0,
+      maxDietPlans: 0,
+    );
+  }
+
   factory AdminSubscriptionLimits.fromMap(Map<String, dynamic>? map) {
-    if (map == null) {
-      return const AdminSubscriptionLimits(
-        maxAdmins: 1,
-        maxTrainers: 1,
-        maxClients: 3,
-        maxWorkoutPlans: 10,
-        maxDietPlans: 10,
-      );
+    if (map == null) return AdminSubscriptionLimits.empty();
+
+    int _toInt(dynamic v) {
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      if (v is String) return int.tryParse(v) ?? 0;
+      return 0;
     }
 
     return AdminSubscriptionLimits(
-      maxAdmins: map['maxAdmins'] ?? 1,
-      maxTrainers: map['maxTrainers'] ?? 1,
-      maxClients: map['maxClients'] ?? 3,
-      maxWorkoutPlans: map['maxWorkoutPlans'] ?? 10,
-      maxDietPlans: map['maxDietPlans'] ?? 10,
+      maxAdmins: _toInt(map['maxAdmins']),
+      maxTrainers: _toInt(map['maxTrainers']),
+      maxClients: _toInt(map['maxClients']),
+      maxWorkoutPlans: _toInt(map['maxWorkoutPlans']),
+      maxDietPlans: _toInt(map['maxDietPlans']),
     );
   }
 
   Map<String, dynamic> toMap() => {
-    "maxAdmins": maxAdmins,
-    "maxTrainers": maxTrainers,
-    "maxClients": maxClients,
-    "maxWorkoutPlans": maxWorkoutPlans,
-    "maxDietPlans": maxDietPlans,
+    'maxAdmins': maxAdmins,
+    'maxTrainers': maxTrainers,
+    'maxClients': maxClients,
+    'maxWorkoutPlans': maxWorkoutPlans,
+    'maxDietPlans': maxDietPlans,
   };
 }
 
 /// =============================================================
-/// ADMIN MODEL
+/// ADMIN MODEL (PRODUCTION / SAAS READY)
 /// =============================================================
 class AdminModel {
   final String docId; // Firestore document ID
   final String uid; // Firebase Auth UID
 
+  // Basic Info
   final String name;
   final String email;
   final String? password;
   final String phone;
   final String organizationName;
 
-  final String role;
-  final String status;
+  // Role & Status
+  final String role; // admin | super_admin
+  final String status; // active | pending | blocked
 
   // Profile
   final String? profilePicUrl;
   final bool isVerified;
+
+  // Address
   final String? address;
+  final String? state;
+  final String? area;
+  final String? pincode;
+
+  // Business
   final String? gstNumber;
   final String? panNumber;
 
-  // Subscription (raw map) & extracted limits
+  // Languages
+  final List<String> spokenLanguages;
+
+  // 🔒 Subscription (PAYMENT METADATA ONLY)
   final Map<String, dynamic>? subscription;
+
+  // 🔥 LIMITS (REAL ENFORCEMENT SOURCE)
   final AdminSubscriptionLimits subscriptionLimits;
 
   final String? planName;
   final DateTime? planExpiry;
   final bool isSubscriptionActive;
 
-  // Extra
+  // Admin control
   final String? approvedBy;
 
+  // System
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? lastLogin;
 
+  // Relations
   final List<String> trainerIds;
   final List<String> clientIds;
 
+  // Misc
   final Map<String, dynamic>? metadata;
 
   const AdminModel({
     required this.docId,
     required this.uid,
-    this.password,
     required this.name,
     required this.email,
+    this.password,
     required this.phone,
     required this.organizationName,
     required this.role,
@@ -103,46 +130,41 @@ class AdminModel {
     this.profilePicUrl,
     this.isVerified = false,
     this.address,
+    this.state,
+    this.area,
+    this.pincode,
     this.gstNumber,
     this.panNumber,
-
-    // subscription
+    this.spokenLanguages = const [],
     this.subscription,
     required this.subscriptionLimits,
-
     this.planName,
     this.planExpiry,
     this.isSubscriptionActive = false,
-
     this.approvedBy,
     required this.createdAt,
     required this.updatedAt,
     this.lastLogin,
-
     this.trainerIds = const [],
     this.clientIds = const [],
     this.metadata,
   });
 
-  // ------------------------------------------
-  // DATE HELPER
-  // ------------------------------------------
-  static DateTime _parseDate(dynamic v) {
-    if (v == null) return DateTime.now();
+  // -------------------------------------------------------------
+  // DATE PARSER (STRICT + SAFE)
+  // -------------------------------------------------------------
+  static DateTime? _parseDate(dynamic v) {
+    if (v == null) return null;
     if (v is Timestamp) return v.toDate();
     if (v is DateTime) return v;
-    if (v is String) return DateTime.tryParse(v) ?? DateTime.now();
-    return DateTime.now();
+    if (v is String) return DateTime.tryParse(v);
+    return null;
   }
 
-  // ------------------------------------------
+  // -------------------------------------------------------------
   // FROM MAP
-  // ------------------------------------------
+  // -------------------------------------------------------------
   factory AdminModel.fromMap(Map<String, dynamic> map, String docId) {
-    final subscriptionMap = map['subscription'] != null
-        ? Map<String, dynamic>.from(map['subscription'])
-        : null;
-
     return AdminModel(
       docId: docId,
       uid: map['uid'] ?? docId,
@@ -155,29 +177,42 @@ class AdminModel {
       status: map['status'] ?? 'pending',
       profilePicUrl: map['profilePicUrl'],
       isVerified: map['isVerified'] ?? false,
+
+      // Address
       address: map['address'],
+      state: map['state'],
+      area: map['area'],
+      pincode: map['pincode'],
+
+      // Business
       gstNumber: map['gstNumber'],
       panNumber: map['panNumber'],
 
-      subscription: subscriptionMap,
+      // Languages
+      spokenLanguages: List<String>.from(map['spokenLanguages'] ?? const []),
+
+      // 🔒 PAYMENT METADATA ONLY
+      subscription: map['subscription'] != null
+          ? Map<String, dynamic>.from(map['subscription'])
+          : null,
+
+      // 🔥 LIMITS — FIXED SOURCE
       subscriptionLimits: AdminSubscriptionLimits.fromMap(
-        subscriptionMap,
-      ), // <-- extracted limits
+        map['subscriptionLimits'],
+      ),
 
       planName: map['planName'],
-      planExpiry: map['planExpiry'] != null
-          ? _parseDate(map['planExpiry'])
-          : null,
-      isSubscriptionActive: map['isSubscriptionActive'] ?? false,
+      planExpiry: _parseDate(map['planExpiry']),
+      isSubscriptionActive: map['isSubscriptionActive'] == true,
 
       approvedBy: map['approvedBy'],
 
-      createdAt: _parseDate(map['createdAt']),
-      updatedAt: _parseDate(map['updatedAt']),
-      lastLogin: map['lastLogin'] != null ? _parseDate(map['lastLogin']) : null,
+      createdAt: _parseDate(map['createdAt']) ?? DateTime.now(),
+      updatedAt: _parseDate(map['updatedAt']) ?? DateTime.now(),
+      lastLogin: _parseDate(map['lastLogin']),
 
-      trainerIds: List<String>.from(map['trainerIds'] ?? []),
-      clientIds: List<String>.from(map['clientIds'] ?? []),
+      trainerIds: List<String>.from(map['trainerIds'] ?? const []),
+      clientIds: List<String>.from(map['clientIds'] ?? const []),
 
       metadata: map['metadata'] != null
           ? Map<String, dynamic>.from(map['metadata'])
@@ -192,45 +227,57 @@ class AdminModel {
     );
   }
 
-  // ------------------------------------------
+  // -------------------------------------------------------------
   // TO MAP
-  // ------------------------------------------
+  // -------------------------------------------------------------
   Map<String, dynamic> toMap() {
     return {
-      "docId": docId,
-      "uid": uid,
-      "name": name,
-      "email": email,
-      "password": password,
-      "phone": phone,
-      "organizationName": organizationName,
-      "role": role,
-      "status": status,
-      "profilePicUrl": profilePicUrl,
-      "isVerified": isVerified,
-      "address": address,
-      "gstNumber": gstNumber,
-      "panNumber": panNumber,
+      'docId': docId,
+      'uid': uid,
+      'name': name,
+      'email': email,
+      'password': password,
+      'phone': phone,
+      'organizationName': organizationName,
+      'role': role,
+      'status': status,
+      'profilePicUrl': profilePicUrl,
+      'isVerified': isVerified,
 
-      "subscription": subscription, // keeps raw map
-      "planName": planName,
-      "planExpiry": planExpiry?.toIso8601String(),
-      "isSubscriptionActive": isSubscriptionActive,
+      // Address
+      'address': address,
+      'state': state,
+      'area': area,
+      'pincode': pincode,
 
-      "approvedBy": approvedBy,
-      "createdAt": createdAt.toIso8601String(),
-      "updatedAt": updatedAt.toIso8601String(),
-      "lastLogin": lastLogin?.toIso8601String(),
+      // Business
+      'gstNumber': gstNumber,
+      'panNumber': panNumber,
 
-      "trainerIds": trainerIds,
-      "clientIds": clientIds,
-      "metadata": metadata,
+      // Languages
+      'spokenLanguages': spokenLanguages,
+
+      // Subscription
+      'subscription': subscription,
+      'subscriptionLimits': subscriptionLimits.toMap(),
+      'planName': planName,
+      'planExpiry': planExpiry?.toIso8601String(),
+      'isSubscriptionActive': isSubscriptionActive,
+
+      'approvedBy': approvedBy,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+      'lastLogin': lastLogin?.toIso8601String(),
+
+      'trainerIds': trainerIds,
+      'clientIds': clientIds,
+      'metadata': metadata,
     };
   }
 
-  // ------------------------------------------
+  // -------------------------------------------------------------
   // COPY WITH
-  // ------------------------------------------
+  // -------------------------------------------------------------
   AdminModel copyWith({
     String? name,
     String? email,
@@ -241,8 +288,12 @@ class AdminModel {
     String? profilePicUrl,
     bool? isVerified,
     String? address,
+    String? state,
+    String? area,
+    String? pincode,
     String? gstNumber,
     String? panNumber,
+    List<String>? spokenLanguages,
     Map<String, dynamic>? subscription,
     AdminSubscriptionLimits? subscriptionLimits,
     String? planName,
@@ -269,21 +320,21 @@ class AdminModel {
       profilePicUrl: profilePicUrl ?? this.profilePicUrl,
       isVerified: isVerified ?? this.isVerified,
       address: address ?? this.address,
+      state: state ?? this.state,
+      area: area ?? this.area,
+      pincode: pincode ?? this.pincode,
       gstNumber: gstNumber ?? this.gstNumber,
       panNumber: panNumber ?? this.panNumber,
-
+      spokenLanguages: spokenLanguages ?? this.spokenLanguages,
       subscription: subscription ?? this.subscription,
       subscriptionLimits: subscriptionLimits ?? this.subscriptionLimits,
-
       planName: planName ?? this.planName,
       planExpiry: planExpiry ?? this.planExpiry,
       isSubscriptionActive: isSubscriptionActive ?? this.isSubscriptionActive,
-
       approvedBy: approvedBy ?? this.approvedBy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastLogin: lastLogin ?? this.lastLogin,
-
       trainerIds: trainerIds ?? this.trainerIds,
       clientIds: clientIds ?? this.clientIds,
       metadata: metadata ?? this.metadata,

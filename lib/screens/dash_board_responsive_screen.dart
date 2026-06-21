@@ -1,266 +1,324 @@
-import 'package:alphaserena_admin_portel/widgets/page_shell.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:alphaserena_admin_portel/widgets/admin_approvel_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/dashboard_controller.dart';
-import '../../models/admin_model.dart';
+import '../../widgets/page_shell.dart';
 
 class DashboardScreenResponsive extends StatelessWidget {
   const DashboardScreenResponsive({super.key});
 
-  Widget kpiCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      width: 260,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.05),
-            blurRadius: 12,
-            spreadRadius: -2,
-          )
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            height: 48,
-            width: 48,
-            decoration: BoxDecoration(
-              color: color.withOpacity(.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 26),
-          ),
-          const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: TextStyle(color: Colors.grey.shade600)),
-              const SizedBox(height: 6),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              )
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  String _fmtCurrency(double v) {
-    if (v >= 1e7) {
-      return '₹${(v / 1e7).toStringAsFixed(2)} Cr';
-    } else if (v >= 1e5) {
-      return '₹${(v / 1e5).toStringAsFixed(2)} L';
-    } else {
-      return '₹${v.toStringAsFixed(0)}';
-    }
-  }
-
-  String _fmtDate(dynamic d) {
-    if (d == null) return '';
-    if (d is DateTime) {
-      final dt = d;
-      return "${dt.day}/${dt.month}/${dt.year}";
-    }
-    if (d is Timestamp) {
-      final dt = d.toDate();
-      return "${dt.day}/${dt.month}/${dt.year}";
-    }
-    try {
-      final dt = DateTime.tryParse(d.toString());
-      if (dt != null) return "${dt.day}/${dt.month}/${dt.year}";
-    } catch (_) {}
-    return d.toString();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final ctrl = Get.put(DashboardController());
+    final ctrl = Get.find<DashboardController>();
 
     return PageShell(
       title: "Dashboard",
       icon: Icons.dashboard_outlined,
-      child: LayoutBuilder(
-        builder: (context, box) {
-          final isMobile = box.maxWidth < 650;
-          final isTablet = box.maxWidth < 1100 && box.maxWidth >= 650;
-
-          return Obx(() {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // KPI section → auto wrap
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  children: [
-                    kpiCard("Admins", "${ctrl.adminCount.value}", Icons.admin_panel_settings, Colors.deepPurple),
-                    kpiCard("Trainers", "${ctrl.trainerCount.value}", Icons.fitness_center, Colors.blue),
-                    kpiCard("Clients", "${ctrl.clientCount.value}", Icons.people, Colors.green),
-                    kpiCard("Revenue", "${_fmtCurrency(ctrl.revenue.value)}", Icons.currency_rupee, Colors.orange),
-                  ],
-                ),
-
-                const SizedBox(height: 30),
-
-                // Activity + Requests → responsive layout
-                if (!isMobile) ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Recent Requests
-                      Expanded(child: _recentRequestsCard(ctrl)),
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        width: isTablet ? 340 : 420,
-                        child: _activityCard(ctrl),
-                      ),
-                    ],
-                  ),
-                ] else ...[
-                  _recentRequestsCard(ctrl),
-                  const SizedBox(height: 16),
-                  _activityCard(ctrl),
-                ],
-              ],
-            );
-          });
-        },
-      ),
-    );
-  }
-
-  Widget _recentRequestsCard(DashboardController ctrl) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.05),
-            blurRadius: 12,
-          )
-        ],
-      ),
       child: Obx(() {
-        final list = ctrl.pendingAdminRequests;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text("Pending Admin Requests", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                const Spacer(),
-                Text("${list.length}", style: TextStyle(color: Colors.grey.shade600)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (list.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 28),
-                child: Center(child: Text("No pending requests", style: TextStyle(color: Colors.grey.shade600))),
-              )
-            else
-              ...list.take(6).map((a) => _requestRow(a, ctrl)).toList(),
-          ],
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _kpis(ctrl),
+              const SizedBox(height: 28),
+
+              _revenueSection(ctrl),
+              const SizedBox(height: 28),
+
+              _alertsSection(ctrl),
+              const SizedBox(height: 28),
+
+              _insightsSection(ctrl),
+            ],
+          ),
         );
       }),
     );
   }
 
-  Widget _requestRow(AdminModel a, DashboardController ctrl) {
-    return Column(
+  // ============================================================
+  // 🔥 KPI STRIP
+  // ============================================================
+  Widget _kpis(DashboardController ctrl) {
+    return Wrap(
+      spacing: 16,
+      runSpacing: 16,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            CircleAvatar(radius: 20, child: Text(a.name.isNotEmpty ? a.name[0].toUpperCase() : 'A')),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Text(a.email, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton(
-              onPressed: () => ctrl.updateAdminStatus(a.docId, "approved"),
-              child: const Text("Approve"),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: () => ctrl.updateAdminStatus(a.docId, "blocked"),
-              child: const Text("Reject"),
-            ),
-          ],
+        _kpi(
+          "Admins",
+          ctrl.adminCount.value.toString(),
+          Icons.admin_panel_settings,
+          Colors.deepPurple,
         ),
-        const SizedBox(height: 12),
-        const Divider(),
+        _kpi(
+          "Trainers",
+          ctrl.trainerCount.value.toString(),
+          Icons.fitness_center,
+          Colors.blue,
+        ),
+        _kpi(
+          "Clients",
+          ctrl.clientCount.value.toString(),
+          Icons.people,
+          Colors.green,
+        ),
+        _kpi(
+          "Revenue",
+          "₹${ctrl.revenue.value.toStringAsFixed(0)}",
+          Icons.currency_rupee,
+          Colors.orange,
+        ),
+        _kpi(
+          "Growth",
+          "${ctrl.revenueGrowth.value.toStringAsFixed(1)}%",
+          Icons.trending_up,
+          Colors.teal,
+        ),
       ],
     );
   }
 
-  Widget _activityCard(DashboardController ctrl) {
+  Widget _kpi(String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.05),
-            blurRadius: 12,
-          )
+      width: 220,
+      padding: const EdgeInsets.all(16),
+      decoration: _card(),
+      child: Row(
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: TextStyle(color: Colors.grey.shade600)),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
-      child: Obx(() {
-        final act = ctrl.recentActivity;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Recent Activity", style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            if (act.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: Text("No recent activity", style: TextStyle(color: Colors.grey.shade600))),
-              )
-            else
-              ...act.map((e) {
-                final title = e['title'] ?? 'User';
-                final subtitle = e['subtitle'] ?? '';
-                final time = e['time'];
-                final timeStr = _fmtDate(time);
-                return Column(
-                  children: [
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(radius: 16, child: Icon(Icons.person, size: 16)),
-                      title: Text("$title $subtitle"),
-                      subtitle: Text(timeStr, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                    ),
-                    const Divider(),
-                  ],
+    );
+  }
+
+  // ============================================================
+  // 📈 REVENUE
+  // ============================================================
+  Widget _revenueSection(DashboardController ctrl) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _card(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Revenue Overview",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 14),
+
+          if (ctrl.revenueChart.isEmpty)
+            const Center(child: Text("No revenue data"))
+          else
+            Column(
+              children: ctrl.revenueChart.map((e) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [Text(e['month']), Text("₹${e['revenue']}")],
+                  ),
                 );
               }).toList(),
-          ],
-        );
-      }),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // ⚠️ ALERTS
+  // ============================================================
+  Widget _alertsSection(DashboardController ctrl) {
+    return LayoutBuilder(
+      builder: (_, box) {
+        final isWide = box.maxWidth > 900;
+
+        return isWide
+            ? Row(
+                children: [
+                  Expanded(child: _expiring(ctrl)),
+                  const SizedBox(width: 16),
+                  Expanded(child: AdminApprovalWidget(ctrl: ctrl)),
+                ],
+              )
+            : Column(
+                children: [
+                  _expiring(ctrl),
+                  const SizedBox(height: 16),
+                  AdminApprovalWidget(ctrl: ctrl),
+                ],
+              );
+      },
+    );
+  }
+
+  Widget _expiring(DashboardController ctrl) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _card(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Expiring Soon",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+
+          if (ctrl.expiringAdmins.isEmpty)
+            const Text("No expiring subscriptions")
+          else
+            ...ctrl.expiringAdmins.map((a) {
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(a.name),
+                subtitle: const Text("Expires soon"),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  // Widget _requests(DashboardController ctrl) {
+  //   return Container(
+  //     padding: const EdgeInsets.all(16),
+  //     decoration: _card(),
+  //     child: Column(
+  //       crossAxisAlignment: CrossAxisAlignment.start,
+  //       children: [
+  //         const Text(
+  //           "Pending Admin Requests",
+  //           style: TextStyle(fontWeight: FontWeight.bold),
+  //         ),
+  //         const SizedBox(height: 12),
+
+  //         if (ctrl.pendingAdminRequests.isEmpty)
+  //           const Text("No requests")
+  //         else
+  //           ...ctrl.pendingAdminRequests.map((a) {
+  //             return ListTile(
+  //               contentPadding: EdgeInsets.zero,
+  //               title: Text(a.name),
+  //               trailing: TextButton(
+  //                 onPressed: () => ctrl.updateAdminStatus(a.docId, "active"),
+  //                 child: const Text("Approve"),
+  //               ),
+  //             );
+  //           }),
+  //       ],
+  //     ),
+  //   );
+  // }
+
+  // ============================================================
+  // 🔥 INSIGHTS
+  // ============================================================
+  Widget _insightsSection(DashboardController ctrl) {
+    return LayoutBuilder(
+      builder: (_, box) {
+        final isWide = box.maxWidth > 900;
+
+        return isWide
+            ? Row(
+                children: [
+                  Expanded(child: _topAdmins(ctrl)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _activity(ctrl)),
+                ],
+              )
+            : Column(
+                children: [
+                  _topAdmins(ctrl),
+                  const SizedBox(height: 16),
+                  _activity(ctrl),
+                ],
+              );
+      },
+    );
+  }
+
+  Widget _topAdmins(DashboardController ctrl) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _card(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Top Admins",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+
+          if (ctrl.topAdmins.isEmpty)
+            const Text("No data")
+          else
+            ...ctrl.topAdmins.map((a) {
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(a['name'] ?? 'Admin'),
+                trailing: Text("₹${a['revenue']}"),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _activity(DashboardController ctrl) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _card(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Recent Activity",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+
+          if (ctrl.recentActivity.isEmpty)
+            const Text("No activity")
+          else
+            ...ctrl.recentActivity.map((e) {
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(e['title']),
+                subtitle: Text(e['subtitle']),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  BoxDecoration _card() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [
+        BoxShadow(color: Colors.black.withOpacity(.05), blurRadius: 10),
+      ],
     );
   }
 }

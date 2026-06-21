@@ -3,24 +3,25 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SubscriptionPlanModel {
-  final String id; // Firestore document ID
-  final String docId; // stored inside document
-  final String uid; // creator admin uid
-  final String title;
+  final String id;
+  final String docId;
 
-  final List<String> points;
-  final List<String> benefits;
-
-  final Map<String, int> limits;
+  final String planName;
 
   final double price;
   final double? oldPrice;
 
-  /// Example: "1 Month", "3 Months", "6 Months", "12 Months"
-  final String duration;
+  final int durationMonths;
 
-  /// Optional badge: "Most Popular", "Best Value"
-  final String? badge;
+  // 🔥 FLAT LIMITS (PRODUCTION SAFE)
+  final int maxAdmins;
+  final int maxTrainers;
+  final int maxClients;
+  final int maxWorkoutPlans;
+  final int maxWorkouts;
+  final int maxDietPlans;
+
+  final List<String> points;
 
   final bool isActive;
 
@@ -30,122 +31,99 @@ class SubscriptionPlanModel {
   SubscriptionPlanModel({
     required this.id,
     required this.docId,
-    required this.uid,
-    required this.title,
-    required this.points,
-    required this.benefits,
-    required this.limits,
+    required this.planName,
     required this.price,
-    required this.duration,
+    required this.durationMonths,
+    required this.maxAdmins,
+    required this.maxTrainers,
+    required this.maxClients,
+    required this.maxWorkoutPlans,
+    required this.maxWorkouts,
+    required this.maxDietPlans,
+    required this.points,
     this.oldPrice,
-    this.badge,
     this.isActive = true,
     required this.createdAt,
     required this.updatedAt,
   });
 
-  // ---------------------------------------------------------------------------
-  // SAFE PARSER FROM FIRESTORE
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------
+  // FROM FIRESTORE
+  // -------------------------------------------------------
   factory SubscriptionPlanModel.fromMap(
     Map<String, dynamic> map,
     String documentId,
   ) {
     return SubscriptionPlanModel(
       id: documentId,
-      docId: map["docId"] ?? documentId,
-      uid: map["uid"]?.toString() ?? "",
+      docId: map['docId'] ?? documentId,
 
-      title: map["title"]?.toString() ?? "",
+      planName: map['planName'] ?? '',
 
-      points: _safeStringList(map["points"]),
-      benefits: _safeStringList(map["benefits"]),
+      price: _toDouble(map['price']),
+      oldPrice: map['oldPrice'] != null ? _toDouble(map['oldPrice']) : null,
 
-      limits: _safeLimits(map["limits"]),
+      durationMonths: (map['durationMonths'] ?? 1) as int,
 
-      price: _safeDouble(map["price"]),
-      oldPrice: map["oldPrice"] != null ? _safeDouble(map["oldPrice"]) : null,
+      maxAdmins: map['maxAdmins'] ?? 0,
+      maxTrainers: map['maxTrainers'] ?? 0,
+      maxClients: map['maxClients'] ?? 0,
+      maxWorkoutPlans: map['maxWorkoutPlans'] ?? 0,
+      maxWorkouts: map['maxWorkouts'] ?? 0,
+      maxDietPlans: map['maxDietPlans'] ?? 0,
 
-      duration: map["duration"]?.toString() ?? "1 Month",
+      points: _toList(map['points']),
 
-      badge: map["badge"]?.toString(),
-      isActive: map["isActive"] == true,
+      isActive: map['isActive'] == true,
 
-      createdAt: _safeDate(map["createdAt"]),
-      updatedAt: _safeDate(map["updatedAt"]),
+      createdAt: _toDate(map['createdAt']),
+      updatedAt: _toDate(map['updatedAt']),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // SAFE HELPERS
-  // ---------------------------------------------------------------------------
-
-  static List<String> _safeStringList(dynamic value) {
-    if (value == null) return [];
-    if (value is List) {
-      return value.map((e) => e.toString()).toList();
-    }
-    return []; // fallback
-  }
-
-  static Map<String, int> _safeLimits(dynamic value) {
-    if (value is Map) {
-      return {
-        "clients": int.tryParse(value["clients"]?.toString() ?? "0") ?? 0,
-        "trainers": int.tryParse(value["trainers"]?.toString() ?? "0") ?? 0,
-        "exerciseLibrary":
-            int.tryParse(value["exerciseLibrary"]?.toString() ?? "0") ?? 0,
-        "workoutPlans":
-            int.tryParse(value["workoutPlans"]?.toString() ?? "0") ?? 0,
-        "dietPlans": int.tryParse(value["dietPlans"]?.toString() ?? "0") ?? 0,
-      };
-    }
-
-    // If Firestore stored invalid type (array/string/int) → fallback
-    return {
-      "clients": 0,
-      "trainers": 0,
-      "exerciseLibrary": 0,
-      "workoutPlans": 0,
-      'dietPlans': 0,
-    };
-  }
-
-  static double _safeDouble(dynamic value) {
-    if (value == null) return 0.0;
-    return double.tryParse(value.toString()) ?? 0.0;
-  }
-
-  static DateTime _safeDate(dynamic value) {
-    if (value == null) return DateTime.now();
-    if (value is Timestamp) return value.toDate();
-    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
-    return DateTime.now();
-  }
-
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------
   // TO FIRESTORE
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------
   Map<String, dynamic> toMap() {
     return {
-      "docId": docId,
-      "uid": uid,
-      "title": title,
+      'docId': docId,
 
-      "points": points,
-      "benefits": benefits,
-      "limits": limits,
+      'planName': planName,
 
-      "price": price,
-      "oldPrice": oldPrice,
+      'price': price,
+      'oldPrice': oldPrice,
 
-      "duration": duration,
-      "badge": badge,
+      'durationMonths': durationMonths,
 
-      "isActive": isActive,
+      'maxAdmins': maxAdmins,
+      'maxTrainers': maxTrainers,
+      'maxClients': maxClients,
+      'maxWorkoutPlans': maxWorkoutPlans,
+      'maxWorkouts': maxWorkouts,
+      'maxDietPlans': maxDietPlans,
 
-      "createdAt": createdAt.toIso8601String(),
-      "updatedAt": updatedAt.toIso8601String(),
+      'points': points,
+
+      'isActive': isActive,
+
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(updatedAt),
     };
+  }
+
+  // -------------------------------------------------------
+  // HELPERS
+  // -------------------------------------------------------
+  static double _toDouble(dynamic v) => double.tryParse(v.toString()) ?? 0;
+
+  static List<String> _toList(dynamic v) {
+    if (v is List) return v.map((e) => e.toString()).toList();
+    return [];
+  }
+
+  static DateTime _toDate(dynamic v) {
+    if (v is Timestamp) return v.toDate();
+    if (v is String) return DateTime.tryParse(v) ?? DateTime.now();
+    return DateTime.now();
   }
 }

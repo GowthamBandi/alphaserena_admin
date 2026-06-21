@@ -8,7 +8,7 @@ class AdminLoginScreen extends StatelessWidget {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  final loginController = Get.put(AdminLoginController());
+  final loginController = Get.find<AdminLoginController>();
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +26,7 @@ class AdminLoginScreen extends StatelessWidget {
                 BoxShadow(
                   color: Colors.black12.withOpacity(0.05),
                   blurRadius: 12,
-                )
+                ),
               ],
             ),
             child: Form(
@@ -91,9 +91,7 @@ class AdminLoginScreen extends StatelessWidget {
                           backgroundColor: Colors.blueAccent,
                         ),
                         child: loginController.isLoading.value
-                            ? CircularProgressIndicator(
-                                color: Colors.white,
-                              )
+                            ? CircularProgressIndicator(color: Colors.white)
                             : Text(
                                 "Login",
                                 style: TextStyle(
@@ -113,4 +111,3 @@ class AdminLoginScreen extends StatelessWidget {
     );
   }
 }
-

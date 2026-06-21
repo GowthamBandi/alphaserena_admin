@@ -3,265 +3,299 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/subscription_controller.dart';
-import '../../widgets/subscription_plan_dialog.dart';
 import '../../models/subscription_plan_model.dart';
+import '../../widgets/subscription_plan_dialog.dart';
 
 class SubscriptionsScreen extends StatelessWidget {
   SubscriptionsScreen({super.key});
 
-  final ctrl = Get.put(SubscriptionController());
-  final bool isMasterAdmin = true; // real permission check later
+  final ctrl = Get.find<SubscriptionController>();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xfff7f8fa),
-      body: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _header(),
-            const SizedBox(height: 26),
-            Expanded(child: _grid()),
-          ],
-        ),
+      backgroundColor: const Color(0xffF5F7FB),
+
+      appBar: AppBar(
+        title: const Text("Subscription Plans"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black,
       ),
+
+      floatingActionButton: FloatingActionButton.extended(
+        elevation: 2,
+        backgroundColor: Colors.black,
+        onPressed: () {
+          ctrl.clearForm();
+          Get.dialog(SubscriptionPlanDialog());
+        },
+        label: const Text("Create Plan"),
+        icon: const Icon(Icons.add),
+      ),
+
+      body: Obx(() {
+        if (ctrl.isLoading.value) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (ctrl.plans.isEmpty) {
+          return _emptyState();
+        }
+
+        return _grid();
+      }),
     );
   }
 
-  // HEADER -------------------------------------------------------------
-  Widget _header() {
-    return Row(
-      children: [
-        const Text(
-          "Subscription Plans",
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-        ),
-
-        const SizedBox(width: 12),
-
-        Obx(() => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                "${ctrl.plans.length} plans",
-                style: TextStyle(
-                    color: Colors.blue.shade700,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13),
-              ),
-            )),
-
-        const Spacer(),
-
-        if (isMasterAdmin)
-          ElevatedButton.icon(
-            onPressed: () {
-              ctrl.clearForm();
-              showDialog(
-                context: Get.context!,
-                builder: (_) => SubscriptionPlanDialog(),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            icon: const Icon(Icons.add),
-            label: const Text("Create Plan"),
-          ),
-      ],
-    );
-  }
-
-  // GRID ---------------------------------------------------------------
+  // ============================================================
+  // GRID
+  // ============================================================
   Widget _grid() {
-    return Obx(() {
-      if (ctrl.isLoading.value) {
-        return const Center(child: CircularProgressIndicator());
-      }
-
-      if (ctrl.plans.isEmpty) {
-        return const Center(
-            child: Text("No plans available",
-                style: TextStyle(color: Colors.grey, fontSize: 16)));
-      }
-
-      return LayoutBuilder(builder: (context, box) {
+    return LayoutBuilder(
+      builder: (_, box) {
         int cross = 1;
-        if (box.maxWidth > 1400) cross = 4;
-        else if (box.maxWidth > 1100) cross = 3;
-        else if (box.maxWidth > 800) cross = 2;
+
+        if (box.maxWidth > 1400)
+          cross = 4;
+        else if (box.maxWidth > 1100)
+          cross = 3;
+        else if (box.maxWidth > 700)
+          cross = 2;
 
         return GridView.builder(
+          padding: const EdgeInsets.all(24),
           itemCount: ctrl.plans.length,
-          padding: const EdgeInsets.only(top: 10),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cross,
-            mainAxisSpacing: 24,
             crossAxisSpacing: 24,
-            childAspectRatio: 0.75,
+            mainAxisSpacing: 24,
+            childAspectRatio: 0.78,
           ),
-          itemBuilder: (_, i) => _card(ctrl.plans[i], i),
+          itemBuilder: (_, i) => _planCard(ctrl.plans[i]),
         );
-      });
-    });
+      },
+    );
   }
 
-  // CARD ---------------------------------------------------------------
-  Widget _card(SubscriptionPlanModel plan, int index) {
-    final isPopular = index == 1;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
+  // ============================================================
+  // 🔥 PREMIUM PLAN CARD
+  // ============================================================
+  Widget _planCard(SubscriptionPlanModel p) {
+    return Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         gradient: const LinearGradient(
-          colors: [Colors.white, Color(0xfff2f3f7)],
+          colors: [Colors.white, Color(0xffF9FAFB)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-            color: Colors.black.withOpacity(.08),
-          )
+            blurRadius: 30,
+            color: Colors.black.withOpacity(.06),
+            offset: const Offset(0, 10),
+          ),
         ],
       ),
-      child: Stack(
+
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (isPopular) _ribbon(),
-
-          Padding(
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // title
-                Text(plan.title,
-                    style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-
-                Text(plan.duration,
-                    style:
-                        TextStyle(color: Colors.grey.shade600, fontSize: 14)),
-                const SizedBox(height: 20),
-
-                // price
-                Row(
-                  children: [
-                    Text("\$${plan.price}",
-                        style: const TextStyle(
-                            fontSize: 32, fontWeight: FontWeight.bold)),
-                    if (plan.oldPrice != null) ...[
-                      const SizedBox(width: 12),
-                      Text("\$${plan.oldPrice}",
-                          style: const TextStyle(
-                              color: Colors.red,
-                              decoration: TextDecoration.lineThrough)),
-                    ]
-                  ],
-                ),
-
-                const SizedBox(height: 18),
-
-                // FEATURES
-                Text("Features",
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey.shade800)),
-                const SizedBox(height: 8),
-
-                Expanded(
-                  child: ListView(
-                    children: [
-                      ...plan.points.map((e) => _bullet(e, false)),
-
-                      const SizedBox(height: 10),
-
-                      Text("Benefits",
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade800)),
-                      const SizedBox(height: 8),
-
-                      ...plan.benefits.map((e) => _bullet(e, true)),
-                    ],
+          // ------------------------------------------------------
+          // HEADER
+          // ------------------------------------------------------
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  p.planName,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
+              ),
 
-                const SizedBox(height: 20),
+              PopupMenuButton(
+                icon: const Icon(Icons.more_horiz),
+                onSelected: (v) {
+                  if (v == "edit") {
+                    ctrl.loadPlanForEdit(p);
+                    Get.dialog(SubscriptionPlanDialog(isEdit: true));
+                  } else {
+                    ctrl.deletePlan(p.id);
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: "edit", child: Text("Edit")),
+                  PopupMenuItem(
+                    value: "delete",
+                    child: Text("Delete", style: TextStyle(color: Colors.red)),
+                  ),
+                ],
+              ),
+            ],
+          ),
 
-                // edit/delete
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton(
-                        onPressed: () => ctrl.deletePlan(plan.id),
-                        child: const Text("Delete",
-                            style: TextStyle(color: Colors.red))),
-                    TextButton(
-                        onPressed: () => _edit(plan),
-                        child: const Text("Edit")),
-                  ],
-                )
-              ],
+          const SizedBox(height: 6),
+
+          Text(
+            "${p.durationMonths} Month${p.durationMonths > 1 ? 's' : ''}",
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+
+          const SizedBox(height: 18),
+
+          // ------------------------------------------------------
+          // 🔥 PRICE HERO
+          // ------------------------------------------------------
+          Row(
+            children: [
+              Text(
+                "₹${p.price.toStringAsFixed(0)}",
+                style: const TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (p.oldPrice != null)
+                Text(
+                  "₹${p.oldPrice!.toStringAsFixed(0)}",
+                  style: const TextStyle(
+                    decoration: TextDecoration.lineThrough,
+                    color: Colors.grey,
+                  ),
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          // ------------------------------------------------------
+          // 🔥 LIMITS AS CHIPS (MODERN UX)
+          // ------------------------------------------------------
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _chip("Clients", p.maxClients),
+              _chip("Trainers", p.maxTrainers),
+              _chip("Admins", p.maxAdmins),
+              _chip("Workout Plans", p.maxWorkoutPlans),
+              _chip("Workouts", p.maxWorkouts),
+              _chip("Diet Plans", p.maxDietPlans),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          // ------------------------------------------------------
+          // FEATURES
+          // ------------------------------------------------------
+          if (p.points.isNotEmpty) ...[
+            const Text(
+              "Features",
+              style: TextStyle(fontWeight: FontWeight.w600),
             ),
-          )
+            const SizedBox(height: 8),
+
+            ...p.points.map((e) => _feature(e)),
+          ],
+
+          const Spacer(),
+
+          // ------------------------------------------------------
+          // CTA (ADMIN)
+          // ------------------------------------------------------
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    ctrl.loadPlanForEdit(p);
+                    Get.dialog(SubscriptionPlanDialog(isEdit: true));
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    "Manage Plan",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  // RIBBON --------------------------------------------------------------
-  Widget _ribbon() {
-    return Positioned(
-      right: 0,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: const BoxDecoration(
-          color: Colors.deepPurple,
-          borderRadius:
-              BorderRadius.only(topRight: Radius.circular(20), bottomLeft: Radius.circular(16)),
-        ),
-        child: const Text("MOST POPULAR",
-            style:
-                TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+  // ============================================================
+  // CHIP (LIMIT UI)
+  // ============================================================
+  Widget _chip(String label, int value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        "$label: $value",
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
       ),
     );
   }
 
-  // BULLET --------------------------------------------------------------
-  Widget _bullet(String text, bool benefit) {
+  // ============================================================
+  // FEATURE ITEM
+  // ============================================================
+  Widget _feature(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          Icon(benefit ? Icons.star : Icons.check_circle,
-              size: 18, color: benefit ? Colors.orange : Colors.green),
-          const SizedBox(width: 10),
+          const Icon(Icons.check_circle, size: 18, color: Colors.green),
+          const SizedBox(width: 8),
           Expanded(child: Text(text)),
         ],
       ),
     );
   }
 
-  // OPEN EDIT -----------------------------------------------------------
-  void _edit(SubscriptionPlanModel plan) {
-    ctrl.loadPlanForEdit(plan);
-    showDialog(
-      context: Get.context!,
-      builder: (_) => SubscriptionPlanDialog(isEdit: true),
+  // ============================================================
+  // EMPTY STATE (MODERN)
+  // ============================================================
+  Widget _emptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.grey.shade200,
+            ),
+            child: const Icon(Icons.auto_awesome, size: 40),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            "No Plans Created",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          const Text("Create your first subscription plan to get started"),
+        ],
+      ),
     );
   }
 }

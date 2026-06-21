@@ -13,294 +13,302 @@ class SubscriptionPlanDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!isEdit) {
-      ctrl.clearForm();
-    }
+    if (!isEdit) ctrl.clearForm();
 
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 50, vertical: 40),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 650),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-
-                _header(),
-                const SizedBox(height: 25),
-
-                // ----------------------------------
-                // BASIC INFO
-                // ----------------------------------
-                _section("Basic Info"),
-                _textInput("Plan Title", ctrl.titleCtrl),
-                const SizedBox(height: 16),
-
-                Row(
+      insetPadding: const EdgeInsets.all(20),
+      backgroundColor: Colors.transparent,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 780),
+        decoration: BoxDecoration(
+          color: const Color(0xffF4F6FA),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _header(),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                   children: [
-                    Expanded(child: _numberInput("Price", ctrl.priceCtrl)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _numberInput("Old Price (optional)", ctrl.oldPriceCtrl)),
+                    _section("Plan Info", _planInfo()),
+                    _section("Pricing", _pricing()),
+                    _section("Features", _features()),
+                    _section("Capacity Limits", _limits()),
                   ],
                 ),
-
-                const SizedBox(height: 16),
-                _durationDropdown(),
-
-                const SizedBox(height: 25),
-                _divider(),
-
-                // ----------------------------------
-                // POINTS
-                // ----------------------------------
-                _section("Plan Points"),
-                _pointInput(),
-                const SizedBox(height: 10),
-                _pointsList(),
-
-                const SizedBox(height: 25),
-                _divider(),
-
-                // ----------------------------------
-                // BENEFITS
-                // ----------------------------------
-                _section("Benefits"),
-                _benefitInput(),
-                const SizedBox(height: 10),
-                _benefitList(),
-
-                const SizedBox(height: 25),
-                _divider(),
-
-                // ----------------------------------
-                // NUMERIC LIMITS
-                // ----------------------------------
-                _section("Numeric Limits"),
-
-                Row(
-                  children: [
-                    Expanded(child: _numberInput("Clients", ctrl.clientLimitCtrl)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _numberInput("Trainers", ctrl.trainerLimitCtrl)),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-
-                Row(
-                  children: [
-                    Expanded(child: _numberInput("Exercise Library", ctrl.exerciseLimitCtrl)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _numberInput("Workout Plans", ctrl.workoutLimitCtrl)),
-                  ],
-                ),
-
-                const SizedBox(height: 30),
-
-                _saveButton(),
-              ],
+              ),
             ),
-          ),
+            _footer(),
+          ],
         ),
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
+  // =========================================================
   // HEADER
-  // ---------------------------------------------------------------------------
+  // =========================================================
   Widget _header() {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Row(
+        children: [
+          Text(
             isEdit ? "Edit Subscription Plan" : "Create Subscription Plan",
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
-        ),
-        IconButton(
-          onPressed: () => Get.back(),
-          icon: const Icon(Icons.close),
-        )
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // SECTION TITLE
-  // ---------------------------------------------------------------------------
-  Widget _section(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          const Spacer(),
+          IconButton(onPressed: Get.back, icon: const Icon(Icons.close)),
+        ],
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // TEXT INPUT
-  // ---------------------------------------------------------------------------
-  Widget _textInput(String label, TextEditingController controller) {
-    return TextField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
-  Widget _numberInput(String label, TextEditingController controller) {
-    return TextField(
-      controller: controller,
-      keyboardType: TextInputType.number,
-      decoration: InputDecoration(
-        labelText: label,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // DURATION DROPDOWN
-  // ---------------------------------------------------------------------------
-  Widget _durationDropdown() {
-    return Obx(() {
-      return DropdownButtonFormField(
-        value: ctrl.duration.value,
-        decoration: InputDecoration(
-          labelText: "Billing Duration",
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        items: ctrl.durationOptions
-            .map((d) => DropdownMenuItem(value: d, child: Text(d)))
-            .toList(),
-        onChanged: (v) => ctrl.duration.value = v!,
-      );
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // POINTS
-  // ---------------------------------------------------------------------------
-  Widget _pointInput() {
-    return Row(
+  // =========================================================
+  // PLAN INFO
+  // =========================================================
+  Widget _planInfo() {
+    return Column(
       children: [
-        Expanded(
-          child: TextField(
-            onChanged: (v) => ctrl.pointInput.value = v,
-            decoration: const InputDecoration(labelText: "Add plan point"),
-          ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.add_circle, size: 28, color: Colors.green),
-          onPressed: ctrl.addPoint,
-        )
-      ],
-    );
-  }
+        _input("Plan Name", ctrl.planNameCtrl),
+        const SizedBox(height: 12),
 
-  Widget _pointsList() {
-    return Obx(() {
-      return Column(
-        children: ctrl.points
-            .map(
-              (p) => _listTile(
-                icon: Icons.check_circle,
-                color: Colors.green,
-                text: p,
-                onDelete: () => ctrl.points.remove(p),
-              ),
-            )
-            .toList(),
-      );
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // BENEFITS
-  // ---------------------------------------------------------------------------
-  Widget _benefitInput() {
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
-            onChanged: (v) => ctrl.benefitInput.value = v,
-            decoration: const InputDecoration(labelText: "Add a benefit"),
-          ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.add_circle, size: 28, color: Colors.blue),
-          onPressed: ctrl.addBenefit,
-        )
-      ],
-    );
-  }
-
-  Widget _benefitList() {
-    return Obx(() {
-      return Column(
-        children: ctrl.benefits
-            .map(
-              (b) => _listTile(
-                icon: Icons.star,
-                color: Colors.orange,
-                text: b,
-                onDelete: () => ctrl.benefits.remove(b),
-              ),
-            )
-            .toList(),
-      );
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // TILE
-  // ---------------------------------------------------------------------------
-  Widget _listTile({
-    required IconData icon,
-    required Color color,
-    required String text,
-    required VoidCallback onDelete,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(width: 10),
-        Expanded(child: Text(text)),
-        IconButton(
-          icon: const Icon(Icons.close, color: Colors.red, size: 18),
-          onPressed: onDelete,
-        )
-      ],
-    );
-  }
-
-  Widget _divider() => Divider(color: Colors.grey.shade300);
-
-  // ---------------------------------------------------------------------------
-  // SAVE BUTTON
-  // ---------------------------------------------------------------------------
-  Widget _saveButton() {
-    return Obx(() {
-      return Align(
-        alignment: Alignment.centerRight,
-        child: ElevatedButton(
-          onPressed: ctrl.isSaving.value ? null : ctrl.savePlan,
-          child: ctrl.isSaving.value
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+        Obx(
+          () => DropdownButtonFormField<int>(
+            value: ctrl.durationMonths.value,
+            decoration: _dec("Duration (Months)"),
+            items: ctrl.durationOptions
+                .map(
+                  (e) => DropdownMenuItem(
+                    value: e,
+                    child: Text("$e Month${e > 1 ? 's' : ''}"),
+                  ),
                 )
-              : Text(isEdit ? "Save Changes" : "Create Plan"),
+                .toList(),
+            onChanged: (v) => ctrl.durationMonths.value = v ?? 1,
+          ),
         ),
-      );
-    });
+      ],
+    );
+  }
+
+  // =========================================================
+  // PRICING
+  // =========================================================
+  Widget _pricing() {
+    return Row(
+      children: [
+        Expanded(child: _number("Price (₹)", ctrl.priceCtrl)),
+        const SizedBox(width: 12),
+        Expanded(child: _number("Old Price (optional)", ctrl.oldPriceCtrl)),
+      ],
+    );
+  }
+
+  // =========================================================
+  // FEATURES
+  // =========================================================
+  Widget _features() {
+    return Column(
+      children: [
+        _addField("Add Feature", ctrl.pointInput, ctrl.addPoint),
+        const SizedBox(height: 12),
+
+        Obx(() {
+          if (ctrl.points.isEmpty) {
+            return const Text(
+              "No features added",
+              style: TextStyle(color: Colors.grey),
+            );
+          }
+
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(
+              ctrl.points.length,
+              (i) => Chip(
+                label: Text(ctrl.points[i]),
+                deleteIcon: const Icon(Icons.close, size: 18),
+                onDeleted: () => ctrl.removePoint(i),
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  // =========================================================
+  // 🔥 LIMITS (CRITICAL + CLEAN UX)
+  // =========================================================
+  Widget _limits() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: _number("Max Admins", ctrl.maxAdminsCtrl)),
+            const SizedBox(width: 12),
+            Expanded(child: _number("Max Trainers", ctrl.maxTrainersCtrl)),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        Row(
+          children: [
+            Expanded(child: _number("Max Clients", ctrl.maxClientsCtrl)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _number("Max Workout Plans", ctrl.maxWorkoutPlansCtrl),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        Row(
+          children: [
+            Expanded(child: _number("Max Workouts", ctrl.maxWorkoutsCtrl)),
+            const SizedBox(width: 12),
+            Expanded(child: _number("Max Diet Plans", ctrl.maxDietPlansCtrl)),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.orange),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  "These values define platform limits and are enforced in real-time.",
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // =========================================================
+  // FOOTER
+  // =========================================================
+  Widget _footer() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+      ),
+      child: Obx(() {
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: ctrl.isSaving.value ? null : _submit,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            child: ctrl.isSaving.value
+                ? const CircularProgressIndicator()
+                : Text(isEdit ? "Update Plan" : "Create Plan"),
+          ),
+        );
+      }),
+    );
+  }
+
+  // =========================================================
+  // SUBMIT
+  // =========================================================
+  void _submit() {
+    if (ctrl.planNameCtrl.text.trim().isEmpty) {
+      Get.snackbar("Error", "Plan name required");
+      return;
+    }
+
+    final price = double.tryParse(ctrl.priceCtrl.text);
+    if (price == null || price <= 0) {
+      Get.snackbar("Error", "Valid price required");
+      return;
+    }
+
+    ctrl.savePlan();
+  }
+
+  // =========================================================
+  // INPUTS
+  // =========================================================
+  Widget _input(String label, TextEditingController c) {
+    return TextField(controller: c, decoration: _dec(label));
+  }
+
+  Widget _number(String label, TextEditingController c) {
+    return TextField(
+      controller: c,
+      keyboardType: TextInputType.number,
+      decoration: _dec(label),
+    );
+  }
+
+  Widget _addField(String hint, RxString rx, VoidCallback onAdd) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            onChanged: (v) => rx.value = v,
+            decoration: _dec(hint),
+          ),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(onPressed: onAdd, child: const Text("Add")),
+      ],
+    );
+  }
+
+  Widget _section(String title, Widget child) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _dec(String label) {
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: const Color(0xffF8FAFC),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    );
   }
 }
