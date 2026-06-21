@@ -1,479 +1,581 @@
-// lib/screens/admins_screen.dart
-
+import 'package:alphaserena_admin_portel/core/theme/app_colors.dart';
+import 'package:alphaserena_admin_portel/core/theme/app_radii.dart';
+import 'package:alphaserena_admin_portel/core/theme/app_shadows.dart';
+import 'package:alphaserena_admin_portel/core/theme/app_text.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
+
 import '../controllers/admin_controller.dart';
 import '../models/admin_model.dart';
-import '../widgets/admin_form_dialog.dart';
-import '../widgets/admin_details_dialog.dart';
+import '../widgets/page_shell.dart';
+
+const _cActive = Color(0xFF1A7F5A);
+const _cPending = Color(0xFF3B6FD4);
+const _cWarning = Color(0xFFB06A00);
+const _cBlocked = Color(0xFFD4341F);
+
+Color _statusColor(String s) {
+  switch (s.toLowerCase()) {
+    case 'active':
+      return _cActive;
+    case 'pending':
+      return _cPending;
+    case 'warning':
+      return _cWarning;
+    case 'blocked':
+      return _cBlocked;
+    default:
+      return const Color(0xFF9AA0A6);
+  }
+}
 
 class AdminsScreen extends StatelessWidget {
   AdminsScreen({super.key});
 
-  final ctrl = Get.find<AdminController>();
-
-  /// 🔥 ENTERPRISE SELECTION STATE
-  final RxSet<String> selectedIds = <String>{}.obs;
+  final AdminController ctrl = Get.find<AdminController>();
+  final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xffF4F7FB),
-
-      body: Column(
-        children: [
-          _header(),
-
-          _topBar(),
-
-          Obx(
-            () => selectedIds.isNotEmpty ? _bulkActionBar() : const SizedBox(),
-          ),
-
-          Expanded(child: Obx(() => _grid())),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // 🧠 HEADER (SAAS STYLE)
-  // ============================================================
-  Widget _header() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-      child: Row(
-        children: [
-          const Text(
-            "Admin Management",
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(width: 12),
-
-          Obx(
-            () => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                "${ctrl.admins.length} admins",
-                style: TextStyle(
-                  color: Colors.blue.shade700,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-
-          const Spacer(),
-
-          ElevatedButton.icon(
-            onPressed: () {
-              ctrl.clearForm();
-              Get.dialog(AdminFormDialog());
-            },
-            icon: const Icon(Icons.add),
-            label: const Text("Create Admin"),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // 🔍 TOP BAR
-  // ============================================================
-  Widget _topBar() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              onChanged: (v) => ctrl.search.value = v,
-              decoration: InputDecoration(
-                hintText: "Search admins...",
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          Obx(
-            () => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: DropdownButton<String>(
-                underline: const SizedBox(),
-                value: ctrl.statusFilter.value,
-                items: const [
-                  DropdownMenuItem(value: "all", child: Text("All")),
-                  DropdownMenuItem(value: "active", child: Text("Active")),
-                  DropdownMenuItem(value: "pending", child: Text("Pending")),
-                  DropdownMenuItem(value: "blocked", child: Text("Blocked")),
-                ],
-                onChanged: (v) => ctrl.statusFilter.value = v!,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // 🧠 BULK ACTION BAR
-  // ============================================================
-  Widget _bulkActionBar() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Text("${selectedIds.length} selected"),
-
-          const SizedBox(width: 20),
-
-          TextButton(
-            onPressed: () => _bulkUpdate("active"),
-            child: const Text("Approve"),
-          ),
-
-          TextButton(
-            onPressed: () => _bulkUpdate("blocked"),
-            child: const Text("Block"),
-          ),
-
-          TextButton(onPressed: _bulkDelete, child: const Text("Delete")),
-
-          const Spacer(),
-
-          IconButton(
-            onPressed: () => selectedIds.clear(),
-            icon: const Icon(Icons.close),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // 🧱 GRID VIEW (MAIN UI)
-  // ============================================================
-  Widget _grid() {
-    if (ctrl.isLoading.value) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final list = ctrl.filteredAdmins;
-
-    if (list.isEmpty) {
-      return const Center(child: Text("No admins found"));
-    }
-
-    return LayoutBuilder(
-      builder: (_, box) {
-        int cross = 1;
-        if (box.maxWidth > 1400)
-          cross = 4;
-        else if (box.maxWidth > 1000)
-          cross = 3;
-        else if (box.maxWidth > 700)
-          cross = 2;
-
-        return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: list.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cross,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            childAspectRatio: 1.2,
-          ),
-          itemBuilder: (_, i) => _adminCard(list[i]),
-        );
-      },
-    );
-  }
-
-  // ============================================================
-  // 💎 ADMIN CARD (CORE UI)
-  // ============================================================
-  Widget _adminCard(AdminModel a) {
-    final selected = selectedIds.contains(a.docId);
-    Map<String, dynamic> safeMap(dynamic value) {
-      if (value is Map) {
-        return value.map((key, val) => MapEntry(key.toString(), val));
-      }
-      return {};
-    }
-
-    int toInt(dynamic v) {
-      if (v is int) return v;
-      if (v is num) return v.toInt();
-      if (v is String) return int.tryParse(v) ?? 0;
-      return 0;
-    }
-
-    /// ✅ SAFE DATA EXTRACTION
-    final limits = safeMap(a.subscriptionLimits);
-    final usage = safeMap(limits['usage']);
-
-    final maxTrainers = toInt(limits['maxTrainers']);
-    final maxClients = toInt(limits['maxClients']);
-    final maxWorkoutPlans = toInt(limits['maxWorkoutPlans']);
-    final maxDietPlans = toInt(limits['maxDietPlans']);
-
-    final usedTrainers = toInt(usage['trainers']);
-    final usedClients = toInt(usage['clients']);
-    final usedWorkouts = toInt(usage['workoutPlans']);
-    final usedDiets = toInt(usage['dietPlans']);
-
-    return GestureDetector(
-      onTap: () => Get.dialog(AdminDetailsDialog(admin: a)),
-      onLongPress: () => _toggleSelection(a.docId),
-
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.all(18),
-
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          color: Colors.white,
-          border: selected ? Border.all(color: Colors.blue, width: 2) : null,
-          boxShadow: [
-            BoxShadow(
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-              color: Colors.black.withOpacity(.06),
-            ),
-          ],
-        ),
-
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ======================================================
-            // HEADER
-            // ======================================================
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: Colors.blue.shade100,
-                  child: Text(a.name.isNotEmpty ? a.name[0] : "?"),
-                ),
-                const SizedBox(width: 10),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        a.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      ),
-                      Text(
-                        a.organizationName,
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                _statusBadge(a.status),
-              ],
-            ),
-
-            const SizedBox(height: 14),
-
-            // ======================================================
-            // PLAN + EXPIRY
-            // ======================================================
-            Row(
-              children: [
-                const Icon(Icons.workspace_premium, size: 16),
-                const SizedBox(width: 6),
-                Text(
-                  a.planName ?? "No Plan",
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-
-            if (a.planExpiry != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  "Expires: ${a.planExpiry!.day}/${a.planExpiry!.month}/${a.planExpiry!.year}",
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _expiryColor(a.planExpiry!),
-                  ),
-                ),
-              ),
-
-            const SizedBox(height: 16),
-
-            // ======================================================
-            // USAGE SECTION
-            // ======================================================
-            _usageRow("Trainers", usedTrainers, maxTrainers),
-            _usageRow("Clients", usedClients, maxClients),
-            _usageRow("Workout Plans", usedWorkouts, maxWorkoutPlans),
-            _usageRow("Diet Plans", usedDiets, maxDietPlans),
-
-            const Spacer(),
-
-            // ======================================================
-            // ACTIONS
-            // ======================================================
-            Row(
-              children: [
-                TextButton(
-                  onPressed: () => ctrl.updateStatus(a.docId, "active"),
-                  child: const Text("Approve"),
-                ),
-                TextButton(
-                  onPressed: () => ctrl.updateStatus(a.docId, "blocked"),
-                  child: const Text("Block"),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () {
-                    ctrl.loadToForm(a);
-                    Get.dialog(AdminFormDialog(admin: a));
-                  },
-                  icon: const Icon(Icons.edit),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Color _expiryColor(DateTime date) {
-    final diff = date.difference(DateTime.now()).inDays;
-
-    if (diff <= 3) return Colors.red;
-    if (diff <= 7) return Colors.orange;
-    return Colors.green;
-  }
-
-  Widget _usageRow(String label, int used, int max) {
-    final double progress = max == 0
-        ? 0.0
-        : (used / max).clamp(0.0, 1.0).toDouble();
-
-    final color = progress > 0.9
-        ? Colors.red
-        : progress > 0.7
-        ? Colors.orange
-        : Colors.green;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+    return PageShell(
+      title: "Organizations",
+      icon: Icons.business_outlined,
+      trailing: Obx(() => Text(
+            "${ctrl.admins.length} total",
+            style: AppText.body(size: 13)
+                .copyWith(color: context.palette.textMuted),
+          )),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          _toolbar(context),
+          const SizedBox(height: 16),
+          Obx(() {
+            if (ctrl.isLoading.value && ctrl.admins.isEmpty) {
+              return const SizedBox(
+                height: 240,
+                child:
+                    Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
+              );
+            }
+            final list = ctrl.filtered;
+            if (list.isEmpty) return _empty(context);
+            return Column(
+              children: [
+                for (final a in list) ...[
+                  _row(context, a),
+                  const SizedBox(height: 10),
+                ],
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ── TOOLBAR ─────────────────────────────────────────────────────────
+  Widget _toolbar(BuildContext context) {
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _searchCtrl,
+          onChanged: (v) => ctrl.search.value = v,
+          decoration: InputDecoration(
+            hintText: "Search organizations, owners, emails…",
+            prefixIcon: Icon(Icons.search, color: p.textMuted),
+            filled: true,
+            fillColor: p.surface,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: AppRadii.smR,
+              borderSide: BorderSide(color: p.border),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Obx(() => Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _chip(context, "All", "all", ctrl.admins.length),
+                _chip(context, "Active", "active",
+                    ctrl.countByStatus("active")),
+                _chip(context, "Pending", "pending",
+                    ctrl.countByStatus("pending")),
+                _chip(context, "Warning", "warning",
+                    ctrl.countByStatus("warning")),
+                _chip(context, "Blocked", "blocked",
+                    ctrl.countByStatus("blocked")),
+              ],
+            )),
+      ],
+    );
+  }
+
+  Widget _chip(BuildContext context, String label, String value, int count) {
+    final p = context.palette;
+    final selected = ctrl.statusFilter.value == value;
+    final accent = value == 'all' ? p.accent : _statusColor(value);
+    return InkWell(
+      onTap: () => ctrl.statusFilter.value = value,
+      borderRadius: AppRadii.smR,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? accent.withValues(alpha: 0.12) : p.surface,
+          borderRadius: AppRadii.smR,
+          border: Border.all(color: selected ? accent : p.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: AppText.label(size: 13)
+                    .copyWith(color: selected ? accent : p.textSecondary)),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+              decoration: BoxDecoration(
+                color:
+                    selected ? accent.withValues(alpha: 0.18) : p.surfaceAlt,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text("$count",
+                  style: AppText.label(size: 11)
+                      .copyWith(color: selected ? accent : p.textMuted)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── ROW ─────────────────────────────────────────────────────────────
+  Widget _row(BuildContext context, AdminModel a) {
+    final p = context.palette;
+    final name = a.organizationName.isNotEmpty ? a.organizationName : a.name;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: AppRadii.cardR,
+        onTap: () => _showDetails(context, a),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: p.surface,
+            borderRadius: AppRadii.cardR,
+            border: Border.all(color: p.border),
+            boxShadow: AppShadows.card(p.isDark),
+          ),
+          child: Row(
             children: [
-              Text(label, style: TextStyle(fontSize: 14)),
-              const Spacer(),
-              Text(
-                "$used / $max",
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
+              _avatar(context, name),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppText.label(size: 14)
+                                  .copyWith(color: p.textPrimary)),
+                        ),
+                        const SizedBox(width: 8),
+                        _statusChip(a.status),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(a.email,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.body(size: 12)
+                            .copyWith(color: p.textMuted)),
+                    const SizedBox(height: 5),
+                    _subscriptionLine(context, a),
+                  ],
                 ),
               ),
+              const SizedBox(width: 8),
+              _actionsMenu(context, a),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _subscriptionLine(BuildContext context, AdminModel a) {
+    final p = context.palette;
+    if (a.isSubscriptionActive) {
+      final exp = a.planExpiry != null
+          ? " · expires ${DateFormat('d MMM yyyy').format(a.planExpiry!)}"
+          : "";
+      return Row(children: [
+        const Icon(Icons.verified, size: 13, color: _cActive),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(
+            "${a.planName ?? 'Subscribed'}$exp",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.body(size: 12).copyWith(color: p.textSecondary),
+          ),
+        ),
+      ]);
+    }
+    return Row(children: [
+      Icon(Icons.cancel_outlined, size: 13, color: p.textMuted),
+      const SizedBox(width: 5),
+      Text("No active subscription",
+          style: AppText.body(size: 12).copyWith(color: p.textMuted)),
+    ]);
+  }
+
+  Widget _actionsMenu(BuildContext context, AdminModel a) {
+    final p = context.palette;
+    final s = a.status.toLowerCase();
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert, color: p.textMuted),
+      position: PopupMenuPosition.under,
+      onSelected: (v) => _onAction(context, a, v),
+      itemBuilder: (_) => [
+        const PopupMenuItem(value: 'view', child: Text('View details')),
+        if (s == 'pending')
+          const PopupMenuItem(value: 'approve', child: Text('Approve')),
+        if (s == 'active' || s == 'pending')
+          const PopupMenuItem(value: 'warn', child: Text('Issue warning')),
+        if (s == 'warning' || s == 'blocked')
+          const PopupMenuItem(value: 'reactivate', child: Text('Reactivate')),
+        if (s != 'blocked')
+          const PopupMenuItem(
+            value: 'block',
+            child: Text('Block', style: TextStyle(color: _cBlocked)),
+          ),
+      ],
+    );
+  }
+
+  void _onAction(BuildContext context, AdminModel a, String action) {
+    switch (action) {
+      case 'view':
+        _showDetails(context, a);
+        break;
+      case 'approve':
+        ctrl.approve(a.docId);
+        break;
+      case 'reactivate':
+        ctrl.reactivate(a.docId);
+        break;
+      case 'warn':
+        _reasonDialog(
+          context,
+          title: 'Issue a warning',
+          hint: 'Reason shown to the organization',
+          confirmLabel: 'Send warning',
+          confirmColor: _cWarning,
+          onConfirm: (r) => ctrl.warn(a.docId, r),
+        );
+        break;
+      case 'block':
+        _reasonDialog(
+          context,
+          title: 'Block organization',
+          hint: 'Reason for blocking',
+          confirmLabel: 'Block',
+          confirmColor: _cBlocked,
+          onConfirm: (r) => ctrl.block(a.docId, r),
+        );
+        break;
+    }
+  }
+
+  // ── DETAILS DIALOG ──────────────────────────────────────────────────
+  void _showDetails(BuildContext context, AdminModel a) {
+    final p = context.palette;
+    final name = a.organizationName.isNotEmpty ? a.organizationName : a.name;
+    final l = a.subscriptionLimits;
+
+    Get.dialog(
+      Dialog(
+        backgroundColor: p.surface,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadii.lgR),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _avatar(context, name, size: 46),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(name,
+                              style: AppText.title(size: 20)
+                                  .copyWith(color: p.textPrimary)),
+                          const SizedBox(height: 2),
+                          Text("Owner: ${a.name}",
+                              style: AppText.body(size: 13)
+                                  .copyWith(color: p.textMuted)),
+                        ],
+                      ),
+                    ),
+                    _statusChip(a.status),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _detail(context, Icons.email_outlined, "Email", a.email),
+                _detail(context, Icons.phone_outlined, "Phone",
+                    a.phone.isEmpty ? "—" : a.phone),
+                if ((a.address ?? '').isNotEmpty)
+                  _detail(context, Icons.location_on_outlined, "Address",
+                      a.address!),
+                _detail(
+                  context,
+                  Icons.workspace_premium_outlined,
+                  "Subscription",
+                  a.isSubscriptionActive
+                      ? "${a.planName ?? 'Active'}${a.planExpiry != null ? ' · expires ${DateFormat('d MMM yyyy').format(a.planExpiry!)}' : ''}"
+                      : "No active subscription",
+                ),
+                _detail(context, Icons.groups_outlined, "Plan limits",
+                    "${l.maxTrainers} trainers · ${l.maxClients} clients"),
+                _detail(context, Icons.calendar_today_outlined, "Joined",
+                    DateFormat('d MMM yyyy').format(a.createdAt)),
+                const SizedBox(height: 22),
+                _detailActions(context, a),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detail(
+      BuildContext context, IconData icon, String label, String value) {
+    final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: p.textMuted),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 96,
+            child: Text(label,
+                style: AppText.body(size: 13).copyWith(color: p.textMuted)),
+          ),
+          Expanded(
+            child: SelectableText(value,
+                style: AppText.body(size: 13).copyWith(color: p.textPrimary)),
           ),
         ],
       ),
     );
   }
 
-  // ============================================================
-  // STATUS BADGE
-  // ============================================================
-  Widget _statusBadge(String status) {
-    final color = {
-      "active": Colors.green,
-      "pending": Colors.orange,
-      "blocked": Colors.red,
-    }[status]!;
+  Widget _detailActions(BuildContext context, AdminModel a) {
+    final s = a.status.toLowerCase();
+    final buttons = <Widget>[];
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(.12),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
+    void add(String label, Color color, VoidCallback onTap) {
+      buttons.add(OutlinedButton(
+        onPressed: () {
+          Get.back();
+          onTap();
+        },
+        style: OutlinedButton.styleFrom(
+          foregroundColor: color,
+          side: BorderSide(color: color),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadii.mdR),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+        child: Text(label),
+      ));
+    }
+
+    if (s == 'pending') add("Approve", _cActive, () => ctrl.approve(a.docId));
+    if (s == 'warning' || s == 'blocked') {
+      add("Reactivate", _cActive, () => ctrl.reactivate(a.docId));
+    }
+    if (s == 'active' || s == 'pending') {
+      add("Warn", _cWarning, () {
+        _reasonDialog(context,
+            title: 'Issue a warning',
+            hint: 'Reason shown to the organization',
+            confirmLabel: 'Send warning',
+            confirmColor: _cWarning,
+            onConfirm: (r) => ctrl.warn(a.docId, r));
+      });
+    }
+    if (s != 'blocked') {
+      add("Block", _cBlocked, () {
+        _reasonDialog(context,
+            title: 'Block organization',
+            hint: 'Reason for blocking',
+            confirmLabel: 'Block',
+            confirmColor: _cBlocked,
+            onConfirm: (r) => ctrl.block(a.docId, r));
+      });
+    }
+
+    return Wrap(spacing: 10, runSpacing: 10, children: buttons);
+  }
+
+  // ── REASON DIALOG ───────────────────────────────────────────────────
+  void _reasonDialog(
+    BuildContext context, {
+    required String title,
+    required String hint,
+    required String confirmLabel,
+    required Color confirmColor,
+    required void Function(String reason) onConfirm,
+  }) {
+    final p = context.palette;
+    final reasonCtrl = TextEditingController();
+    Get.dialog(
+      Dialog(
+        backgroundColor: p.surface,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadii.lgR),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style:
+                        AppText.title(size: 19).copyWith(color: p.textPrimary)),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: reasonCtrl,
+                  maxLines: 3,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: hint,
+                    filled: true,
+                    fillColor: p.inputFill,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: AppRadii.smR,
+                      borderSide: BorderSide(color: p.border),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Get.back(),
+                      child:
+                          Text("Cancel", style: TextStyle(color: p.textMuted)),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () {
+                        final r = reasonCtrl.text.trim();
+                        Get.back();
+                        onConfirm(r);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: confirmColor,
+                        foregroundColor: Colors.white,
+                        shape: const RoundedRectangleBorder(
+                            borderRadius: AppRadii.mdR),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
+                      ),
+                      child: Text(confirmLabel),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  // ============================================================
-  // BULK LOGIC
-  // ============================================================
-  void _toggleSelection(String id) {
-    if (selectedIds.contains(id)) {
-      selectedIds.remove(id);
-    } else {
-      selectedIds.add(id);
-    }
+  // ── SHARED ──────────────────────────────────────────────────────────
+  Widget _statusChip(String status) {
+    final c = _statusColor(status);
+    final label = status.isEmpty
+        ? "unknown"
+        : "${status[0].toUpperCase()}${status.substring(1).toLowerCase()}";
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+          const SizedBox(width: 6),
+          Text(label, style: AppText.label(size: 11).copyWith(color: c)),
+        ],
+      ),
+    );
   }
 
-  void _bulkUpdate(String status) {
-    for (final id in selectedIds) {
-      ctrl.updateStatus(id, status);
-    }
-    selectedIds.clear();
+  Widget _avatar(BuildContext context, String name, {double size = 38}) {
+    final p = context.palette;
+    final letter = name.trim().isEmpty ? "?" : name.trim()[0].toUpperCase();
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: p.accent.withValues(alpha: 0.12),
+        shape: BoxShape.circle,
+      ),
+      child: Text(letter,
+          style: AppText.label(size: size * 0.4).copyWith(color: p.accent)),
+    );
   }
 
-  void _bulkDelete() {
-    for (final id in selectedIds) {
-      ctrl.deleteAdmin(id);
-    }
-    selectedIds.clear();
+  Widget _empty(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 60),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          Icon(Icons.business_outlined,
+              size: 40, color: p.textMuted.withValues(alpha: 0.5)),
+          const SizedBox(height: 12),
+          Text("No organizations found",
+              style: AppText.label(size: 14).copyWith(color: p.textSecondary)),
+          const SizedBox(height: 4),
+          Text("Gyms that sign up (or match your filter) appear here.",
+              style: AppText.body(size: 13).copyWith(color: p.textMuted)),
+        ],
+      ),
+    );
   }
 }

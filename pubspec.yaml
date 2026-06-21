@@ -43,6 +43,8 @@ dependencies:
   get: ^4.7.3
   intl: ^0.20.2
 
+  google_fonts: ^8.1.0
+  fl_chart: ^0.69.0
   cached_network_image: ^3.4.1
 
 dev_dependencies:

@@ -54,27 +54,39 @@ class SubscriptionPlanModel {
     Map<String, dynamic> map,
     String documentId,
   ) {
+    // Read limits from EITHER shape:
+    //   • flat top-level fields (this admin app's legacy writes), or
+    //   • the nested `limits: {trainers, clients, ...}` map (canonical, what
+    //     trainersHQ writes/reads). Flat wins when both exist.
+    final rawLimits = map['limits'];
+    final Map nested = rawLimits is Map ? rawLimits : const {};
+    int limitOf(String nestedKey, String flatKey) =>
+        _toInt(map[flatKey] ?? nested[nestedKey] ?? nested[flatKey]);
+
+    final months = _toInt(map['durationMonths'] ?? map['months']);
+
     return SubscriptionPlanModel(
       id: documentId,
       docId: map['docId'] ?? documentId,
 
-      planName: map['planName'] ?? '',
+      // trainersHQ stores `title`; this app stores `planName`. Accept both.
+      planName: (map['planName'] ?? map['title'] ?? '').toString(),
 
       price: _toDouble(map['price']),
       oldPrice: map['oldPrice'] != null ? _toDouble(map['oldPrice']) : null,
 
-      durationMonths: (map['durationMonths'] ?? 1) as int,
+      durationMonths: months > 0 ? months : 1,
 
-      maxAdmins: map['maxAdmins'] ?? 0,
-      maxTrainers: map['maxTrainers'] ?? 0,
-      maxClients: map['maxClients'] ?? 0,
-      maxWorkoutPlans: map['maxWorkoutPlans'] ?? 0,
-      maxWorkouts: map['maxWorkouts'] ?? 0,
-      maxDietPlans: map['maxDietPlans'] ?? 0,
+      maxAdmins: limitOf('admins', 'maxAdmins'),
+      maxTrainers: limitOf('trainers', 'maxTrainers'),
+      maxClients: limitOf('clients', 'maxClients'),
+      maxWorkoutPlans: limitOf('workoutPlans', 'maxWorkoutPlans'),
+      maxWorkouts: limitOf('workouts', 'maxWorkouts'),
+      maxDietPlans: limitOf('dietPlans', 'maxDietPlans'),
 
       points: _toList(map['points']),
 
-      isActive: map['isActive'] == true,
+      isActive: map['isActive'] != false,
 
       createdAt: _toDate(map['createdAt']),
       updatedAt: _toDate(map['updatedAt']),
@@ -88,13 +100,25 @@ class SubscriptionPlanModel {
     return {
       'docId': docId,
 
+      // ── Canonical fields (READ by trainersHQ org app + the
+      //    verifyAndActivateSubscription Cloud Function) ──────────────────
+      'title': planName,
+      'months': durationMonths,
+      'duration': '$durationMonths Month${durationMonths == 1 ? '' : 's'}',
+      'order': durationMonths,
+      // trainersHQ reads plan limits ONLY from this nested map.
+      'limits': {
+        'admins': maxAdmins,
+        'trainers': maxTrainers,
+        'clients': maxClients,
+        'workoutPlans': maxWorkoutPlans,
+        'dietPlans': maxDietPlans,
+        'workouts': maxWorkouts,
+      },
+
+      // ── Flat fields kept for THIS admin app's own reads / back-compat ──
       'planName': planName,
-
-      'price': price,
-      'oldPrice': oldPrice,
-
       'durationMonths': durationMonths,
-
       'maxAdmins': maxAdmins,
       'maxTrainers': maxTrainers,
       'maxClients': maxClients,
@@ -102,8 +126,9 @@ class SubscriptionPlanModel {
       'maxWorkouts': maxWorkouts,
       'maxDietPlans': maxDietPlans,
 
+      'price': price,
+      'oldPrice': oldPrice,
       'points': points,
-
       'isActive': isActive,
 
       'createdAt': Timestamp.fromDate(createdAt),
@@ -114,6 +139,13 @@ class SubscriptionPlanModel {
   // -------------------------------------------------------
   // HELPERS
   // -------------------------------------------------------
+  static int _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v) ?? 0;
+    return 0;
+  }
+
   static double _toDouble(dynamic v) => double.tryParse(v.toString()) ?? 0;
 
   static List<String> _toList(dynamic v) {

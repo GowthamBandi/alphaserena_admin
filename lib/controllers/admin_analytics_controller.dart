@@ -45,18 +45,18 @@ class AdminAnalyticsController extends GetxController {
           clients.value = snap.docs.length;
         });
 
-    /// WORKOUTS
+    /// WORKOUTS (canonical collection is `workoutPlans`)
     _db
-        .collection("workout_plans")
+        .collection("workoutPlans")
         .where("adminId", isEqualTo: adminUid)
         .snapshots()
         .listen((snap) {
           workouts.value = snap.docs.length;
         });
 
-    /// DIET PLANS
+    /// DIET PLANS (canonical collection is `dietPlans`)
     _db
-        .collection("diet_plans")
+        .collection("dietPlans")
         .where("adminId", isEqualTo: adminUid)
         .snapshots()
         .listen((snap) {

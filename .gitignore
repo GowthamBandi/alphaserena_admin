@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Secrets — service account keys must NEVER be committed
+**/service-account.json
+scripts/node_modules/

@@ -166,11 +166,11 @@ class AdminRootController extends GetxController {
     try {
       log("👋 [AdminRoot] Logging out...");
 
+      // Sign out only. The reactive RootGate (driven by SessionController)
+      // rebuilds to the login screen — there are no named routes to push.
       await _auth.signOut();
 
       _clearState();
-
-      Get.offAllNamed('/login'); // or use widget if not using named routes
     } catch (e) {
       log("🔥 Logout error → $e");
     }
@@ -180,11 +180,9 @@ class AdminRootController extends GetxController {
   // HANDLE AUTO LOGOUT (AUTH STATE)
   // ===========================================================================
   void _handleLogoutNavigation() {
+    // No navigation here — RootGate reacts to the auth-state change and shows
+    // the login screen automatically.
     _clearState();
-
-    Future.microtask(() {
-      Get.offAllNamed('/login');
-    });
   }
 
   // ===========================================================================

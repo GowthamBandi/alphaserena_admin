@@ -1,0 +1,12 @@
+{
+  "name": "alphaserena-admin-scripts",
+  "private": true,
+  "version": "1.0.0",
+  "description": "One-time admin/ops scripts for the AlphaSerena founder console (backend: trainershq-f5ded).",
+  "scripts": {
+    "set-super-admin": "node set_super_admin.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

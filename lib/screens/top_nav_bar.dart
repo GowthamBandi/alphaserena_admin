@@ -1,8 +1,12 @@
+import 'package:alphaserena_admin_portel/controllers/admin_root_controller.dart';
+import 'package:alphaserena_admin_portel/core/theme/app_colors.dart';
+import 'package:alphaserena_admin_portel/core/theme/app_radii.dart';
+import 'package:alphaserena_admin_portel/core/theme/app_shadows.dart';
 import 'package:alphaserena_admin_portel/screens/admin_root_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-/// Top navigation bar (constant across pages)
+/// Top navigation bar (constant across pages).
 class TopNavBar extends StatelessWidget {
   const TopNavBar({super.key});
 
@@ -13,7 +17,7 @@ class TopNavBar extends StatelessWidget {
       items: [
         PopupMenuItem(
           child: ListTile(
-            leading: const Icon(Icons.person),
+            leading: const Icon(Icons.person_outline),
             title: const Text("Profile"),
             onTap: () {
               Navigator.pop(context);
@@ -27,7 +31,6 @@ class TopNavBar extends StatelessWidget {
             title: const Text("Logout"),
             onTap: () {
               Navigator.pop(context);
-              // Replace with real logout
               Get.defaultDialog(
                   title: "Logout",
                   middleText: "Confirm logout?",
@@ -35,7 +38,7 @@ class TopNavBar extends StatelessWidget {
                   textConfirm: "Logout",
                   onConfirm: () {
                     Get.back();
-                    Get.snackbar("Logged out", "User logged out (hook your auth logic).");
+                    Get.find<AdminRootController>().logout();
                   });
             },
           ),
@@ -46,22 +49,25 @@ class TopNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final bool isDesktop = Responsive.isDesktop(context);
+
     return Container(
       height: 68,
       padding: const EdgeInsets.symmetric(horizontal: 18),
       margin: const EdgeInsets.symmetric(horizontal: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 6))],
+        color: p.surface,
+        borderRadius: AppRadii.cardR,
+        border: Border.all(color: p.border),
+        boxShadow: AppShadows.card(p.isDark),
       ),
       child: Row(
         children: [
           if (!isDesktop)
             Builder(
               builder: (ctx) => IconButton(
-                icon: const Icon(Icons.menu),
+                icon: Icon(Icons.menu, color: p.textSecondary),
                 onPressed: () => Scaffold.of(ctx).openDrawer(),
               ),
             ),
@@ -70,24 +76,31 @@ class TopNavBar extends StatelessWidget {
             child: TextField(
               decoration: InputDecoration(
                 hintText: "Search anything...",
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: Icon(Icons.search, color: p.textMuted),
                 filled: true,
-                fillColor: Colors.grey.shade100,
+                fillColor: p.inputFill,
                 isDense: true,
                 contentPadding: const EdgeInsets.all(12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                  borderRadius: AppRadii.smR,
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
           ),
           const SizedBox(width: 12),
-          IconButton(onPressed: () => Get.snackbar("Notifications", "Open notifications (not implemented)"), icon: const Icon(Icons.notifications_outlined)),
+          IconButton(
+            onPressed: () => Get.snackbar(
+                "Notifications", "Open notifications (not implemented)"),
+            icon: Icon(Icons.notifications_outlined, color: p.textSecondary),
+          ),
           const SizedBox(width: 8),
           GestureDetector(
             onTap: () => _onProfileTap(context),
             child: CircleAvatar(
               radius: 20,
-              backgroundColor: Colors.grey.shade300,
-              child: const Icon(Icons.person, color: Colors.white),
+              backgroundColor: p.accent.withValues(alpha: 0.12),
+              child: Icon(Icons.person, color: p.accent),
             ),
           ),
         ],

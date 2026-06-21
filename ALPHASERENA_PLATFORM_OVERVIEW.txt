@@ -1,0 +1,467 @@
+==============================================================================
+ ALPHASERENA — COMPLETE PLATFORM OVERVIEW
+ The whole SaaS, every app, every section, in plain language.
+ Snapshot date: 21 Jun 2026 · Living document — update as sections change.
+==============================================================================
+
+HOW TO READ THIS FILE
+  • Part 1–4  = the big picture (what it is, who uses it, the money model).
+  • Part 5–8  = the shared foundation (backend, data, rules, functions, design).
+  • Part 9    = APP 1  trainersHQ          (the gym/organization app).
+  • Part 10   = APP 2  alphaserena_admin   (your founder console — web).
+  • Part 11   = APP 3  alphaserena         (the client / gym-member app).
+  • Part 12   = cross-app contracts & known gaps.
+  • Part 13   = honest build status (done vs pending) per app.
+  • Part 14   = founder go-live checklist.
+  • Part 15   = run / build / deploy commands.
+  • Part 16   = glossary.
+
+==============================================================================
+ PART 1 — WHAT ALPHASERENA IS (one paragraph)
+==============================================================================
+AlphaSerena is a multi-tenant B2B (and soon B2C) fitness SaaS. You (the founder)
+sell a subscription to fitness ORGANIZATIONS (gyms, yoga studios, personal-training
+businesses, sports academies — "Comeback Sports", etc.). Each organization runs its
+own gym inside the platform: it creates trainers (staff), manages clients (members),
+and builds workout/diet plans. Members get their own mobile app to follow their
+plans, track progress, and chat with their trainer. Everything runs on ONE shared
+Firebase backend. Money flows in two layers (see Part 4).
+
+The brand was previously called "TrainersHQ" and is migrating to "AlphaSerena".
+
+==============================================================================
+ PART 2 — THE BIG PICTURE: 3 APPS + 1 BACKEND
+==============================================================================
+There are THREE applications, all sharing ONE Firebase project: trainershq-f5ded
+(bucket trainershq-f5ded.firebasestorage.app, region us-central1).
+
+  APP 1  trainersHQ           Flutter MOBILE (Android/iOS)   — the ORGANIZATION app
+         folder: /Users/gowthambandi/flutters/trainersHQ
+         package: com.trainersHQ
+         Users: gym owner (admin) + trainer (staff) + super admin — all in ONE app.
+         Status: feature-complete rebuild (its own PROJECT_BRIEF, Sections 0–11).
+
+  APP 2  alphaserena_admin    Flutter WEB                    — the FOUNDER console
+         folder: /Users/gowthambandi/flutters/alphaserena_admin
+         pubspec name: alphaserena_admin_portel
+         User: YOU (the founder / super admin) only.
+         Status: actively being finished (this is where current work happens).
+
+  APP 3  alphaserena          Flutter MOBILE                 — the CLIENT app
+         folder: /Users/gowthambandi/flutters/alphaserena
+         package: com.alphaserena
+         Users: clients (gym members).
+         Status: UI built, NOT yet wired to the database.
+
+WHY THREE APPS
+  Different audiences need different tools. Gym staff run operations (trainersHQ);
+  you watch the whole business and control the catalog (alphaserena_admin); members
+  consume their plans (alphaserena). One backend keeps all their data in sync.
+
+==============================================================================
+ PART 3 — ROLES: WHO DOES WHAT
+==============================================================================
+SUPER ADMIN (you, the founder) — uses alphaserena_admin (web)
+  • God-mode READ across the entire platform.
+  • Creates the Tier-1 subscription plans gyms buy + discount coupons.
+  • Approves / warns / blocks organizations (moderation).
+  • Watches revenue, growth, expiring subscriptions, pending approvals.
+  • Does NOT run any gym's daily operations.
+
+ADMIN = GYM OWNER — uses trainersHQ (mobile)
+  • Signs up, gets approved by you, buys a Tier-1 subscription.
+  • Creates trainers (staff), manages clients (members).
+  • Builds the content library: exercises, food, workout/diet/weekly plans.
+  • Can only operate while approved + subscription active (else read-only).
+
+TRAINER = STAFF inside one gym — uses trainersHQ (mobile)
+  • Created by their gym owner (via a Cloud Function).
+  • Works with assigned clients: assigns plans, writes notes, chats.
+  • Bound to their org; same "can operate" gate as the org.
+
+CLIENT = GYM MEMBER — uses alphaserena (mobile)
+  • Follows assigned workout/diet plans, tracks progress, chats with the trainer.
+  • (Future) buys the gym's own membership (Tier-2).
+  • Today: a DATA RECORD managed inside trainersHQ; the app exists but isn't wired.
+
+==============================================================================
+ PART 4 — THE MONEY MODEL: TWO SUBSCRIPTION TIERS (critical)
+==============================================================================
+TIER 1 — PLATFORM SaaS  (Founder  ->  Organizations)
+  • YOU create plans in alphaserena_admin (collection: subscription_plans).
+  • A gym owner buys one inside trainersHQ to unlock the app + get usage LIMITS
+    (max trainers / clients / workout plans / diet plans / workouts).
+  • Payment via Razorpay; verified SERVER-SIDE by a Cloud Function that derives the
+    limits + duration FROM THE PLAN DOC (never trusts the client), then writes
+    isSubscriptionActive + planExpiry + subscriptionLimits onto the gym's admin doc.
+  • THIS IS LIVE/BUILT on the catalog side (Subscriptions screen) + verified schema.
+
+TIER 2 — GYM MEMBERSHIPS  (Organization  ->  Clients)
+  • Each gym would create its OWN membership plans for its members.
+  • Members buy them inside the alphaserena client app.
+  • NOT BUILT YET — no data model exists for it. Proposed (to design):
+      membershipPlans/{id}         org-owned (adminId), the gym's member plans
+      clientSubscriptions/{id}     a member's active membership + expiry
+      + a Cloud Function to verify the member's payment & activate it.
+
+==============================================================================
+ PART 5 — THE SHARED BACKEND (Firebase)
+==============================================================================
+PROJECT: trainershq-f5ded   ·   Auth + Firestore + Storage + (Cloud Functions).
+
+IDENTITY & ACCESS COLLECTIONS
+  master_admins/{uid}   Super admins (you). Membership here = founder access.
+  admins/{uid}          Gym owners. docId == auth uid. Key fields:
+                          name, email, phone, organizationName,
+                          role, status (pending|active|warning|blocked),
+                          statusReason, statusUpdatedAt, statusUpdatedBy,
+                          subscription (map), subscriptionLimits {maxAdmins,
+                          maxTrainers, maxClients, maxWorkoutPlans, maxDietPlans},
+                          planName, planExpiry, isSubscriptionActive,
+                          approvedBy, trainerIds[], clientIds[], timestamps.
+  trainers/{uid}        Staff. docId == auth uid. name, email, phone,
+                          specialization, experience, status (active|inactive),
+                          assignedBy (owner uid), clientIds[], timestamps.
+
+MEMBERS & RELATIONS
+  clients/{id}                  Members (no login yet). name, phone, email, gender,
+                                age, goal, adminId (org), trainerId (assigned),
+                                status, notes, timestamps.  CANONICAL — not "clints".
+  client_plan_assignments/{id}  Links a plan to a client (workout|diet).
+  workout_notes_clients/{id}    Per-client trainer notes.
+  chats/{clientId}/messages/{id}  Per-client chat thread (trainer <-> client).
+
+TRAINING CONTENT (org-owned via adminId)
+  exercises/{id}            name, muscleGroup, instructions, videoUrl, adminId.
+  foodDatabase/{id}         name, serving, calories, protein, carbs, fat, adminId.
+  workoutPlans/{id}         name, items[{exerciseId, sets, reps}], adminId, createdById.
+  dietPlans/{id}            name, items[{foodId, qty, calories}], adminId, createdById.
+  weeklyWorkoutPlans/{id}   Mon–Sun day -> workoutPlan schedule, adminId.
+
+SUBSCRIPTION & BILLING
+  subscription_plans/{id}   Tier-1 catalog (FOUNDER creates). Canonical schema:
+                              title, duration (str), months (num), price (INR),
+                              oldPrice?, points[] (features), isActive, order,
+                              limits { trainers, clients, workoutPlans, dietPlans,
+                              workouts }  <-- NESTED MAP (trainersHQ reads this).
+                              (This app also writes flat maxTrainers/... for its own
+                              back-compat; both are kept in sync by the model.)
+  coupon_codes/{id}         Discount codes (super admin only). code, type
+                              (percent|flat), value, isActive, expiresAt, description.
+  admin_payments_history/{id}  Payment records written by the verify CF.
+
+ORGANIZATION
+  organizationProfiles/{adminId}  Public gym profile: name, logoUrl, about,
+                              address, phone, email, instagram, website.
+
+NOTE on a fixed data drift: the founder console used to read `users` (for members)
+and `subscriptions` (for revenue) and write plans with FLAT limits. These were
+WRONG. They are corrected: members = `clients`, revenue = `admin_payments_history`,
+and plans now carry the nested `limits` map the rest of the platform expects.
+
+==============================================================================
+ PART 6 — SECURITY RULES (firestore.rules, in the trainersHQ folder)
+==============================================================================
+The rules file lives in trainersHQ/firestore.rules and governs the shared backend
+for ALL apps. Deploy from the trainersHQ folder:
+    firebase deploy --only firestore:rules
+
+KEY IDEAS
+  • Role checks:
+      isSuperAdmin()  = custom token claim role=='super_admin'  OR  a master_admins
+                        doc exists. (Claim is preferred; set by set_super_admin.js.)
+      isAdmin()       = an admins/{uid} doc exists.
+      isTrainer()     = a trainers/{uid} doc exists; trainerAdminId() = their org.
+  • status vocabulary on admins: pending | active | warning | blocked.
+  • "CAN OPERATE" gate (orgCanOperate): an org may CREATE/EDIT data only when
+        status not in (pending, blocked)  AND  isSubscriptionActive == true.
+      -> An expired OR blocked org can still READ its data (see it + the notice),
+         but cannot WRITE. This is what makes a trainer go read-only and the owner
+         see a "Buy subscription" prompt. (Button visibility is app UI; the rules
+         guarantee no writes slip through.)
+  • TENANT ISOLATION: each gym can only read/edit its OWN content (exercises, food,
+    plans, clients, assignments, notes, chats), matched by adminId. (Fixed an earlier
+    leak where any gym owner could read/edit every gym's content.)
+  • FOUNDER MODERATION: a super admin may update ONLY the moderation fields on an
+    admin doc (status, statusReason, statusUpdatedAt, statusUpdatedBy, updatedAt).
+    Subscription/limits/role are never client-writable.
+  • SERVER-ONLY writes (Cloud Functions via Admin SDK, which bypass rules):
+    create admins, create trainers, activate/renew a subscription.
+  • subscription_plans: any signed-in user may READ (gyms browse to buy); only the
+    founder may WRITE.   coupon_codes: founder only.
+  • FALLBACK: super admin has god-mode READ on everything (powers the console
+    dashboards); everything else denied; all writes default to locked.
+
+DEPENDENCY: the operate-gate trusts the isSubscriptionActive boolean — a scheduled
+Cloud Function must flip it to false when planExpiry passes (and planExpiry should be
+stored as a Timestamp).
+
+==============================================================================
+ PART 7 — CLOUD FUNCTIONS (functions/, TypeScript, in the trainersHQ folder)
+==============================================================================
+BUILT (in trainersHQ; compile clean):
+  registerAdmin                 Creates admins/{uid} with safe defaults (pending,
+                                zero limits). Prevents self-elevation.
+  setAdminStatus                (super admin) approve/block/reactivate an admin.
+  setRoleClaims                 (super admin) set a custom role claim.
+  createTrainer                 (admin) provisions a trainer server-side (Auth user
+                                + trainers doc + link + claim); enforces active
+                                subscription + trainer limit.
+  setTrainerStatus              (admin) activate/deactivate a trainer.
+  previewCoupon                 (admin) validate a coupon, return discount.
+  createRazorpayOrder           (admin) load plan + apply coupon + create order.
+  verifyAndActivateSubscription (admin) verify Razorpay signature, derive limits +
+                                months FROM THE PLAN DOC, write subscription state +
+                                payment history.
+  Secrets: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET.
+
+RECOMMENDED / NOT YET BUILT
+  • A scheduled function to expire subscriptions (flip isSubscriptionActive when
+    planExpiry passes) — REQUIRED for the operate-gate to be fully correct.
+  • createHQ/staff helpers, refunds/reconciliation — future.
+  • Tier-2 membership purchase verification — future (Part 4).
+
+ONE-OFF SCRIPT (in alphaserena_admin/scripts/)
+  set_super_admin.js   Bootstraps the founder: finds/creates the auth user, sets the
+                       {role:'super_admin'} custom claim, writes master_admins/{uid}.
+                       Needs scripts/service-account.json (git-ignored).
+
+==============================================================================
+ PART 8 — DESIGN SYSTEM (shared brand)
+==============================================================================
+Brand voice: gym "arena / warrior". Full spec: trainersHQ/DESIGN_SYSTEM.md.
+  • Accent: deep red #D50000 (-> orange #FB8C00 gradients).
+  • Fonts (google_fonts): Teko (display/titles), Poppins (body/buttons), Inter (lists).
+  • Radii: 14 (inputs/buttons), 16 (buttons/dialogs), 18 (cards), 20–22 (premium).
+  • Soft card shadows; accent focus borders; uppercase primary buttons.
+
+In alphaserena_admin this is implemented as code under lib/core/theme/ (AppPalette as
+a ThemeExtension read via context.palette; AppText; AppRadii; AppShadows; AppTheme)
+and lib/core/widgets/ (PrimaryButton, AppTextField, GradientTitle). trainersHQ has the
+same. The client app still hardcodes colours (to be migrated).
+
+==============================================================================
+ PART 9 — APP 1: trainersHQ (the organization app)  [feature-complete]
+==============================================================================
+Architecture: Flutter + GetX (state, DI, named routes). The SessionController is the
+routing brain: it watches auth, resolves the user (admins -> trainers ->
+master_admins), and routes automatically (login / pending / blocked / subscription /
+dashboard / super-admin). See trainersHQ/PROJECT_BRIEF.txt + CLAUDE.md for specifics.
+
+SECTION 0 — Foundation & design system: theme tokens + reusable widgets,
+  FsCollections constants, Cloud Functions backbone, firebase config, base rules.
+SECTION 1 — Auth & identity: admin sign-up (registerAdmin CF), unified login, the
+  SessionController routing brain, screens splash/login/register/pending/blocked.
+SECTION 2 — Subscription & billing: plan catalog UI, Razorpay checkout wired to the
+  CFs (server-verified), payment history, coupon preview.
+SECTION 3 — Limits & usage: UsageController is the single source of truth for usage
+  vs plan limits; LimitGuard blocks over-limit creates with an upgrade prompt.
+SECTION 4 — Trainer management: admin creates trainers via createTrainer CF
+  (server-side Auth provisioning so the admin stays logged in); list/detail/activate.
+SECTION 5 — Client management: canonical clients collection; role-aware CRUD (admin
+  sees all org clients, trainer sees assigned); create/edit/detail.
+SECTION 6 — Workout & diet system: exercise library (with video upload), food
+  database, workout/diet plans (composed from those), plan assignment to clients,
+  per-client workout notes.
+SECTION 7 — Chat: per-client thread chats/{clientId}/messages; admin + the client's
+  trainer post; built so the client app can join the same thread later.
+SECTION 8 — Organization profile & settings: public gym profile (logo upload), My
+  Account (dark mode, sign out).
+SECTION 9 — Super admin / platform: an in-app super-admin console (approve/block
+  admins + coupons). NOTE: this overlaps the alphaserena_admin web console — decide
+  which is canonical (the web console is the fuller founder surface).
+SECTION 10 — Security & hardening: locked-down admins/trainers docs; weekly plans.
+SECTION 11 — Polish & launch: main.dart boots the rebuilt app; analyze clean.
+DEFERRED in trainersHQ: push notifications, app icon/splash, store metadata,
+  refunds/reconciliation, the customer (client) app.
+
+==============================================================================
+ PART 10 — APP 2: alphaserena_admin (FOUNDER CONSOLE — web)  [in progress]
+==============================================================================
+Architecture: Flutter Web + GetX. Firebase configured inline (web options) in
+main.dart. Entry flow: main() -> AppBindings (SessionController + AdminLoginController,
+permanent) -> RootGate (reactive) -> booting? loader : authorized? console : login.
+Navigation inside the console = AdminRootController.selectedIndex (0–6) with a lazy
+page cache (no named routes). Collections accessed are the canonical shared ones.
+
+  10.0 SECURITY / LOGIN  [DONE]
+    • SessionController (GetxService) verifies the user is a super admin on EVERY
+      auth-state change (including a web refresh): it checks the {role:'super_admin'}
+      custom CLAIM first, then falls back to a master_admins/{uid} doc; fails closed.
+      A non-master is signed out and never reaches the console.
+    • AdminLoginController.loginAdmin = pure email/password sign-in with generic
+      errors (no account enumeration). All authorization + routing live in
+      SessionController. Logout just signs out; RootGate reacts.
+    • Login screen rebuilt on the design system (ALPHASERENA gradient wordmark,
+      "Founder Console / Restricted", themed fields, password toggle).
+    • Bootstrap: scripts/set_super_admin.js sets the claim + master doc.
+
+  10.1 CONSOLE SHELL  [DONE]
+    • admin_root_screen: sidebar (red active states, AlphaSerena brand header, real
+      signed-in email in the footer, working logout) + top bar (themed search,
+      notifications, profile menu) + animated page switcher. PageShell re-skinned.
+
+  10.2 DASHBOARD  (/ index 0)  [DONE]
+    • Real platform metrics on the CANONICAL collections:
+      KPIs: organizations, active subscriptions, trainers, members, total revenue,
+      this-month revenue (+ growth %). Animated count-ups + hover lift.
+    • fl_chart revenue area chart (last 6 months) + organizations status donut.
+    • Live lists: pending approvals (with one-click Approve), expiring-soon (days
+      left), recent payments. Entrance animations; loading/empty states.
+    • Revenue stays ₹0 until real payments flow (admin_payments_history, written by
+      the payment CF). Counts reflect real Firestore data.
+
+  10.3 ORGANIZATIONS (Admins)  (index 1)  [DONE]
+    • Themed list of every gym: status chip, subscription line, search + status-filter
+      chips (with counts), a details dialog.
+    • MODERATION: approve / issue warning (with reason) / block (with reason) /
+      reactivate — each writes ONLY the rule-allowed moderation fields. Blocking flips
+      the org's operate-gate (it goes read-only platform-wide).
+    • No "create admin" here by design — gyms self-register (registerAdmin CF) and
+      appear as Pending for you to approve.
+
+  10.4 SUBSCRIPTIONS  (index 4)  [DONE]
+    • Tier-1 plan catalog: responsive cards (price hero, limit chips, features,
+      Inactive badge, edit/delete), "New plan", delete-confirm, empty state.
+    • Create/Edit dialog: themed sections, duration choice-chips, feature add/remove,
+      capacity limits, save with loading.
+    • VERIFIED end-to-end: writes the nested `limits` map + title/months that
+      trainersHQ + the verify CF read. Plan writes allowed by rules (super admin).
+
+  10.5 TRAINERS  (index 2)  [EXISTS — pending re-skin]
+    • Platform-wide trainers list with controller (trainer_controller) reading real
+      data. Still on default Material styling. CAVEAT: any "create trainer" here must
+      go through the createTrainer CF (direct trainer-doc creation is blocked by
+      rules); to be aligned during its re-skin.
+
+  10.6 CLIENTS  (index 3)  [EXISTS — pending re-skin]
+    • Platform-wide members list (client_controller). Real data; default styling.
+      Read-only observation fits the founder role; align writes with rules on re-skin.
+
+  10.7 PAYMENTS  (index 5)  [EXISTS — pending re-skin]
+    • Payment history view (payments_controller) from admin_payments_history. Real
+      data; default styling; pending re-skin. Will be empty until the payment CF runs.
+
+  10.8 COUPONS  (index 6)  [EXISTS — pending re-skin]
+    • Create/manage discount codes (coupon_controller, coupon_codes collection).
+      Rules allow super-admin read/write. Default styling; pending re-skin.
+
+  CONSOLE PENDING WORK
+    • Re-skin Trainers / Clients / Payments / Coupons onto the design tokens.
+    • Move any privileged WRITES to Cloud Functions where rules require it.
+    • Decide the super-admin overlap with trainersHQ's in-app console.
+    • (Later) auto-expire scheduled CF; Tier-2 design.
+
+==============================================================================
+ PART 11 — APP 3: alphaserena (CLIENT / MEMBER app)  [UI only, not wired]
+==============================================================================
+Architecture: Flutter + GetX. Entry: main() -> PhoneLoginScreen. Same backend
+(com.alphaserena, trainershq-f5ded). It currently has NO Firestore calls at all.
+
+CURRENT SCREENS (UI built, data is dummy/in-memory)
+  • Phone login (country picker) — UI only; brand still says "Fitopia" (to rebrand).
+  • OTP screen — FAKE: it checks the code is 6 digits then opens the dashboard. No
+    real Firebase phone verification.
+  • Onboarding (5 steps: diet type, previous diet, medical, goal, activity).
+  • Client dashboard shell (bottom nav: Home, Schedule, Activity/Progress, Profile).
+  • Workout player (video via chewie, sets, rest timer) — DUMMY workout data.
+  • Diet / progress / chat / profile screens — static UI.
+
+WHAT IT NEEDS (to become real)
+  1. Rebrand Fitopia -> AlphaSerena; adopt the shared design system; one theme controller.
+  2. Real Firebase phone OTP (verifyPhoneNumber + signInWithCredential) + a session
+     controller + splash + named routes.
+  3. Decide how a phone-auth member maps to a clients/{id} doc (match by phone or
+     store an authUid on the client doc) — the #1 architecture decision.
+  4. Read real data: the member's profile, their assigned workout/diet plans
+     (client_plan_assignments + the plan collections), progress, and the real chat
+     thread (chats/{clientId}/messages).
+  5. (Later) Tier-2: buy the gym's membership (needs the model + a CF).
+
+==============================================================================
+ PART 12 — CROSS-APP CONTRACTS & KNOWN GAPS
+==============================================================================
+  • Collection names are SHARED — never invent parallel/renamed collections. Use the
+    canonical names (clients, admin_payments_history, workoutPlans, dietPlans, …).
+  • Subscription plan schema: the nested `limits` map + title/months is the contract
+    between the console (writer) and trainersHQ/the CF (readers). Keep both in sync.
+  • Subscription gate: depends on isSubscriptionActive being kept accurate -> needs
+    the scheduled expiry CF.
+  • Client <-> auth linkage: undefined until the client app is wired (Part 11.3).
+  • Tier-2 membership model: does not exist yet (Part 4).
+  • Super-admin surface overlap: trainersHQ in-app console vs the web console.
+  • Brand migration TrainersHQ -> AlphaSerena: in progress (client app still "Fitopia").
+
+==============================================================================
+ PART 13 — BUILD STATUS (honest)
+==============================================================================
+BACKEND
+  [x] Firebase project, shared collections, production security rules (deployed when
+      you run the deploy command), super-admin bootstrap script + custom claim.
+  [x] Core Cloud Functions (in trainersHQ): register/trainer/subscription/coupon.
+  [ ] Scheduled expiry function; Tier-2 functions; refunds.
+
+APP 1 trainersHQ        [x] Feature-complete rebuild (Sections 0–11). Deferred:
+                            FCM, store assets, refunds, client app.
+
+APP 2 alphaserena_admin [x] Secure login + claims, console shell, Dashboard,
+                            Organizations + moderation, Subscriptions (verified).
+                        [ ] Re-skin Trainers/Clients/Payments/Coupons; CF-back the
+                            privileged writes; super-admin overlap decision.
+
+APP 3 alphaserena       [ ] UI only; not wired. Needs auth, data, rebrand (Part 11).
+
+==============================================================================
+ PART 14 — FOUNDER GO-LIVE CHECKLIST
+==============================================================================
+  1. Firebase on the Blaze plan (Cloud Functions require it).
+  2. Set Razorpay secrets:
+       firebase functions:secrets:set RAZORPAY_KEY_ID
+       firebase functions:secrets:set RAZORPAY_KEY_SECRET
+  3. Bootstrap yourself: run alphaserena_admin/scripts/set_super_admin.js (sets the
+     super_admin claim + master_admins doc).   [DONE for your account]
+  4. Deploy rules (and functions when ready) from the trainersHQ folder:
+       firebase deploy --only firestore:rules
+       firebase deploy --only functions
+  5. Create your Tier-1 subscription_plans in the console (Subscriptions screen).
+  6. Build the scheduled expiry function (so subscriptions actually expire).
+  7. Onboard a few gyms, approve them, run real test subscriptions end-to-end.
+  8. Build the rider/customer side (Tier-2 + client app) before public launch.
+
+==============================================================================
+ PART 15 — RUN / BUILD / DEPLOY
+==============================================================================
+ANY Flutter app:
+  flutter pub get
+  flutter analyze
+  flutter run -d chrome        (web — alphaserena_admin)
+  flutter run                  (mobile device/emulator — trainersHQ, alphaserena)
+  flutter build web            (alphaserena_admin)
+  flutter build apk            (mobile apps)
+
+Backend (from the trainersHQ folder, where firebase.json + rules + functions live):
+  cd functions && npm run build
+  firebase deploy --only firestore:rules
+  firebase deploy --only functions
+
+Founder bootstrap (from alphaserena_admin/scripts):
+  npm install
+  node set_super_admin.js you@email.com 'StrongPassword'
+
+==============================================================================
+ PART 16 — GLOSSARY
+==============================================================================
+  Tenant / Org   = one gym (an admin + its trainers + clients + content).
+  Super admin    = you, the founder; god-mode read + catalog + moderation.
+  Operate-gate   = the rule that an org can only WRITE while active + subscribed.
+  Custom claim   = a flag baked into the auth token (role=super_admin) — can't be
+                   forged by the client; enforced in rules + functions.
+  Tier-1         = founder -> organizations (the SaaS subscription).
+  Tier-2         = organization -> clients (gym memberships; not built yet).
+  Canonical      = the agreed single name/shape for a collection or field; never fork.
+
+==============================================================================
+ END — keep this file updated as sections are completed.
+ Per-app detail also lives in: trainersHQ/PROJECT_BRIEF.txt, trainersHQ/CLAUDE.md,
+ alphaserena_admin/CLAUDE.md, alphaserena/CLAUDE.md.
+==============================================================================

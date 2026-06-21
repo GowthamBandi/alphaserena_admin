@@ -7,6 +7,8 @@ import 'package:alphaserena_admin_portel/controllers/coupon_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/dashboard_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/subscription_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/trainer_controller.dart';
+import 'package:alphaserena_admin_portel/core/controllers/session_controller.dart';
+import 'package:alphaserena_admin_portel/core/theme/app_theme.dart';
 
 import 'package:alphaserena_admin_portel/screens/admin_root_screen.dart';
 import 'package:alphaserena_admin_portel/screens/auth/admin_login_screen.dart';
@@ -37,11 +39,16 @@ Future<void> main() async {
 }
 
 /// =============================================================
-/// 🔐 AUTH LAYER BINDINGS (ONLY AUTH HERE)
+/// 🔐 AUTH-LAYER BINDINGS
+/// Registered before the first frame so the gate is ready.
 /// =============================================================
 class AppBindings extends Bindings {
   @override
   void dependencies() {
+    // Secure session gate — verifies master_admins on EVERY auth change.
+    if (!Get.isRegistered<SessionController>()) {
+      Get.put(SessionController(), permanent: true);
+    }
     if (!Get.isRegistered<AdminLoginController>()) {
       Get.put(AdminLoginController(), permanent: true);
     }
@@ -61,45 +68,40 @@ class AlphaSerenaAdminApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       initialBinding: AppBindings(),
 
-      theme: ThemeData.light(useMaterial3: true),
-      darkTheme: ThemeData.dark(useMaterial3: true),
+      // Shared design system (brand red + Teko/Poppins/Inter).
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.light,
 
-      // 🔥 SINGLE ENTRY POINT
-      home: const AuthGate(),
+      // 🔥 SINGLE ENTRY POINT — a reactive gate, not a bare hasData check.
+      home: const RootGate(),
     );
   }
 }
 
 /// =============================================================
-/// 🔄 AUTH GATE (SOURCE OF TRUTH FOR SESSION)
+/// 🔄 ROOT GATE (SOURCE OF TRUTH FOR SESSION)
+/// Booting → loader · authorized master → console · else → login.
+/// SessionController has already verified master_admins, so a merely
+/// authenticated (non-master) user can never reach the console here.
 /// =============================================================
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
+class RootGate extends StatelessWidget {
+  const RootGate({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        // ⏳ WAIT FOR FIREBASE
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _BootLoader();
-        }
-
-        // ❌ NOT LOGGED IN
-        if (!snapshot.hasData) {
-          return AdminLoginScreen();
-        }
-
-        // ✅ USER EXISTS → LOAD MAIN APP
-        return const MasterAdminBootstrap();
-      },
-    );
+    final session = Get.find<SessionController>();
+    return Obx(() {
+      if (session.isBooting.value) return const _BootLoader();
+      if (session.isAuthorized) return const MasterAdminBootstrap();
+      return AdminLoginScreen();
+    });
   }
 }
 
 /// =============================================================
-/// 🚀 BOOTSTRAP (CRITICAL - CONTROLLERS INIT)
+/// 🚀 BOOTSTRAP (CONSOLE CONTROLLERS INIT)
+/// Only ever built for a verified master admin.
 /// =============================================================
 class MasterAdminBootstrap extends StatefulWidget {
   const MasterAdminBootstrap({super.key});
@@ -119,16 +121,11 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
 
   Future<void> _initializeApp() async {
     final user = FirebaseAuth.instance.currentUser;
-
     if (user == null) return;
 
     debugPrint("🚀 MASTER ADMIN BOOT → ${user.uid}");
 
     try {
-      // =====================================================
-      // 🔥 SAFE CONTROLLER REGISTRATION
-      // =====================================================
-
       _safePut(AdminRootController());
       _safePut(DashboardController());
       _safePut(AdminController());
@@ -136,11 +133,7 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
       _safePut(CouponController());
       _safePut(SubscriptionController());
 
-      // Optional: preload data if needed
-      // await Future.wait([...]);
-
       debugPrint("✅ ALL CONTROLLERS INITIALIZED");
-
       isReady.value = true;
     } catch (e, s) {
       debugPrint("🔥 BOOT ERROR → $e");
@@ -148,7 +141,6 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
     }
   }
 
-  /// 🔒 SAFE PUT (PREVENT DUPLICATES)
   void _safePut<T>(T controller) {
     if (!Get.isRegistered<T>()) {
       Get.put<T>(controller, permanent: true);
@@ -158,10 +150,7 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      if (!isReady.value) {
-        return const _BootLoader();
-      }
-
+      if (!isReady.value) return const _BootLoader();
       return AdminRootScreen();
     });
   }
