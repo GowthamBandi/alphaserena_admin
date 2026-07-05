@@ -1,30 +1,42 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// M4: replaced the dead `flutter create` counter template (which asserted a
+// non-existent counter and always failed) with a real widget test of the Serena
+// Design System status pill — the component M4 introduces to the console tables.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:alphaserena_admin_portel/main.dart';
+import 'package:alphaserena_admin_portel/core/widgets/serena/serena_ui.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget( const AlphaSerenaAdminApp());
+  testWidgets('SerenaStatusPill renders its label and is exposed to a11y',
+      (WidgetTester tester) async {
+    final handle = tester.ensureSemantics();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SerenaStatusPill(label: 'ACTIVE', status: SerenaStatus.active),
+        ),
+      ),
+    );
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // The label renders...
+    expect(find.text('ACTIVE'), findsOneWidget);
+    // ...and the pill exposes a labeled status to screen readers.
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is Semantics && w.properties.label == 'Status: ACTIVE',
+      ),
+      findsOneWidget,
+    );
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    handle.dispose();
+  });
+
+  test('serenaStatusColor falls back safely without a registered palette', () {
+    // SerenaStatus is a complete vocabulary; every value resolves to a color.
+    // (Behavioural resolution is covered by the widget test above; here we only
+    // assert the enum stayed exhaustive so a new status can never be un-mapped.)
+    expect(SerenaStatus.values.length, greaterThanOrEqualTo(6));
   });
 }

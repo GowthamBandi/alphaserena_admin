@@ -4,6 +4,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/trainer_controller.dart';
+import '../core/theme/serena/serena_tokens.g.dart';
+import '../core/widgets/serena/serena_ui.dart';
 import '../models/trainer_model.dart';
 import '../widgets/trainer_form_dialog.dart';
 
@@ -127,10 +129,13 @@ class TrainersScreen extends StatelessWidget {
   Widget _kpis() {
     return Row(
       children: [
-        _kpi("Total", ctrl.totalCount, Colors.blue),
-        _kpi("Active", ctrl.activeCount, Colors.green),
-        _kpi("Pending", ctrl.pendingCount, Colors.orange),
-        _kpi("Blocked", ctrl.blockedCount, Colors.red),
+        _kpi("Total", ctrl.totalCount, const Color(SerenaColor.infoFillLight)),
+        _kpi("Active", ctrl.activeCount,
+            const Color(SerenaColor.statusActiveLight)),
+        _kpi("Pending", ctrl.pendingCount,
+            const Color(SerenaColor.statusPendingLight)),
+        _kpi("Blocked", ctrl.blockedCount,
+            const Color(SerenaColor.statusBlockedLight)),
       ],
     );
   }
@@ -298,23 +303,18 @@ class TrainersScreen extends StatelessWidget {
   // STATUS
   // ============================================================
   Widget _statusChip(String status) {
-    final color = {
-      "active": Colors.green,
-      "pending": Colors.orange,
-      "blocked": Colors.red,
-      "suspended": Colors.grey,
-    }[status]!;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(color: color, fontWeight: FontWeight.bold),
-      ),
+    // M4: SDS semantic status (green active / amber pending / red blocked /
+    // neutral suspended) replaces hardcoded Material colors. The `?? neutral`
+    // also removes the prior force-unwrap crash on an unmapped status.
+    const map = {
+      "active": SerenaStatus.active,
+      "pending": SerenaStatus.pending,
+      "blocked": SerenaStatus.blocked,
+      "suspended": SerenaStatus.neutral,
+    };
+    return SerenaStatusPill(
+      label: status.toUpperCase(),
+      status: map[status] ?? SerenaStatus.neutral,
     );
   }
 

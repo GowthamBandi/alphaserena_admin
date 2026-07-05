@@ -129,7 +129,11 @@ class _Sidebar extends StatelessWidget {
               itemBuilder: (_, i) {
                 final isSelected = i == selected;
 
-                return InkWell(
+                return Semantics(
+                  button: true,
+                  selected: isSelected,
+                  label: items[i].title,
+                  child: InkWell(
                   onTap: () {
                     ctrl.changePage(i);
                     if (!desktop) Navigator.of(context).maybePop();
@@ -168,6 +172,7 @@ class _Sidebar extends StatelessWidget {
                       ],
                     ),
                   ),
+                ),
                 );
               },
             );

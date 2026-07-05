@@ -4,6 +4,8 @@ import 'package:alphaserena_admin_portel/models/clints_model.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/client_controller.dart';
+import '../core/theme/serena/serena_tokens.g.dart';
+import '../core/widgets/serena/serena_ui.dart';
 
 class ClientsScreen extends StatelessWidget {
   ClientsScreen({super.key});
@@ -58,10 +60,14 @@ class ClientsScreen extends StatelessWidget {
         spacing: 16,
         runSpacing: 16,
         children: [
-          _kpi("Total Clients", ctrl.total, Icons.people, Colors.blue),
-          _kpi("Active", ctrl.active, Icons.check_circle, Colors.green),
-          _kpi("Inactive", ctrl.inactive, Icons.block, Colors.red),
-          _kpi("Verified", ctrl.verified, Icons.verified, Colors.purple),
+          _kpi("Total Clients", ctrl.total, Icons.people,
+              const Color(SerenaColor.infoFillLight)),
+          _kpi("Active", ctrl.active, Icons.check_circle,
+              const Color(SerenaColor.statusActiveLight)),
+          _kpi("Inactive", ctrl.inactive, Icons.block,
+              const Color(SerenaColor.statusBlockedLight)),
+          _kpi("Verified", ctrl.verified, Icons.verified,
+              const Color(SerenaColor.accentPurpleLight)),
         ],
       ),
     );
@@ -240,18 +246,10 @@ class ClientsScreen extends StatelessWidget {
   }
 
   Widget _status(ClientModel c) {
-    final color = c.isActive ? Colors.green : Colors.red;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        c.isActive ? "ACTIVE" : "INACTIVE",
-        style: TextStyle(color: color, fontWeight: FontWeight.bold),
-      ),
+    // M4: SDS semantic status pill (green active / neutral inactive).
+    return SerenaStatusPill(
+      label: c.isActive ? "ACTIVE" : "INACTIVE",
+      status: c.isActive ? SerenaStatus.active : SerenaStatus.neutral,
     );
   }
 

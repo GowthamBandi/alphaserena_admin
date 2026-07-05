@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 import 'app_radii.dart';
+import 'serena/serena_palette.dart';
 
 /// Builds the light and dark [ThemeData] for the app. Both carry an [AppPalette]
 /// theme extension so widgets resolve semantic colors via `context.palette`.
@@ -28,7 +29,15 @@ class AppTheme {
         seedColor: BrandColors.accent,
         brightness: brightness,
       ),
-      extensions: <ThemeExtension<dynamic>>[p],
+      // M4: register the Serena Design System palette ALONGSIDE the existing
+      // AppPalette (additive — no screen forced to migrate). Console screens read
+      // the SDS semantic status / accent tokens via `context.serena`.
+      extensions: <ThemeExtension<dynamic>>[
+        p,
+        brightness == Brightness.dark
+            ? SerenaPalette.dark()
+            : SerenaPalette.light(),
+      ],
     );
 
     return base.copyWith(
