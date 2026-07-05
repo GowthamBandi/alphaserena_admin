@@ -70,7 +70,7 @@ class SerenaStatusPill extends StatelessWidget {
       label: 'Status: $label',
       container: true,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.13),
           borderRadius: BorderRadius.circular(20),
@@ -92,9 +92,9 @@ class SerenaStatusPill extends StatelessWidget {
               label,
               style: TextStyle(
                 color: context.serena.textPrimary,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 fontSize: 11.5,
-                letterSpacing: 0.2,
+                letterSpacing: 0.1,
               ),
             ),
           ],
