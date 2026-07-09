@@ -113,6 +113,7 @@ class _Sidebar extends StatelessWidget {
       _MenuItem("Communication", Icons.campaign_outlined),
       _MenuItem("Audit Log", Icons.receipt_long_outlined),
       _MenuItem("Operations Center", Icons.monitor_heart_outlined),
+      _MenuItem("Platform Staff", Icons.shield_outlined),
     ];
 
     final p = context.palette;

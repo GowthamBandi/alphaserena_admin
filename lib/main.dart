@@ -8,6 +8,7 @@ import 'package:alphaserena_admin_portel/controllers/communication_controller.da
 import 'package:alphaserena_admin_portel/controllers/coupon_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/dashboard_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/operations_controller.dart';
+import 'package:alphaserena_admin_portel/controllers/platform_staff_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/subscription_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/support_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/trainer_controller.dart';
@@ -141,6 +142,7 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
       _safePut(AuditController());
       // Operations Center derives from Admin/Support/Communication — register last.
       _safePut(OperationsController());
+      _safePut(PlatformStaffController());
 
       debugPrint("✅ ALL CONTROLLERS INITIALIZED");
       isReady.value = true;

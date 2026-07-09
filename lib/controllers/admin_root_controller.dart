@@ -7,6 +7,7 @@ import 'package:alphaserena_admin_portel/screens/coupon_code_screen.dart';
 import 'package:alphaserena_admin_portel/screens/dash_board_responsive_screen.dart';
 import 'package:alphaserena_admin_portel/screens/operations_screen.dart';
 import 'package:alphaserena_admin_portel/screens/payments_screen.dart';
+import 'package:alphaserena_admin_portel/screens/platform_staff_screen.dart';
 import 'package:alphaserena_admin_portel/screens/subscriptions_screen.dart';
 import 'package:alphaserena_admin_portel/screens/support_screen.dart';
 import 'package:alphaserena_admin_portel/screens/trainers_screen.dart';
@@ -36,7 +37,7 @@ class AdminRootController extends GetxController {
   final RxInt selectedIndex = 0.obs;
 
   /// Prevent invalid index crashes
-  final int maxIndex = 10;
+  final int maxIndex = 11;
 
   // ===========================================================================
   // PAGE CACHE (LAZY LOADED)
@@ -166,6 +167,8 @@ class AdminRootController extends GetxController {
         return AuditLogScreen();
       case 10:
         return OperationsScreen();
+      case 11:
+        return PlatformStaffScreen();
       default:
         return const SizedBox();
     }
