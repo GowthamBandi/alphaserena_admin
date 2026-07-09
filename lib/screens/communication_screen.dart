@@ -17,6 +17,7 @@ import 'package:intl/intl.dart';
 import '../controllers/admin_controller.dart';
 import '../controllers/communication_controller.dart';
 import '../models/platform_announcement_model.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/page_shell.dart';
 
 const _cDraft = Color(0xFF6A6F7A);
@@ -982,6 +983,20 @@ class _ComposeDialogState extends State<_ComposeDialog> {
       recurring: _recurring,
       recurrence: _recurrence,
     );
-    if (ok) Get.back();
+    if (!ok) return;
+    // Close the dialog BEFORE the confirmation snackbar. AppSnackbar uses
+    // Get.rawSnackbar (a GetX navigator entry); showing it first made the
+    // following Get.back() pop the snackbar instead of this dialog, so the
+    // dialog never closed. Close first, then confirm (also the correct UX order).
+    Get.back();
+    AppSnackbar.show(
+      title: 'Saved',
+      message: switch (intent) {
+        AnnouncementIntent.draft => 'Draft saved',
+        AnnouncementIntent.schedule => 'Scheduled',
+        AnnouncementIntent.sendNow => 'Queued for delivery',
+      },
+      background: Colors.green.shade700,
+    );
   }
 }

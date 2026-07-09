@@ -188,15 +188,10 @@ class CommunicationController extends GetxController {
       } else {
         await coll.doc(id).set(data, SetOptions(merge: true));
       }
-      AppSnackbar.show(
-        title: 'Saved',
-        message: switch (intent) {
-          AnnouncementIntent.draft => 'Draft saved',
-          AnnouncementIntent.schedule => 'Scheduled',
-          AnnouncementIntent.sendNow => 'Queued for delivery',
-        },
-        background: Colors.green.shade700,
-      );
+      // The success snackbar is shown by the caller AFTER it closes the dialog
+      // (see _ComposeDialog._submit). Showing it here — before the dialog's
+      // Get.back() — made Get.back() pop the snackbar instead of the dialog, so
+      // the dialog never closed on success.
       return true;
     } catch (e) {
       debugPrint('announcement submit error: $e');
