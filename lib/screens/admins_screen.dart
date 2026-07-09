@@ -2,12 +2,15 @@ import 'package:alphaserena_admin_portel/core/theme/app_colors.dart';
 import 'package:alphaserena_admin_portel/core/theme/app_radii.dart';
 import 'package:alphaserena_admin_portel/core/theme/app_shadows.dart';
 import 'package:alphaserena_admin_portel/core/theme/app_text.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import '../controllers/admin_controller.dart';
+import '../core/constants/firestore_collections.dart';
 import '../models/admin_model.dart';
+import '../models/audit_log_model.dart';
 import '../widgets/page_shell.dart';
 
 const _cActive = Color(0xFF1A7F5A);
@@ -357,6 +360,35 @@ class AdminsScreen extends StatelessWidget {
                     "${l.maxTrainers} trainers · ${l.maxClients} clients"),
                 _detail(context, Icons.calendar_today_outlined, "Joined",
                     DateFormat('d MMM yyyy').format(a.createdAt)),
+                if (a.lastLogin != null)
+                  _detail(context, Icons.login_outlined, "Last login",
+                      DateFormat('d MMM yyyy, h:mm a').format(a.lastLogin!)),
+                _detail(context, Icons.verified_user_outlined, "Verified",
+                    a.isVerified ? "Yes" : "No"),
+                if ((a.gstNumber ?? '').isNotEmpty)
+                  _detail(context, Icons.receipt_long_outlined, "GST",
+                      a.gstNumber!),
+                if ((a.panNumber ?? '').isNotEmpty)
+                  _detail(context, Icons.badge_outlined, "PAN", a.panNumber!),
+                // ── Moderation trail (traceability: who moderated, when, why) ──
+                if ((a.approvedBy ?? '').isNotEmpty)
+                  _detail(context, Icons.how_to_reg_outlined, "Approved by",
+                      a.approvedBy!),
+                if ((a.statusReason ?? '').isNotEmpty)
+                  _detail(context, Icons.gpp_maybe_outlined, "Status note",
+                      a.statusReason!),
+                if (a.statusUpdatedAt != null)
+                  _detail(
+                      context,
+                      Icons.update_outlined,
+                      "Status updated",
+                      "${DateFormat('d MMM yyyy, h:mm a').format(a.statusUpdatedAt!)}"
+                          "${(a.statusUpdatedBy ?? '').isNotEmpty ? ' · by ${_short(a.statusUpdatedBy!)}' : ''}"),
+                const SizedBox(height: 18),
+                Text("ACTIVITY (AUDIT TRAIL)",
+                    style: AppText.label(size: 11).copyWith(color: p.textMuted)),
+                const SizedBox(height: 8),
+                _auditTrail(context, a),
                 const SizedBox(height: 22),
                 _detailActions(context, a),
               ],
@@ -390,6 +422,80 @@ class AdminsScreen extends StatelessWidget {
       ),
     );
   }
+
+  // ── Per-org AUDIT TRAIL — reads the existing server-written `audit_logs`
+  //    (targetId == this org's uid). Read-only, index-free (equality + client
+  //    sort), and degrades gracefully so the dialog never breaks.
+  Widget _auditTrail(BuildContext context, AdminModel a) {
+    final p = context.palette;
+    final orgId = a.uid.isNotEmpty ? a.uid : a.docId;
+    return FutureBuilder<List<AuditLogModel>>(
+      future: _loadOrgAudit(orgId),
+      builder: (_, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+        final logs = snap.data ?? const <AuditLogModel>[];
+        if (logs.isEmpty) {
+          return Text(
+            "No recorded platform actions for this organization yet.",
+            style: AppText.body(size: 12).copyWith(color: p.textMuted),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final l in logs.take(15))
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.bolt, size: 14, color: p.textMuted),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "${l.actionLabel} · by ${l.displayActor}"
+                        "${l.createdAt != null ? ' · ${DateFormat('d MMM, h:mm a').format(l.createdAt!)}' : ''}",
+                        style: AppText.body(size: 12)
+                            .copyWith(color: p.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<List<AuditLogModel>> _loadOrgAudit(String orgId) async {
+    if (orgId.isEmpty) return const <AuditLogModel>[];
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection(FsCollections.auditLogs)
+          .where('targetId', isEqualTo: orgId)
+          .limit(25)
+          .get();
+      final list = snap.docs.map(AuditLogModel.fromSnapshot).toList()
+        ..sort((x, y) =>
+            (y.createdAt ?? DateTime(0)).compareTo(x.createdAt ?? DateTime(0)));
+      return list;
+    } catch (_) {
+      // e.g. rule/index not yet deployed — never crash the dialog.
+      return const <AuditLogModel>[];
+    }
+  }
+
+  String _short(String uid) =>
+      uid.length <= 10 ? uid : '${uid.substring(0, 10)}…';
 
   Widget _detailActions(BuildContext context, AdminModel a) {
     final s = a.status.toLowerCase();

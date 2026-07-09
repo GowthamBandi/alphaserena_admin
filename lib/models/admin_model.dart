@@ -105,6 +105,13 @@ class AdminModel {
   // Admin control
   final String? approvedBy;
 
+  // Moderation trail — written by the founder console's status actions
+  // (admin_controller/_setStatus + dashboard approveOrg): statusReason /
+  // statusUpdatedBy (actor uid) / statusUpdatedAt. Read-only here for traceability.
+  final String? statusReason;
+  final String? statusUpdatedBy;
+  final DateTime? statusUpdatedAt;
+
   // System
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -142,6 +149,9 @@ class AdminModel {
     this.planExpiry,
     this.isSubscriptionActive = false,
     this.approvedBy,
+    this.statusReason,
+    this.statusUpdatedBy,
+    this.statusUpdatedAt,
     required this.createdAt,
     required this.updatedAt,
     this.lastLogin,
@@ -210,6 +220,9 @@ class AdminModel {
       isSubscriptionActive: map['isSubscriptionActive'] == true,
 
       approvedBy: map['approvedBy'],
+      statusReason: map['statusReason'],
+      statusUpdatedBy: map['statusUpdatedBy'],
+      statusUpdatedAt: _parseDate(map['statusUpdatedAt']),
 
       createdAt: _parseDate(map['createdAt']) ?? DateTime.now(),
       updatedAt: _parseDate(map['updatedAt']) ?? DateTime.now(),
