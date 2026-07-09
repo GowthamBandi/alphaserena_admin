@@ -257,7 +257,7 @@ class SupportScreen extends StatelessWidget {
   }
 
   void _respondDialog(BuildContext context, OrgFeedbackModel f) {
-    Get.dialog(_RespondDialog(feedback: f, ctrl: ctrl));
+    Get.dialog(_RespondDialog(feedback: f, ctrl: ctrl), barrierDismissible: false);
   }
 
   // ══════════════════════════════════════════════════════════════════

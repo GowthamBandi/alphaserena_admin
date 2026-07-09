@@ -1,5 +1,7 @@
 // lib/controllers/subscription_controller.dart
 
+import 'dart:async';
+
 import 'package:alphaserena_admin_portel/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -16,6 +18,8 @@ class SubscriptionController extends GetxController {
   final RxList<SubscriptionPlanModel> plans = <SubscriptionPlanModel>[].obs;
   final RxBool isLoading = false.obs;
   final RxBool isSaving = false.obs;
+
+  StreamSubscription? _sub;
 
   // =========================================================
   // EDIT MODE
@@ -67,8 +71,9 @@ class SubscriptionController extends GetxController {
   // =========================================================
   void fetchPlans() {
     isLoading.value = true;
+    _sub?.cancel();
 
-    _db
+    _sub = _db
         .collection('subscription_plans')
         .orderBy('price')
         .snapshots()
@@ -307,6 +312,7 @@ class SubscriptionController extends GetxController {
   // =========================================================
   @override
   void onClose() {
+    _sub?.cancel();
     planNameCtrl.dispose();
     priceCtrl.dispose();
     oldPriceCtrl.dispose();

@@ -274,7 +274,7 @@ class CommunicationScreen extends StatelessWidget {
   }
 
   void _openComposer(BuildContext context, PlatformAnnouncementModel? a) {
-    Get.dialog(_ComposeDialog(ctrl: ctrl, existing: a));
+    Get.dialog(_ComposeDialog(ctrl: ctrl, existing: a), barrierDismissible: false);
   }
 
   // ── SMALL WIDGETS ───────────────────────────────────────────────────
@@ -908,6 +908,7 @@ class _ComposeDialogState extends State<_ComposeDialog> {
           _scheduledAt ?? now.add(const Duration(hours: 1))),
     );
     if (time == null) return;
+    if (!mounted) return;
     setState(() {
       _scheduledAt =
           DateTime(date.year, date.month, date.day, time.hour, time.minute);

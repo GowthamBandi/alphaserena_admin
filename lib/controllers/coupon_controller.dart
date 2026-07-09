@@ -1,5 +1,7 @@
 // lib/controllers/coupon_controller.dart
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -38,10 +40,22 @@ class CouponController extends GetxController {
   // validator + platform_service never read → founder coupons were unredeemable.)
   final String collectionName = FsCollections.couponCodes;
 
+  StreamSubscription? _sub;
+
   @override
   void onInit() {
     super.onInit();
     fetchCoupons();
+  }
+
+  @override
+  void onClose() {
+    _sub?.cancel();
+    codeCtrl.dispose();
+    descCtrl.dispose();
+    discountCtrl.dispose();
+    maxUsageCtrl.dispose();
+    super.onClose();
   }
 
   // ---------------------------------------------------------------------------
@@ -49,16 +63,19 @@ class CouponController extends GetxController {
   // ---------------------------------------------------------------------------
   void fetchCoupons() {
     isLoading.value = true;
-
-    _db.collection(collectionName)
+    _sub?.cancel();
+    _sub = _db
+        .collection(collectionName)
         .orderBy("createdAt", descending: true)
         .snapshots()
         .listen((snapshot) {
       coupons.value = snapshot.docs
           .map((d) => CouponModel.fromMap(d.id, d.data()))
           .toList();
-
       isLoading.value = false;
+    }, onError: (e) {
+      isLoading.value = false;
+      Get.snackbar("Error", "Failed to load coupons");
     });
   }
 

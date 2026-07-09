@@ -1,6 +1,5 @@
 // lib/screens/coupon/coupon_code_screen.dart
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/coupon_controller.dart';
@@ -10,8 +9,15 @@ class CouponCodeScreen extends StatelessWidget {
   CouponCodeScreen({super.key});
 
   final ctrl = Get.find<CouponController>();
-  final String adminUid =
-      FirebaseAuth.instance.currentUser!.uid; // Replace with real admin UID
+
+  // Safe lookup of the coupon being edited — avoids a firstWhere StateError
+  // crash if the doc is removed from the stream while the edit dialog is open.
+  bool _editedCouponActive() {
+    for (final c in ctrl.coupons) {
+      if (c.docId == ctrl.editDocId.value) return c.isActive;
+    }
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -275,13 +281,7 @@ class CouponCodeScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 16),
                     ),
                     Switch(
-                      value: isEdit
-                          ? ctrl.coupons
-                                .firstWhere(
-                                  (x) => x.docId == ctrl.editDocId.value,
-                                )
-                                .isActive
-                          : true,
+                      value: isEdit ? _editedCouponActive() : true,
                       onChanged: isEdit
                           ? (value) {
                               ctrl.toggleCoupon(ctrl.editDocId.value, !value);

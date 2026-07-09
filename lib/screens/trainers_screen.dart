@@ -106,8 +106,7 @@ class TrainersScreen extends StatelessWidget {
                   items: const [
                     DropdownMenuItem(value: "all", child: Text("All")),
                     DropdownMenuItem(value: "active", child: Text("Active")),
-                    DropdownMenuItem(value: "pending", child: Text("Pending")),
-                    DropdownMenuItem(value: "blocked", child: Text("Blocked")),
+                    DropdownMenuItem(value: "inactive", child: Text("Inactive")),
                   ],
                   onChanged: (v) => ctrl.selectedStatus.value = v!,
                 );
@@ -128,9 +127,7 @@ class TrainersScreen extends StatelessWidget {
         _kpi("Total", ctrl.totalCount, const Color(SerenaColor.infoFillLight)),
         _kpi("Active", ctrl.activeCount,
             const Color(SerenaColor.statusActiveLight)),
-        _kpi("Pending", ctrl.pendingCount,
-            const Color(SerenaColor.statusPendingLight)),
-        _kpi("Blocked", ctrl.blockedCount,
+        _kpi("Inactive", ctrl.inactiveCount,
             const Color(SerenaColor.statusBlockedLight)),
       ],
     );

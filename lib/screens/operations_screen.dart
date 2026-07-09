@@ -86,7 +86,13 @@ class OperationsScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 18),
-                if (alerts.isEmpty)
+                if (ctrl.anyLoading && alerts.isEmpty)
+                  const SizedBox(
+                    height: 200,
+                    child: Center(
+                        child: CircularProgressIndicator(strokeWidth: 2.4)),
+                  )
+                else if (alerts.isEmpty)
                   _allClear(context)
                 else
                   for (final a in alerts) ...[

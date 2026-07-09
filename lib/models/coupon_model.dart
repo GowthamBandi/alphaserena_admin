@@ -75,7 +75,11 @@ class CouponModel {
       isActive: map["isActive"] != false,
 
       validFrom: _toDate(rawFrom),
-      validTo: _toDate(rawExpiry),
+      // A coupon with NO expiry (e.g. created via the legacy platform screen,
+      // which never writes expiresAt) is treated by the server's validateCoupon
+      // as never-expiring. Default a missing expiry to the far future so the
+      // console doesn't falsely show a live coupon as "Expired".
+      validTo: rawExpiry == null ? DateTime(2100) : _toDate(rawExpiry),
 
       createdAt: _toDate(map["createdAt"]),
       updatedAt: _toDate(map["updatedAt"]),

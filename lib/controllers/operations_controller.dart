@@ -241,4 +241,13 @@ class OperationsController extends GetxController {
   /// means "all clear", not "still loading").
   bool get sourcesReady =>
       _admins != null && _support != null && _comms != null;
+
+  /// True while any source is still doing its first load — so the screen shows a
+  /// loader instead of a false "All clear" before data arrives.
+  bool get anyLoading {
+    final a = _admins, s = _support, c = _comms;
+    return (a == null || a.isLoading.value) ||
+        (s == null || s.feedbackLoading.value || s.reviewsLoading.value) ||
+        (c == null || c.isLoading.value);
+  }
 }

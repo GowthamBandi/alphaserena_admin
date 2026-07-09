@@ -585,4 +585,55 @@ Full spec: `/Users/gowthambandi/flutters/trainersHQ/DESIGN_SYSTEM.md`.
   • DEAD CODE (dormant, unreachable, zero runtime risk): trainer/client controller
     write methods + their form controllers — optional prune, not a defect.
 
+## Phase G — Pre-Release Certification ✅ (9 Jul 2026) — ecosystem audit + defect fixes
+  Full ecosystem certification (6 parallel audit agents: auth/authz, rules+storage+
+  indexes, cloud functions, shared-collection contracts, controllers+UI, E2E
+  workflows+integrity). Fixed the verified FIXABLE-in-console defects; classified the
+  rest. `flutter analyze` = 0, web build OK, committed.
+  FIXED (founder console):
+   • CRASH: coupon edit-dialog `firstWhere` (no orElse) → StateError if the coupon
+     is removed while the dialog is open → replaced with a safe `_editedCouponActive()`.
+   • CRASH: communication `_pickDateTime` missing `mounted` check after showTimePicker.
+   • STUCK-STATE: CouponController.fetchCoupons had NO onError (Firestore error →
+     permanent spinner) → added onError + stored/cancelled `_sub` + onClose disposes
+     form controllers.
+   • SILENT-FAILURE: DashboardController.approveOrg (the dashboard pending-approval
+     button) had no try/catch/feedback → wrapped + snackbar.
+   • LEAKS: SubscriptionController now stores/cancels its stream; Trainer/Client/Coupon
+     controllers dispose their form TextEditingControllers in onClose.
+   • SECURITY LANDMINE: deleted lib/screens/auth/auth_wrapper.dart (dead, but routed
+     ANY signed-in user to the console with no master check — a revert-magnet bypass).
+   • WRONG DATA: admin_model normalizes trainersHQ's `status:'approved'`→'active' (was
+     invisible in all console counts/filters/Operations Center); coupon_model treats a
+     missing `expiresAt` as far-future (was falsely showing legacy coupons "Expired");
+     trainers KPIs/filter collapsed to Active/Inactive (pending/blocked/suspended are
+     never produced → were permanently-0 KPIs).
+   • UI-STATE: clients table empty state; Operations Center now shows a loader instead
+     of a false "All clear" before its source streams load; support/communication
+     compose+respond dialogs are `barrierDismissible:false` (a mid-request outside-tap
+     could pop the wrong route); removed a dead force-unwrapped `adminUid` field.
+  CLASSIFIED — NOT fixed (with reason):
+   • RELEASE-OPS (deploy): firestore.rules `platform_announcements`+`audit_logs` blocks
+     present in repo but must be deployed; confirm live deployed rules == repo; deploy
+     storage.rules; prune ~21 stale composite indexes (low priority). Repo rules audit =
+     PASS (every live-used collection has a correct, tenancy-scoped block).
+   • RELEASE-OPS / FOUNDER-DECISION (need `cloud_functions` dep + CFs): route founder
+     moderation through the audited `setAdminStatus` CF (currently a raw write → founder
+     actions are NOT in audit_logs + the org's trainers' `orgActive` isn't cascaded);
+     wire the settlement queue (`settleMemberPayment`) + Tier-1 refund (`refundPayment`)
+     — both CFs are built + super-admin-gated but ORPHANED (no console UI); build the
+     `fanoutAnnouncement` delivery CF (announcements queue forever without it).
+   • FROZEN-APP defect: `validateCoupon` never enforces maxUsage/usedCount (coupons are
+     effectively unlimited-use) — fix belongs in trainersHQ (frozen).
+   • LATENT (permanent controllers, app has no navigation/dispose → no live impact):
+     dashboard's 5 uncancellable streams; StatelessWidget search-field controllers;
+     AdminRootController's redundant 2nd auth listener. Fix if navigation/Get.delete/
+     tests are added.
+   • PRODUCT-OPPORTUNITY: client_feedback "god-mode" read tab (promised in code comments,
+     never built); refund-aware revenue (parse admin_payments_history.refund) — latent
+     until refunds actually flow (refundPayment is orphaned).
+  VERDICT: founder console has no remaining crashes / permission-failures / auth
+  failures / producer-consumer breaks that are fixable in-console. Remaining = deploy +
+  frozen-app CF decisions + product opportunities.
+
 # END — update PART 12 as each item completes; never delete done items, mark them ✅.

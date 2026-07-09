@@ -39,6 +39,12 @@ class TrainerController extends GetxController {
   int get suspendedCount =>
       trainers.where((t) => t.status == "suspended").length;
 
+  // Producer (trainersHQ setTrainerStatus) only ever writes active/inactive, so
+  // the console surfaces those two states (pending/blocked/suspended are never
+  // produced and were showing as permanently-zero KPIs).
+  int get inactiveCount =>
+      trainers.where((t) => t.status != "active").length;
+
   // ============================================================
   // 🧠 FORM STATE
   // ============================================================
@@ -180,6 +186,12 @@ class TrainerController extends GetxController {
   @override
   void onClose() {
     _sub?.cancel();
+    nameCtrl.dispose();
+    emailCtrl.dispose();
+    phoneCtrl.dispose();
+    specializationCtrl.dispose();
+    experienceCtrl.dispose();
+    bioCtrl.dispose();
     super.onClose();
   }
 

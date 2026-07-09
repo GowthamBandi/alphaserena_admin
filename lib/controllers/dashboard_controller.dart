@@ -243,13 +243,20 @@ class DashboardController extends GetxController {
   /// Approve a pending organization. Writes ONLY moderation fields (matches the
   /// security rules' super-admin branch).
   Future<void> approveOrg(String docId) async {
-    await _db.collection('admins').doc(docId).update({
-      'status': 'active',
-      'statusReason': 'Approved by founder',
-      'statusUpdatedAt': FieldValue.serverTimestamp(),
-      'statusUpdatedBy': FirebaseAuth.instance.currentUser?.uid,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      await _db.collection('admins').doc(docId).update({
+        'status': 'active',
+        'statusReason': 'Approved by founder',
+        'statusUpdatedAt': FieldValue.serverTimestamp(),
+        'statusUpdatedBy': FirebaseAuth.instance.currentUser?.uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      Get.snackbar('Approved', 'Organization approved',
+          snackPosition: SnackPosition.BOTTOM);
+    } catch (e) {
+      Get.snackbar('Error', 'Could not approve organization',
+          snackPosition: SnackPosition.BOTTOM);
+    }
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────

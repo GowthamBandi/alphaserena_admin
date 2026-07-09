@@ -174,7 +174,11 @@ class AdminModel {
       phone: map['phone'] ?? '',
       organizationName: map['organizationName'] ?? '',
       role: map['role'] ?? 'admin',
-      status: map['status'] ?? 'pending',
+      // trainersHQ's own super-admin screen can set status 'approved' (approved,
+      // not-yet-subscribed). This console models active|pending|warning|blocked;
+      // normalize 'approved'→'active' so such orgs stay visible + counted +
+      // actionable (subscription state is shown separately via isSubscriptionActive).
+      status: (map['status'] == 'approved') ? 'active' : (map['status'] ?? 'pending'),
       profilePicUrl: map['profilePicUrl'],
       isVerified: map['isVerified'] ?? false,
 

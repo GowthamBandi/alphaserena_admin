@@ -183,10 +183,12 @@ class ClientsScreen extends StatelessWidget {
           _tableHeader(),
           const Divider(),
           Expanded(
-            child: ListView.builder(
-              itemCount: list.length,
-              itemBuilder: (_, i) => _row(list[i]),
-            ),
+            child: list.isEmpty
+                ? const Center(child: Text("No clients found"))
+                : ListView.builder(
+                    itemCount: list.length,
+                    itemBuilder: (_, i) => _row(list[i]),
+                  ),
           ),
         ],
       ),

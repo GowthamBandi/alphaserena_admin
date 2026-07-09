@@ -78,6 +78,13 @@ class ClientController extends GetxController {
   @override
   void onClose() {
     _sub?.cancel();
+    nameCtrl.dispose();
+    emailCtrl.dispose();
+    phoneCtrl.dispose();
+    goalCtrl.dispose();
+    ageCtrl.dispose();
+    heightCtrl.dispose();
+    weightCtrl.dispose();
     super.onClose();
   }
 
