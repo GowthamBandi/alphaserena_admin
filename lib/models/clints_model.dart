@@ -1,5 +1,7 @@
 // lib/models/client_model.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class ClientModel {
   final String docId;
   final String uid;
@@ -53,6 +55,19 @@ class ClientModel {
     this.lastLogin,
   });
 
+  // Tolerant date parsing. Production `clients` docs store dates as a Firestore
+  // Timestamp (server/CF writes); legacy/local writes may use an ISO String or a
+  // DateTime; a field may be absent. Accept all shapes; never crash. (Fixes the
+  // "Instance of 'Timestamp' is not a subtype of type 'String'" TypeError that
+  // was thrown by passing a Timestamp straight into DateTime.tryParse(String).)
+  static DateTime? _date(dynamic v) {
+    if (v == null) return null;
+    if (v is Timestamp) return v.toDate();
+    if (v is DateTime) return v;
+    if (v is String) return DateTime.tryParse(v);
+    return null;
+  }
+
   factory ClientModel.fromMap(Map<String, dynamic> map) => ClientModel(
     docId: map['docId'] ?? '',
     uid: map['uid'] ?? '',
@@ -76,15 +91,9 @@ class ClientModel {
     membershipActive: map['membershipActive'] == true,
     progress: map['progress'],
     metadata: map['metadata'],
-    createdAt: map['createdAt'] != null
-        ? DateTime.tryParse(map['createdAt']) ?? DateTime.now()
-        : DateTime.now(),
-    updatedAt: map['updatedAt'] != null
-        ? DateTime.tryParse(map['updatedAt']) ?? DateTime.now()
-        : DateTime.now(),
-    lastLogin: map['lastLogin'] != null
-        ? DateTime.tryParse(map['lastLogin'])
-        : null,
+    createdAt: _date(map['createdAt']) ?? DateTime.now(),
+    updatedAt: _date(map['updatedAt']) ?? DateTime.now(),
+    lastLogin: _date(map['lastLogin']),
   );
 
   Map<String, dynamic> toMap() => {
