@@ -138,11 +138,22 @@ class SubscriptionsScreen extends StatelessWidget {
                 position: PopupMenuPosition.under,
                 onSelected: (v) {
                   if (v == 'edit') _edit(plan);
+                  if (v == 'toggle') {
+                    Get.find<SubscriptionController>().togglePlanActive(plan);
+                  }
+                  if (v == 'clone') {
+                    Get.find<SubscriptionController>().clonePlan(plan);
+                  }
                   if (v == 'delete') _confirmDelete(context, plan);
                 },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: Text('Edit')),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
                   PopupMenuItem(
+                    value: 'toggle',
+                    child: Text(plan.isActive ? 'Deactivate' : 'Activate'),
+                  ),
+                  const PopupMenuItem(value: 'clone', child: Text('Duplicate')),
+                  const PopupMenuItem(
                     value: 'delete',
                     child: Text('Delete',
                         style: TextStyle(color: Color(0xFFD4341F))),

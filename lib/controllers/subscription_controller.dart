@@ -221,6 +221,69 @@ class SubscriptionController extends GetxController {
   }
 
   // =========================================================
+  // TOGGLE ACTIVE (deactivate / reactivate)
+  // A deactivated plan (isActive:false) is hidden from new subscribers and the
+  // verifyAndActivateSubscription CF rejects it — existing subscribers keep it.
+  // =========================================================
+  Future<void> togglePlanActive(SubscriptionPlanModel plan) async {
+    try {
+      await _db.collection('subscription_plans').doc(plan.docId).update({
+        'isActive': !plan.isActive,
+        'updatedAt': Timestamp.fromDate(DateTime.now()),
+      });
+      AppSnackbar.show(
+        title: plan.isActive ? "Deactivated" : "Activated",
+        message: plan.isActive
+            ? "Plan hidden from new subscribers"
+            : "Plan is live again",
+        background: Colors.green,
+      );
+    } catch (e) {
+      AppSnackbar.show(title: "Error", message: "Could not update plan status");
+    }
+  }
+
+  // =========================================================
+  // CLONE PLAN — one-click duplicate, saved as an INACTIVE draft to edit
+  // before going live (avoids two identical live plans by accident).
+  // =========================================================
+  Future<void> clonePlan(SubscriptionPlanModel plan) async {
+    try {
+      final now = DateTime.now();
+      final docId = _db.collection('subscription_plans').doc().id;
+      final copy = SubscriptionPlanModel(
+        id: docId,
+        docId: docId,
+        planName: "${plan.planName} (Copy)",
+        price: plan.price,
+        oldPrice: plan.oldPrice,
+        durationMonths: plan.durationMonths,
+        maxAdmins: plan.maxAdmins,
+        maxTrainers: plan.maxTrainers,
+        maxClients: plan.maxClients,
+        maxWorkoutPlans: plan.maxWorkoutPlans,
+        maxWorkouts: plan.maxWorkouts,
+        maxDietPlans: plan.maxDietPlans,
+        points: List<String>.from(plan.points),
+        isActive: false,
+        createdAt: now,
+        updatedAt: now,
+      );
+      await _db
+          .collection('subscription_plans')
+          .doc(docId)
+          .set(copy.toMap());
+      AppSnackbar.show(
+        title: "Cloned",
+        message: "Draft copy created (inactive) — edit then activate",
+        background: Colors.green,
+      );
+    } catch (e) {
+      AppSnackbar.show(title: "Error", message: "Could not clone plan");
+    }
+  }
+
+  // =========================================================
   // ADD POINT
   // =========================================================
   void addPoint() {

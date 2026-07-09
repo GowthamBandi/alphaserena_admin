@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class SubscriptionModel {
   final String id;
   final String adminUid;
@@ -56,36 +58,74 @@ class SubscriptionModel {
     required this.maxDietPlans,
   });
 
+  // Tolerant helpers — the real `admin_payments_history` doc (written by
+  // trainersHQ verifyAndActivateSubscription) uses `amount`/`startedAt`/`expiry`
+  // and a Firestore Timestamp `createdAt`. Earlier this model read
+  // `amountPaid`/`startAt`/`expiryAt` and passed a Timestamp into
+  // DateTime.tryParse(String) → revenue showed ₹0 and the stream threw. These
+  // helpers read either shape and any date type.
+  static int _int(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v) ?? 0;
+    return 0;
+  }
+
+  static DateTime? _date(dynamic v) {
+    if (v is Timestamp) return v.toDate();
+    if (v is DateTime) return v;
+    if (v is String) return DateTime.tryParse(v);
+    return null;
+  }
+
   factory SubscriptionModel.fromMap(String id, Map<String, dynamic> map) {
+    final rawLimits = map['limits'];
+    final Map limits = rawLimits is Map ? rawLimits : const {};
+    int lim(String flat, String nested) =>
+        _int(map[flat] ?? limits[nested] ?? limits[flat]);
+
+    final months = _int(map['durationMonths'] ?? map['months']);
+
     return SubscriptionModel(
       id: id,
-      adminUid: map['adminUid'] ?? '',
-      adminDocId: map['adminDocId'] ?? '',
-      planName: map['planName'] ?? '',
-      durationMonths: map['durationMonths'] ?? 1,
+      adminUid: (map['adminUid'] ?? map['adminId'] ?? '').toString(),
+      adminDocId:
+          (map['adminDocId'] ?? map['adminId'] ?? map['adminUid'] ?? '')
+              .toString(),
+      planName: (map['planName'] ?? map['plan'] ?? map['title'] ?? '').toString(),
+      durationMonths: months > 0 ? months : 1,
 
-      originalAmount: map['originalAmount'] ?? 0,
-      amountPaid: map['amountPaid'] ?? 0,
-      discountAmount: map['discountAmount'] ?? 0,
-      couponApplied: map['couponApplied'] ?? false,
-      couponCode: map['couponCode'],
+      originalAmount: _int(map['originalAmount'] ?? map['amount']),
+      amountPaid: _int(map['amount'] ??
+          map['amountPaid'] ??
+          map['price'] ??
+          map['paidAmount'] ??
+          map['totalAmount']),
+      discountAmount: _int(map['discountAmount'] ?? map['discount']),
+      couponApplied: map['couponApplied'] == true ||
+          (map['couponCode']?.toString().isNotEmpty ?? false),
+      couponCode: map['couponCode']?.toString(),
 
-      paymentId: map['paymentId'] ?? '',
-      orderId: map['orderId'],
-      signature: map['signature'],
+      paymentId:
+          (map['paymentId'] ?? map['razorpayPaymentId'] ?? id).toString(),
+      orderId: map['orderId']?.toString(),
+      signature: map['signature']?.toString(),
 
-      startAt: DateTime.tryParse(map['startAt'] ?? '') ?? DateTime.now(),
-      expiryAt:
-          DateTime.tryParse(map['expiryAt'] ?? '') ??
+      startAt: _date(map['startedAt'] ?? map['startAt']) ?? DateTime.now(),
+      expiryAt: _date(map['expiry'] ?? map['expiryAt'] ?? map['planExpiry']) ??
           DateTime.now().add(const Duration(days: 30)),
-      createdAt: DateTime.tryParse(map['createdAt'] ?? '') ?? DateTime.now(),
+      createdAt: _date(map['createdAt'] ??
+              map['paidAt'] ??
+              map['timestamp'] ??
+              map['date']) ??
+          DateTime.now(),
 
-      maxAdmins: map['maxAdmins'] ?? 0,
-      maxTrainers: map['maxTrainers'] ?? 0,
-      maxClients: map['maxClients'] ?? 3,
-      maxWorkoutPlans: map['maxWorkoutPlans'] ?? 0,
-      maxWorkouts: map['maxWorkouts'] ?? 0,
-      maxDietPlans: map['maxDietPlans'] ?? 0,
+      maxAdmins: lim('maxAdmins', 'admins'),
+      maxTrainers: lim('maxTrainers', 'trainers'),
+      maxClients: lim('maxClients', 'clients'),
+      maxWorkoutPlans: lim('maxWorkoutPlans', 'workoutPlans'),
+      maxWorkouts: lim('maxWorkouts', 'workouts'),
+      maxDietPlans: lim('maxDietPlans', 'dietPlans'),
     );
   }
 

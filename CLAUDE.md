@@ -483,4 +483,65 @@ Full spec: `/Users/gowthambandi/flutters/trainersHQ/DESIGN_SYSTEM.md`.
 
 ---
 
+## Phase E — Organization Operating System / Product-Completion Loop ✅ (9 Jul 2026)
+  CTO-level owner-capability audit (11 domains × 3-app ecosystem, multi-agent,
+  adversarially verified) → built the confirmed genuine, non-duplicating,
+  buildable-now gaps. Analyze clean (2 deferred infos), web build OK, committed.
+  ✅ DOMAIN 8 — OPERATIONS CENTER (mandatory; nav index 10). New
+     `OperationsController` + `OperationsScreen` (models reused). The founder's
+     daily triage home: a single severity-ranked "what needs my attention across
+     the platform" feed — pending approvals, LAPSED subscriptions (status active
+     but !isSubscriptionActive & planExpiry past), expiring-soon (≤7d),
+     orgs-under-moderation, open support (critical if any complaint), critical
+     reviews (≤2★), failed/overdue/queued announcements. Each row jumps to the
+     section (AdminRootController.changePage). PURE DERIVATION from already-
+     streamed controllers (AdminController/SupportController/Communication
+     Controller) — NO new Firestore streams, NO duplicated logic. "All clear"
+     empty state + critical/attention/info summary strip. (Distinct from the KPI
+     dashboard, which is business metrics, not operational triage.)
+     NOTE: appended at index 10 (keeps all existing nav indices stable, which the
+     OC's own jump-targets rely on). Nav-position is cosmetic; could move to
+     index 1 later with a coordinated reindex.
+  ✅ FINANCE DEFECT FIXED (coupon-drift class) — `SubscriptionModel.fromMap`
+     (payments screen) read `amountPaid`/`startAt`/`expiryAt` and passed a
+     Firestore Timestamp `createdAt` into `DateTime.tryParse(String)` → the
+     Payments screen showed ₹0 revenue and the stream threw. The REAL
+     `admin_payments_history` doc (trainersHQ verifyAndActivateSubscription) uses
+     `amount`/`startedAt`/`expiry`/Timestamp `createdAt`/`adminId`. Rewrote
+     fromMap with tolerant `_int`/`_date` helpers reading either shape (matches
+     the dashboard's proven parsing). Payments screen revenue is now correct.
+  ✅ MEMBERSHIPS — plan lifecycle completed. `subscription_controller` gained
+     `togglePlanActive` (deactivate/reactivate — flips `isActive`; the
+     verifyAndActivateSubscription CF already rejects inactive plans) and
+     `clonePlan` (one-click duplicate saved as an INACTIVE draft). Wired into the
+     plan-card menu (Deactivate/Activate · Duplicate) in subscriptions_screen.
+  ── AUDIT VERDICT (what is NOT built here, by design / gating) ──
+  • BELONGS_TRAINERHQ (per-org, do NOT duplicate): org profile/branding/hours/
+    tax/policies (organizationProfiles), Tier-2 member memberships (pause/freeze/
+    transfer/upgrade — memberships.ts), trainer invite/suspend/permissions
+    (createTrainer/setTrainerStatus CFs), member assign/transfer trainer.
+  • GATED (need cloud_functions dep + deployed CFs — HIGH VALUE, top of next queue):
+    (1) MEMBER-PAYMENT SETTLEMENT queue — trainersHQ settlements.ts
+    `settleMemberPayment` is super-admin-gated + fully built but has NO founder
+    UI; genuine platform money-movement duty. (2) Tier-1 REFUND action —
+    refunds.ts `refundPayment` super-admin-gated + built, no UI. Both need the
+    console to add `cloud_functions` and call the CFs.
+  • KNOWN DEFECTS to fix next (found, not yet fixed — own careful pass):
+    (a) Founder console trainers_screen/clients_screen CREATE/EDIT/DELETE write
+    RAW Firestore → violate rules (trainers/clients create=false, no isSuperAdmin
+    on update/delete) → permission-denied in prod + would orphan Auth-less
+    trainers; should be made READ-ONLY (persona: per-org writes belong to
+    trainersHQ). (b) clients_screen search/filter is dead code (controller has it,
+    no UI wires it) and KPIs count a fictitious `isVerified`/`isActive` field the
+    real `clients` doc never sets. (c) admin_controller moderation uses raw writes
+    with a `warning` status the setAdminStatus CF doesn't accept → drift +
+    founder actions are NOT audited (console has no cloud_functions, so nothing it
+    does reaches audit_logs). (d) dashboard `topOrgs` computed but never rendered.
+  • FOUNDATION/PRODUCT-OPPORTUNITY (need frozen-app or new backend): fanout
+    Announcement delivery CF; renewal/expiry/payment reminder CFs; maintenance
+    mode + feature flags (need consumers in frozen apps); CSV export (buildable
+    now, clipboard-based, no dep — nice-to-have); support priority/SLA fields;
+    multi-branch + white-label (no data model); failed-payment tracking (needs
+    Razorpay webhook); Tier-1 invoices/receipts (no artifact generation).
+
 # END — update PART 12 as each item completes; never delete done items, mark them ✅.
