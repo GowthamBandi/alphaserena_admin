@@ -31,7 +31,7 @@ class PlanModel {
   });
 
   factory PlanModel.fromMap(Map<String, dynamic> map, String docId) {
-    DateTime _parse(dynamic v) {
+    DateTime parse(dynamic v) {
       if (v == null) return DateTime.now();
       if (v is DateTime) return v;
       if (v is String) return DateTime.tryParse(v) ?? DateTime.now();
@@ -49,8 +49,8 @@ class PlanModel {
       maxWorkoutPlans: map['maxWorkoutPlans'] ?? 10,
       maxDietPlans: map['maxDietPlans'] ?? 10,
       isActive: map['isActive'] ?? true,
-      createdAt: _parse(map['createdAt']),
-      updatedAt: _parse(map['updatedAt']),
+      createdAt: parse(map['createdAt']),
+      updatedAt: parse(map['updatedAt']),
     );
   }
 

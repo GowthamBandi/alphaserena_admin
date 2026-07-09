@@ -3,9 +3,12 @@
 import 'package:alphaserena_admin_portel/controllers/admin_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/admin_login_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/admin_root_controller.dart';
+import 'package:alphaserena_admin_portel/controllers/audit_controller.dart';
+import 'package:alphaserena_admin_portel/controllers/communication_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/coupon_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/dashboard_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/subscription_controller.dart';
+import 'package:alphaserena_admin_portel/controllers/support_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/trainer_controller.dart';
 import 'package:alphaserena_admin_portel/core/controllers/session_controller.dart';
 import 'package:alphaserena_admin_portel/core/theme/app_theme.dart';
@@ -132,6 +135,9 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
       _safePut(TrainerController());
       _safePut(CouponController());
       _safePut(SubscriptionController());
+      _safePut(SupportController());
+      _safePut(CommunicationController());
+      _safePut(AuditController());
 
       debugPrint("✅ ALL CONTROLLERS INITIALIZED");
       isReady.value = true;

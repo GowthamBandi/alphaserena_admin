@@ -32,7 +32,7 @@ class AdminSubscriptionLimits {
   factory AdminSubscriptionLimits.fromMap(Map<String, dynamic>? map) {
     if (map == null) return AdminSubscriptionLimits.empty();
 
-    int _toInt(dynamic v) {
+    int toInt(dynamic v) {
       if (v is int) return v;
       if (v is num) return v.toInt();
       if (v is String) return int.tryParse(v) ?? 0;
@@ -40,11 +40,11 @@ class AdminSubscriptionLimits {
     }
 
     return AdminSubscriptionLimits(
-      maxAdmins: _toInt(map['maxAdmins']),
-      maxTrainers: _toInt(map['maxTrainers']),
-      maxClients: _toInt(map['maxClients']),
-      maxWorkoutPlans: _toInt(map['maxWorkoutPlans']),
-      maxDietPlans: _toInt(map['maxDietPlans']),
+      maxAdmins: toInt(map['maxAdmins']),
+      maxTrainers: toInt(map['maxTrainers']),
+      maxClients: toInt(map['maxClients']),
+      maxWorkoutPlans: toInt(map['maxWorkoutPlans']),
+      maxDietPlans: toInt(map['maxDietPlans']),
     );
   }
 

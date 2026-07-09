@@ -109,6 +109,9 @@ class _Sidebar extends StatelessWidget {
       _MenuItem("Subscriptions", Icons.subscriptions_outlined),
       _MenuItem("Payments", Icons.payments_outlined),
       _MenuItem("Coupon Codes", Icons.discount_outlined),
+      _MenuItem("Support", Icons.support_agent_outlined),
+      _MenuItem("Communication", Icons.campaign_outlined),
+      _MenuItem("Audit Log", Icons.receipt_long_outlined),
     ];
 
     final p = context.palette;

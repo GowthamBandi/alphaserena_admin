@@ -81,7 +81,7 @@ class ClientsScreen extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 10),
+          BoxShadow(color: Colors.black.withValues(alpha: .04), blurRadius: 10),
         ],
       ),
       child: Row(
@@ -90,7 +90,7 @@ class ClientsScreen extends StatelessWidget {
             height: 48,
             width: 48,
             decoration: BoxDecoration(
-              color: color.withOpacity(.12),
+              color: color.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color),
@@ -327,7 +327,7 @@ class ClientsScreen extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 10),
+        BoxShadow(color: Colors.black.withValues(alpha: .04), blurRadius: 10),
       ],
     );
   }

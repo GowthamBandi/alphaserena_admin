@@ -358,6 +358,129 @@ Full spec: `/Users/gowthambandi/flutters/trainersHQ/DESIGN_SYSTEM.md`.
      Clients, Payments, Coupons — still default Material/greys.
   ⏳ Resolve super-admin overlap with trainersHQ
 
+## Phase D — Journey completion & cross-app correctness ⏳ IN PROGRESS (9 Jul 2026)
+  Engineering-completion pass (AIEO "Delivery Loop V1"): make every founder
+  journey functionally real against the shared ecosystem. Analyze clean, web
+  build OK.
+  ✅ JOURNEY 6 — SUPPORT (was entirely missing; now a full nav section, index 7).
+     New `SupportController` + `SupportScreen` (two tabs) + models
+     `org_feedback_model.dart` / `org_review_model.dart`, wired into
+     admin_root_controller (maxIndex 6→7, case 7), the sidebar, and the
+     bootstrap. CONSUMES existing platform data — no duplicated logic:
+     • Org feedback (`org_feedback`) — ACTIONABLE inbox. The founder reads all
+       (rules: `read: isSuperAdmin()`), replies + resolves via a direct update
+       (rules: `update: isSuperAdmin()` — same rules-gated pattern as admin
+       moderation, writes superAdminResponse/respondedAt/respondedBy/status).
+       The `org_feedback` model docstring in trainersHQ literally says it is
+       "read + responded to in the founder console (alphaserena_admin)".
+     • Member reviews (`org_reviews`) — READ-ONLY oversight (rating/comment,
+       avg + critical counts, filters). Shape matches alphaserena
+       review_service.dart (adminId/clientId/authUid/memberName/rating/comment/
+       createdAt/updatedAt). Sorted client-side (no orderBy → no dropped docs).
+     Loading / empty / error(+retry) states on both streams; controller cleans
+     up its subs. NO Cloud Function needed (rules already permit the founder's
+     read+update).
+  ✅ CROSS-APP DEFECT FIXED — COUPONS were unredeemable (Journey 2). The console
+     wrote to `master_coupons` with fields `isPercentage`/`discountValue`/
+     `validTo`, but trainersHQ's checkout validator (subscriptions.ts
+     validateCoupon / previewCoupon) + its own platform_service read
+     `coupon_codes` with `type`('percent'|'flat')/`value`/`expiresAt`, matching
+     an UPPERCASED `code`. ⇒ every founder coupon landed in an orphan collection
+     nothing reads AND, even if found, computed a ₹0 discount. FIX (same house
+     pattern as the DRIFT-1 subscription-plan fix): coupon_controller now writes
+     the canonical `coupon_codes` collection (via new
+     `core/constants/firestore_collections.dart` → FsCollections.couponCodes);
+     CouponModel.toMap() now writes the canonical `type`/`value`/`expiresAt`
+     (Timestamp) + uppercased `code` alongside the legacy fields (back-compat);
+     CouponModel.fromMap() reads BOTH shapes (canonical wins) so the console
+     also correctly displays coupons trainersHQ authors. Rules already allow it
+     (`match /coupon_codes/{id} { allow read, write: if isSuperAdmin() }`).
+     ⚠️ Old `master_coupons` docs are orphaned (they were never redeemable);
+     re-create any real ones — they now write to `coupon_codes`.
+  ✅ Added `lib/core/constants/firestore_collections.dart` (mirrors trainersHQ
+     FsCollections; used by the new Support + coupon code). Existing screens
+     still hardcode strings — migrate opportunistically (low risk; not churned
+     here to keep this pass focused).
+  ✅ Analyzer hygiene — fixed 3 real warnings (unnecessary_non_null_assertion in
+     client/trainer controllers) + 1 annotate_overrides (payments_controller
+     refresh). Remaining `flutter analyze` items are all pre-existing `info`
+     deprecations in the not-yet-token-migrated screens (Phase-C UX, untouched).
+  ✅ DOMAIN 7 — COMMUNICATION CENTER (Loop V2, 9 Jul 2026; nav index 8). New
+     `CommunicationController` + `CommunicationScreen` + model
+     `platform_announcement_model.dart`, wired into admin_root_controller
+     (maxIndex 7→8, case 8), the sidebar, and the bootstrap. It is the founder's
+     announcements/broadcast AUTHORING + monitoring surface: compose (title/body
+     + built-in templates) → target an audience (all-platform / all-orgs /
+     active|expired|renewal-due orgs / all-trainers / selected orgs picked from
+     the live AdminController list) → channels (In-app + Push real; Email/SMS/
+     WhatsApp = FOUNDATION toggles) → Send now / Schedule (date-time + recurring
+     foundation) / Save draft → a status history (draft/scheduled/queued/sent/
+     failed/cancelled) with per-item Send-now/Cancel/Edit/Delete. Persists to a
+     new `platform_announcements` collection with a DELIVERY-READY schema
+     (audience spec + targetIds + channels map + schedule + status + delivery
+     counters). Verified: analyze clean, web build OK.
+     Rationale (challenged per the mission): there is NO existing announcement/
+     broadcast system anywhere in the ecosystem (the only notification infra is
+     the scheduled engagement engine `evaluateNotifications` → FCM to coaches),
+     so this is net-new, non-duplicating, and founder-appropriate. It does NOT
+     re-implement per-org member ops (those stay in trainersHQ).
+     ⚠️ TWO deploy-gated handoffs (Release Ops — the console CODE is complete):
+       (1) RULES: added an additive `match /platform_announcements/{id} {
+           allow read, write: if isSuperAdmin() }` block to
+           trainersHQ/firestore.rules (next to coupon_codes). Until
+           `firebase deploy --only firestore:rules`, the founder's writes are
+           denied by the hardened rules. Broaden read to signed-in for
+           `status=='sent'` when the in-app inbox is built.
+       (2) DELIVERY WORKER CF `fanoutAnnouncement` (NOT built — a web client
+           cannot multicast FCM). Contract for whoever builds it:
+           trigger onDocumentWritten `platform_announcements/{id}` (or a
+           scheduled sweep) → when status=='queued' (or a due 'scheduled'),
+           resolve `audience`+`targetIds` to recipient docs (admins/trainers/
+           clients) → collect `fcmTokens[]` → sendEachForMulticast → prune dead
+           tokens (reuse functions/src/lib/notifications.ts tokensToPrune) →
+           stamp `status:'sent'`, `sentAt`, `sentCount`, `failedCount` (or
+           `status:'failed'` + `lastError`). Email/SMS/WhatsApp transports plug
+           in behind the same channel flags. IN-APP delivery needs a per-user
+           inbox in trainersHQ + alphaserena (both currently frozen) — separate
+           work; until then push is the live channel.
+  ✅ DOMAIN 9 — SYSTEM · AUDIT LOG (Loop V2, 9 Jul 2026; nav index 9). New
+     `AuditController` + `AuditLogScreen` + model `audit_log_model.dart`,
+     read-only. Streams the server-only `audit_logs` collection (written by CFs
+     via functions/src/lib/audit.ts `writeAudit`) ordered by createdAt desc,
+     capped at 300; search + action-type filter chips + per-entry detail dialog
+     (actor / target / details map). Gives the founder oversight of privileged
+     actions (approvals, role changes, activations) that were previously
+     invisible. Verified: analyze clean, web build OK.
+     ⚠️ RULES: `audit_logs` client reads were DENIED (server-only). Added an
+     additive `match /audit_logs/{id} { allow read: if isSuperAdmin(); allow
+     write: if false; }` block to trainersHQ/firestore.rules. Until
+     `firebase deploy --only firestore:rules`, the screen shows its error/retry
+     state (it explains the rule may be undeployed). No writes ever.
+  ✅ AIEO GOVERNANCE PASS (9 Jul 2026) — technical-debt cleanup + clean state.
+     `flutter analyze lib/` 14→2 issues: swapped all 9 deprecated `withOpacity(x)`
+     → `withValues(alpha: x)` (project coding-rule 7) across clients/coupon/
+     payments/trainers screens + trainer_form_dialog; renamed 2 leading-underscore
+     locals (`_toInt`/`_parse`) in admin_model/plan_model; fixed 1
+     unnecessary-underscores lint (trainers_screen). All behavior-preserving;
+     web build OK. The 2 REMAINING infos are `DropdownButtonFormField.value`→
+     `initialValue` in trainer_form_dialog (lines 229/247) — LEFT deliberately:
+     those are CONTROLLED dropdowns inside Obx; switching a controlled field to
+     initial-only is a behavior risk, so address it during the Phase-C
+     trainer-form rebuild, not as a lint fix. Added `graphify-out/` to
+     .gitignore (generated artifact). Graphify: re-queried at session start
+     (informed all work) + incremental delta confirmed (25 changed files);
+     full graph regen deferred as standalone `/graphify . --update` maintenance
+     (disproportionate to query value; authoritative knowledge lives here + in
+     memory per the evidence hierarchy).
+  ⬜ NOT done (deliberately — gated / out of scope for an engineering pass):
+     • Route privileged writes through trainersHQ Cloud Functions (Phase B) —
+       deploy/region-gated; current writes are already super-admin rules-gated.
+     • The Phase-C token migration of Trainers/Clients/Payments/Coupons screens
+       (UX — explicitly out of scope for this engineering loop).
+     • Deploy verification of the shared firestore.rules from trainersHQ (Release
+       Ops): the Support + coupon paths depend on the rules already documented
+       here as needing `firebase deploy --only firestore:rules`.
+
 ---
 
 # END — update PART 12 as each item completes; never delete done items, mark them ✅.

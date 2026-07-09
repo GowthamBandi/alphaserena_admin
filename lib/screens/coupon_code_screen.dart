@@ -376,7 +376,7 @@ class CouponCodeScreen extends StatelessWidget {
       BoxShadow(
         blurRadius: 12,
         offset: const Offset(0, 4),
-        color: Colors.black.withOpacity(.06),
+        color: Colors.black.withValues(alpha: .06),
       ),
     ],
   );

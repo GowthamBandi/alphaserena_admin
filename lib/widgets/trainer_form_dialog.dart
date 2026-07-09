@@ -161,7 +161,7 @@ class _TrainerFormDialogState extends State<TrainerFormDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(.12),
+        color: color.withValues(alpha: .12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -384,7 +384,7 @@ class _TrainerFormDialogState extends State<TrainerFormDialog> {
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 10),
+        BoxShadow(color: Colors.black.withValues(alpha: .04), blurRadius: 10),
       ],
     );
   }

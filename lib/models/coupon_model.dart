@@ -42,24 +42,40 @@ class CouponModel {
   });
 
   factory CouponModel.fromMap(String docId, Map<String, dynamic> map) {
+    // The founder console now shares the canonical `coupon_codes` collection
+    // with trainersHQ, so read BOTH shapes: the canonical one
+    // (`type`/`value`/`expiresAt` — written by trainersHQ platform_service +
+    // this app) and the legacy console fields (`isPercentage`/`discountValue`/
+    // `validTo`). Canonical wins; legacy is the fallback.
+    final bool percent = map["type"] != null
+        ? map["type"].toString() == "percent"
+        : map["isPercentage"] == true;
+    final dynamic rawValue = map["value"] ?? map["discountValue"];
+    final dynamic rawExpiry = map["expiresAt"] ?? map["validTo"];
+    final dynamic rawFrom = map["validFrom"] ?? map["createdAt"];
+
     return CouponModel(
       id: docId,
-      docId: map["docId"] ?? docId,
-      uid: map["uid"] ?? "",
+      docId: (map["docId"] ?? docId).toString(),
+      uid: (map["uid"] ?? "").toString(),
 
-      code: map["code"] ?? "",
-      description: map["description"] ?? "",
+      code: (map["code"] ?? "").toString(),
+      description: (map["description"] ?? "").toString(),
 
-      isPercentage: map["isPercentage"] ?? false,
-      discountValue: double.tryParse(map["discountValue"].toString()) ?? 0.0,
+      isPercentage: percent,
+      discountValue: double.tryParse("${rawValue ?? 0}") ?? 0.0,
 
-      maxUsage: map["maxUsage"] ?? 0,
-      usedCount: map["usedCount"] ?? 0,
+      maxUsage: (map["maxUsage"] is num)
+          ? (map["maxUsage"] as num).toInt()
+          : int.tryParse("${map["maxUsage"] ?? 0}") ?? 0,
+      usedCount: (map["usedCount"] is num)
+          ? (map["usedCount"] as num).toInt()
+          : int.tryParse("${map["usedCount"] ?? 0}") ?? 0,
 
-      isActive: map["isActive"] ?? true,
+      isActive: map["isActive"] != false,
 
-      validFrom: _toDate(map["validFrom"]),
-      validTo: _toDate(map["validTo"]),
+      validFrom: _toDate(rawFrom),
+      validTo: _toDate(rawExpiry),
 
       createdAt: _toDate(map["createdAt"]),
       updatedAt: _toDate(map["updatedAt"]),
@@ -75,19 +91,27 @@ class CouponModel {
 
   Map<String, dynamic> toMap() {
     return {
+      // ── Canonical `coupon_codes` shape — READ at checkout by trainersHQ's
+      //    validateCoupon / previewCoupon CF and by its platform_service.
+      //    Without these, founder coupons compute a ₹0 discount / never match.
+      "code": code.trim().toUpperCase(), // validator matches an uppercased code
+      "type": isPercentage ? "percent" : "flat",
+      "value": discountValue,
+      "isActive": isActive,
+      "description": description,
+      "expiresAt": Timestamp.fromDate(validTo),
+      "createdAt": Timestamp.fromDate(createdAt),
+
+      // ── Console-side extras (founder tracking + UI) — ignored by consumers.
       "docId": docId,
       "uid": uid,
-      "code": code,
-      "description": description,
       "isPercentage": isPercentage,
       "discountValue": discountValue,
       "maxUsage": maxUsage,
       "usedCount": usedCount,
-      "isActive": isActive,
-      "validFrom": validFrom.toIso8601String(),
-      "validTo": validTo.toIso8601String(),
-      "createdAt": createdAt.toIso8601String(),
-      "updatedAt": updatedAt.toIso8601String(),
+      "validFrom": Timestamp.fromDate(validFrom),
+      "validTo": Timestamp.fromDate(validTo),
+      "updatedAt": Timestamp.fromDate(updatedAt),
     };
   }
 }

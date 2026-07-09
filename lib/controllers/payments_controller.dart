@@ -268,6 +268,7 @@ class PaymentsController extends GetxController {
   // ============================================================
   // MANUAL REFRESH
   // ============================================================
+  @override
   Future<void> refresh() async {
     _initStream();
   }

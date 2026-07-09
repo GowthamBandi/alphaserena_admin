@@ -149,7 +149,7 @@ class TrainersScreen extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(.05), blurRadius: 10),
+            BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
           ],
         ),
         child: Column(
@@ -181,7 +181,7 @@ class TrainersScreen extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.05), blurRadius: 10),
+          BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 10),
         ],
       ),
 
@@ -279,7 +279,7 @@ class TrainersScreen extends StatelessWidget {
                     ),
 
                     /// 🔥 ERROR (IMPORTANT)
-                    errorWidget: (context, _, __) => _fallbackAvatar(t.name),
+                    errorWidget: (context, _, _) => _fallbackAvatar(t.name),
                   )
                 : _fallbackAvatar(t.name),
           ),

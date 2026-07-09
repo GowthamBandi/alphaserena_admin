@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../core/constants/firestore_collections.dart';
 import '../models/coupon_model.dart';
 
 class CouponController extends GetxController {
@@ -32,8 +33,10 @@ class CouponController extends GetxController {
   // TRACK WHICH DOCUMENT IS BEING EDITED
   RxString editDocId = "".obs;
 
-  // FIRESTORE COLLECTION NAME
-  final String collectionName = "master_coupons";
+  // FIRESTORE COLLECTION NAME — canonical, ecosystem-shared `coupon_codes`.
+  // (Was the orphan `master_coupons`, which trainersHQ's checkout coupon
+  // validator + platform_service never read → founder coupons were unredeemable.)
+  final String collectionName = FsCollections.couponCodes;
 
   @override
   void onInit() {

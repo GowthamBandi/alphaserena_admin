@@ -1,10 +1,13 @@
 import 'dart:developer';
 import 'package:alphaserena_admin_portel/screens/admins_screen.dart';
+import 'package:alphaserena_admin_portel/screens/audit_log_screen.dart';
 import 'package:alphaserena_admin_portel/screens/clients_screen.dart';
+import 'package:alphaserena_admin_portel/screens/communication_screen.dart';
 import 'package:alphaserena_admin_portel/screens/coupon_code_screen.dart';
 import 'package:alphaserena_admin_portel/screens/dash_board_responsive_screen.dart';
 import 'package:alphaserena_admin_portel/screens/payments_screen.dart';
 import 'package:alphaserena_admin_portel/screens/subscriptions_screen.dart';
+import 'package:alphaserena_admin_portel/screens/support_screen.dart';
 import 'package:alphaserena_admin_portel/screens/trainers_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -32,7 +35,7 @@ class AdminRootController extends GetxController {
   final RxInt selectedIndex = 0.obs;
 
   /// Prevent invalid index crashes
-  final int maxIndex = 6;
+  final int maxIndex = 9;
 
   // ===========================================================================
   // PAGE CACHE (LAZY LOADED)
@@ -154,6 +157,12 @@ class AdminRootController extends GetxController {
         return PaymentsScreen();
       case 6:
         return CouponCodeScreen();
+      case 7:
+        return SupportScreen();
+      case 8:
+        return CommunicationScreen();
+      case 9:
+        return AuditLogScreen();
       default:
         return const SizedBox();
     }
