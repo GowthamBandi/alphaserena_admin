@@ -7,7 +7,6 @@ import '../controllers/trainer_controller.dart';
 import '../core/theme/serena/serena_tokens.g.dart';
 import '../core/widgets/serena/serena_ui.dart';
 import '../models/trainer_model.dart';
-import '../widgets/trainer_form_dialog.dart';
 
 class TrainersScreen extends StatelessWidget {
   TrainersScreen({super.key});
@@ -75,12 +74,9 @@ class TrainersScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const Spacer(),
-
-              ElevatedButton.icon(
-                onPressed: () => Get.dialog(TrainerFormDialog()),
-                icon: const Icon(Icons.add),
-                label: const Text("Create Trainer"),
-              ),
+              // Read-only cross-org oversight. Trainers are created/managed per
+              // org in trainersHQ (createTrainer/setTrainerStatus CFs); the
+              // shared rules deny founder writes to `trainers`.
             ],
           ),
           const SizedBox(height: 14),
@@ -230,7 +226,7 @@ class TrainersScreen extends StatelessWidget {
           Expanded(flex: 1, child: Text("${t.clientIds.length}")),
           Expanded(flex: 2, child: Text(ctrl.getAdminName(t.assignedBy))),
           Expanded(flex: 1, child: _statusChip(t.status)),
-          _actions(t),
+          const SizedBox(width: 40),
         ],
       ),
     );
@@ -318,25 +314,4 @@ class TrainersScreen extends StatelessWidget {
     );
   }
 
-  // ============================================================
-  // ACTIONS
-  // ============================================================
-  Widget _actions(TrainerModel t) {
-    return PopupMenuButton<String>(
-      onSelected: (v) {
-        if (v == "edit") {
-          Get.dialog(TrainerFormDialog(trainer: t));
-        } else if (v == "delete") {
-          ctrl.deleteTrainer(t.docId);
-        }
-      },
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: "edit", child: Text("Edit")),
-        PopupMenuItem(
-          value: "delete",
-          child: Text("Delete", style: TextStyle(color: Colors.red)),
-        ),
-      ],
-    );
-  }
 }

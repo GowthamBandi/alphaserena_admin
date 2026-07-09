@@ -16,6 +16,12 @@ class ClientModel {
   final String? adminId; // who created / assigned
   final bool isActive;
   final bool isVerified;
+
+  /// REAL membership state written by trainersHQ (membership CFs + the admin's
+  /// extend/freeze feature). This — not the legacy `isActive`/`isVerified`
+  /// fields (which the real `clients` doc never sets) — is the source of truth
+  /// for a member being active. Read-only here (founder oversight).
+  final bool membershipActive;
   final Map<String, dynamic>? progress; // e.g. weight logs
   final Map<String, dynamic>? metadata;
 
@@ -39,6 +45,7 @@ class ClientModel {
     this.adminId,
     this.isActive = true,
     this.isVerified = false,
+    this.membershipActive = false,
     this.progress,
     this.metadata,
     required this.createdAt,
@@ -66,6 +73,7 @@ class ClientModel {
     adminId: map['adminId'],
     isActive: map['isActive'] ?? true,
     isVerified: map['isVerified'] ?? false,
+    membershipActive: map['membershipActive'] == true,
     progress: map['progress'],
     metadata: map['metadata'],
     createdAt: map['createdAt'] != null

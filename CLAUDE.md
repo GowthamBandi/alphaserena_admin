@@ -544,4 +544,45 @@ Full spec: `/Users/gowthambandi/flutters/trainersHQ/DESIGN_SYSTEM.md`.
     multi-branch + white-label (no data model); failed-payment tracking (needs
     Razorpay webhook); Tier-1 invoices/receipts (no artifact generation).
 
+## Phase F — Release Stabilization ✅ (9 Jul 2026) — production-defect fixes only
+  No features. Fixed VERIFIED production defects (evidence: deployed
+  trainersHQ/firestore.rules + real doc shapes). `flutter analyze` = 0, web build
+  OK, committed.
+  🔴 P2 PERMISSION FAILURES (production-breaking) — the founder console's
+     trainers_screen + clients_screen did RAW Firestore create/edit/delete that
+     the DEPLOYED rules reject: `trainers` (create:false, update needs
+     assignedBy==uid — no isSuperAdmin, delete:false); `clients` (create/update
+     need adminOperating/trainerOperating — no isSuperAdmin). So every trainer/
+     client write button threw permission-denied in prod (and could have orphaned
+     Auth-less trainer docs). FIX (persona: founder = god-mode READ, per-org
+     writes belong to trainersHQ): made both screens READ-ONLY — removed the
+     Create button + Edit/Delete/status/toggle actions; deleted the orphaned
+     `lib/widgets/trainer_form_dialog.dart` (dead broken-write code). The
+     controller write methods remain dormant + unreachable (zero runtime risk;
+     optional prune later — not refactored per stabilization rules).
+  🔴 P1 RUNTIME CRASH — clients_screen side panel did `Text(c.name[0])`
+     UNGUARDED → RangeError on any client with an empty name. FIX: guarded
+     (`c.name.isNotEmpty ? c.name[0] : "?"`), matching every other avatar helper.
+  🟠 P6 INCORRECT BUSINESS LOGIC — client KPIs + status pill read the fictitious
+     `isActive`/`isVerified` fields the real `clients` doc never sets (Verified
+     always 0; Active a meaningless default). FIX: added `membershipActive`
+     (the REAL field) to ClientModel; KPIs now Total / Active-membership /
+     With-trainer / Unassigned (all real fields); status pill + filter read
+     `membershipActive`. Numbers are now truthful.
+  ✅ FULL WRITE AUDIT of the console: every remaining Firestore write targets a
+     super-admin-permitted collection (admins moderation fields, subscription_
+     plans, coupon_codes, org_feedback, platform_announcements) — no permission-
+     failure surface remains. (platform_announcements + audit_logs still need the
+     rules DEPLOY = Release Ops, not a code defect.)
+  ── CLASSIFICATION of what remains ──
+  • RELEASE OPERATIONS: deploy trainersHQ/firestore.rules (platform_announcements
+    + audit_logs blocks); build+deploy the fanoutAnnouncement delivery CF.
+  • FROZEN APPS: TrainerHQ + AlphaSerena engineering frozen — not scanned/edited;
+    the cross-app CONTRACTS the console consumes (clients.membershipActive,
+    admin_payments_history.amount, trainers/clients rules) were verified.
+  • FEATURE (frozen this loop): settlement/refund UIs (need cloud_functions +
+    deployed CFs).
+  • DEAD CODE (dormant, unreachable, zero runtime risk): trainer/client controller
+    write methods + their form controllers — optional prune, not a defect.
+
 # END — update PART 12 as each item completes; never delete done items, mark them ✅.

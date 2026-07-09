@@ -30,13 +30,17 @@ class ClientController extends GetxController {
   // ============================================================
   int get total => clients.length;
 
-  int get active => clients.where((c) => c.isActive == true).length;
+  // Honest KPIs from REAL `clients` fields (the legacy isActive/isVerified are
+  // never set on the real doc, so they were showing wrong numbers).
+  int get active => clients.where((c) => c.membershipActive).length;
 
-  int get inactive => clients.where((c) => c.isActive == false).length;
+  int get inactive => clients.where((c) => !c.membershipActive).length;
 
-  int get verified => clients.where((c) => c.isVerified == true).length;
+  int get withTrainer =>
+      clients.where((c) => (c.trainerId ?? '').isNotEmpty).length;
 
-  int get unverified => clients.where((c) => c.isVerified == false).length;
+  int get unassigned =>
+      clients.where((c) => (c.trainerId ?? '').isEmpty).length;
 
   // ============================================================
   // 🧠 FORM STATE
@@ -192,8 +196,8 @@ class ClientController extends GetxController {
 
       final matchStatus =
           statusFilter.value == "all" ||
-          (statusFilter.value == "active" && c.isActive) ||
-          (statusFilter.value == "inactive" && !c.isActive);
+          (statusFilter.value == "active" && c.membershipActive) ||
+          (statusFilter.value == "inactive" && !c.membershipActive);
 
       return matchSearch && matchStatus;
     }).toList();

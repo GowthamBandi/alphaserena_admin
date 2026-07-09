@@ -60,14 +60,14 @@ class ClientsScreen extends StatelessWidget {
         spacing: 16,
         runSpacing: 16,
         children: [
-          _kpi("Total Clients", ctrl.total, Icons.people,
+          _kpi("Total Members", ctrl.total, Icons.people,
               const Color(SerenaColor.infoFillLight)),
-          _kpi("Active", ctrl.active, Icons.check_circle,
+          _kpi("Active Membership", ctrl.active, Icons.check_circle,
               const Color(SerenaColor.statusActiveLight)),
-          _kpi("Inactive", ctrl.inactive, Icons.block,
-              const Color(SerenaColor.statusBlockedLight)),
-          _kpi("Verified", ctrl.verified, Icons.verified,
+          _kpi("With Trainer", ctrl.withTrainer, Icons.fitness_center,
               const Color(SerenaColor.accentPurpleLight)),
+          _kpi("Unassigned", ctrl.unassigned, Icons.person_off,
+              const Color(SerenaColor.statusPendingLight)),
         ],
       ),
     );
@@ -200,7 +200,6 @@ class ClientsScreen extends StatelessWidget {
         Expanded(flex: 2, child: Text("Goal")),
         Expanded(flex: 2, child: Text("Trainer")),
         Expanded(flex: 1, child: Text("Status")),
-        Expanded(flex: 1, child: Text("Actions")),
       ],
     );
   }
@@ -214,7 +213,6 @@ class ClientsScreen extends StatelessWidget {
           Expanded(flex: 2, child: Text(c.goal ?? "-")),
           Expanded(flex: 2, child: Text(ctrl.getTrainerName(c.trainerId))),
           Expanded(flex: 1, child: _status(c)),
-          Expanded(flex: 1, child: _actions(c)),
         ],
       ),
     );
@@ -246,25 +244,12 @@ class ClientsScreen extends StatelessWidget {
   }
 
   Widget _status(ClientModel c) {
-    // M4: SDS semantic status pill (green active / neutral inactive).
+    // SDS semantic status pill from the REAL membership state (green active /
+    // neutral inactive). Read-only: the founder console cannot write per-org
+    // client records (that's trainersHQ's job; the rules deny it).
     return SerenaStatusPill(
-      label: c.isActive ? "ACTIVE" : "INACTIVE",
-      status: c.isActive ? SerenaStatus.active : SerenaStatus.neutral,
-    );
-  }
-
-  Widget _actions(ClientModel c) {
-    return PopupMenuButton<String>(
-      onSelected: (v) {
-        if (v == "delete") ctrl.deleteClient(c.docId);
-      },
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: "edit", child: Text("Edit")),
-        PopupMenuItem(
-          value: "delete",
-          child: Text("Delete", style: TextStyle(color: Colors.red)),
-        ),
-      ],
+      label: c.membershipActive ? "ACTIVE" : "INACTIVE",
+      status: c.membershipActive ? SerenaStatus.active : SerenaStatus.neutral,
     );
   }
 
@@ -290,7 +275,9 @@ class ClientsScreen extends StatelessWidget {
               .map(
                 (c) => ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(child: Text(c.name[0])),
+                  leading: CircleAvatar(
+                    child: Text(c.name.isNotEmpty ? c.name[0].toUpperCase() : "?"),
+                  ),
                   title: Text(c.name),
                   subtitle: Text(c.goal ?? ""),
                 ),
