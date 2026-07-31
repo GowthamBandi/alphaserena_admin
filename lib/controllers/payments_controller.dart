@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import '../core/services/refund_service.dart';
 import '../core/services/revenue_engine.dart';
 import '../models/subscription_model.dart';
+import '../widgets/app_snackbar.dart';
 
 class PaymentsController extends GetxController {
   // ============================================================
@@ -236,5 +237,48 @@ class PaymentsController extends GetxController {
   @override
   Future<void> refresh() async {
     _initStream();
+  }
+
+  // ============================================================
+  // REFUND (super-admin only, via refundPayment Cloud Function)
+  // ============================================================
+  final RxBool isRefunding = false.obs;
+
+  /// [amount] in rupees; 0 = full refund.
+  Future<bool> refundPayment({
+    required String paymentId,
+    required String historyDocId,
+    int amount = 0,
+    String reason = '',
+  }) async {
+    if (paymentId.isEmpty) {
+      AppSnackbar.show(
+          title: 'Cannot refund', message: 'No payment id on this record.');
+      return false;
+    }
+    try {
+      isRefunding.value = true;
+      await FirebaseFunctions.instance.httpsCallable('refundPayment').call({
+        'paymentId': paymentId,
+        'historyDocId': historyDocId,
+        'amount': amount,
+        'reason': reason,
+      });
+      AppSnackbar.show(
+        title: 'Refunded',
+        message: 'Refund processed successfully',
+        background: Colors.green.shade700,
+      );
+      return true;
+    } on FirebaseFunctionsException catch (e) {
+      AppSnackbar.show(
+          title: 'Refund failed', message: e.message ?? 'Gateway error');
+      return false;
+    } catch (_) {
+      AppSnackbar.show(title: 'Error', message: 'Could not process refund');
+      return false;
+    } finally {
+      isRefunding.value = false;
+    }
   }
 }

@@ -40,12 +40,18 @@ class CouponController extends GetxController {
   // TRACK WHICH DOCUMENT IS BEING EDITED
   RxString editDocId = "".obs;
 
+<<<<<<< HEAD
   // FIRESTORE COLLECTION NAME — canonical, ecosystem-shared `coupon_codes`.
   // (Was the orphan `master_coupons`, which trainersHQ's checkout coupon
   // validator + platform_service never read → founder coupons were unredeemable.)
   final String collectionName = FsCollections.couponCodes;
 
   StreamSubscription? _sub;
+=======
+  // FIRESTORE COLLECTION NAME — canonical, shared with trainersHQ (previewCoupon CF)
+  // and allowed by the security rules (super-admin read/write).
+  final String collectionName = "coupon_codes";
+>>>>>>> origin/main
 
   @override
   void onInit() {

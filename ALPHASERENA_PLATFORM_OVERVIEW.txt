@@ -213,11 +213,21 @@ BUILT (in trainersHQ; compile clean):
   verifyAndActivateSubscription (admin) verify Razorpay signature, derive limits +
                                 months FROM THE PLAN DOC, write subscription state +
                                 payment history.
-  Secrets: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET.
+  expireSubscriptions          (scheduled, every 6h) flips isSubscriptionActive=false
+                                once planExpiry passes — REQUIRED so the rules'
+                                operate-gate actually expires a gym. [BUILT 2026-06-21]
+  refundPayment                (super admin) Razorpay refund (full/partial), stamps the
+                                payment-history doc + audit log. UI = founder console
+                                Payments screen. [BUILT 2026-06-21]
+  claimClientAccount           (member) links the member's VERIFIED phone to their gym
+                                `clients` doc + writes clientProfiles. [BUILT 2026-06-21]
+  getMyTraining                (member) returns assigned workout + diet content,
+                                resolved server-side. [BUILT 2026-06-21]
+  Secrets: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET (set a rzp_test_ key now; swap to
+  rzp_live_ later — secret only, no code change).
+  ALL functions compile clean (tsc) and are READY TO DEPLOY (Blaze). Not yet deployed.
 
 RECOMMENDED / NOT YET BUILT
-  • A scheduled function to expire subscriptions (flip isSubscriptionActive when
-    planExpiry passes) — REQUIRED for the operate-gate to be fully correct.
   • createHQ/staff helpers, refunds/reconciliation — future.
   • Tier-2 membership purchase verification — future (Part 4).
 
@@ -328,28 +338,32 @@ page cache (no named routes). Collections accessed are the canonical shared ones
     • VERIFIED end-to-end: writes the nested `limits` map + title/months that
       trainersHQ + the verify CF read. Plan writes allowed by rules (super admin).
 
-  10.5 TRAINERS  (index 2)  [EXISTS — pending re-skin]
-    • Platform-wide trainers list with controller (trainer_controller) reading real
-      data. Still on default Material styling. CAVEAT: any "create trainer" here must
-      go through the createTrainer CF (direct trainer-doc creation is blocked by
-      rules); to be aligned during its re-skin.
+  10.5 TRAINERS  (index 2)  [DONE — read-only observer]
+    • Themed platform-wide trainers list: search, status-filter chips with counts,
+      org name (via getAdminName), client count, details dialog. Founder does NOT
+      create trainers (that's the createTrainer CF) — so this is read-only.
 
-  10.6 CLIENTS  (index 3)  [EXISTS — pending re-skin]
-    • Platform-wide members list (client_controller). Real data; default styling.
-      Read-only observation fits the founder role; align writes with rules on re-skin.
+  10.6 MEMBERS / Clients  (index 3)  [DONE — read-only observer]
+    • Themed members list: search, active/inactive filter, trainer + org names,
+      active/verified pills, details dialog. Founder can't write clients per rules.
 
-  10.7 PAYMENTS  (index 5)  [EXISTS — pending re-skin]
-    • Payment history view (payments_controller) from admin_payments_history. Real
-      data; default styling; pending re-skin. Will be empty until the payment CF runs.
+  10.7 PAYMENTS  (index 5)  [DONE — read-only ledger]
+    • Revenue ledger from admin_payments_history: KPI cards (total / this-month +
+      growth / week / today), plan filter, search, transaction list with coupon
+      badges. Empty until the payment CF writes records.
 
-  10.8 COUPONS  (index 6)  [EXISTS — pending re-skin]
-    • Create/manage discount codes (coupon_controller, coupon_codes collection).
-      Rules allow super-admin read/write. Default styling; pending re-skin.
+  10.8 COUPONS  (index 6)  [DONE — full CRUD]
+    • Create/edit/toggle/disable discount codes with a themed dialog (%/₹ toggle,
+      date pickers, usage). FIXED drift: now writes the canonical `coupon_codes`
+      collection (was master_coupons) with type/value/expiresAt so trainersHQ's
+      previewCoupon CF reads it. Rules allow super-admin read/write.
 
-  CONSOLE PENDING WORK
-    • Re-skin Trainers / Clients / Payments / Coupons onto the design tokens.
-    • Move any privileged WRITES to Cloud Functions where rules require it.
+  CONSOLE STATUS: ALL 7 nav sections complete on the design system with real data,
+  and `flutter analyze lib` is clean (No issues found).
+
+  CONSOLE PENDING (platform-wide, not screens)
     • Decide the super-admin overlap with trainersHQ's in-app console.
+    • Move privileged writes behind Cloud Functions where applicable.
     • (Later) auto-expire scheduled CF; Tier-2 design.
 
 ==============================================================================
@@ -401,15 +415,30 @@ BACKEND
   [x] Core Cloud Functions (in trainersHQ): register/trainer/subscription/coupon.
   [ ] Scheduled expiry function; Tier-2 functions; refunds.
 
-APP 1 trainersHQ        [x] Feature-complete rebuild (Sections 0–11). Deferred:
-                            FCM, store assets, refunds, client app.
+APP 1 trainersHQ        [x] Feature-complete rebuild (Sections 0–11) + production pass
+                            (2026-06-21): Razorpay client checkout RE-ENABLED (real,
+                            key from secret), expireSubscriptions auto-expire CF added;
+                            all compiles clean, READY TO DEPLOY.
+                            + launch polish (2026-06-21): FCM push, native splash,
+                            app-icon config, refundPayment CF + console refund UI.
+                        [ ] Founder go-live: Blaze + set Razorpay secrets + deploy +
+                            create plans + test payment (Android). iOS Razorpay pod +
+                            APNs may need setup. Add the app-icon PNG. Deferred: store
+                            listing, a real analytics dashboard.
 
-APP 2 alphaserena_admin [x] Secure login + claims, console shell, Dashboard,
-                            Organizations + moderation, Subscriptions (verified).
-                        [ ] Re-skin Trainers/Clients/Payments/Coupons; CF-back the
-                            privileged writes; super-admin overlap decision.
+APP 2 alphaserena_admin [x] COMPLETE (UI + data): secure claims login, shell, and all
+                            7 sections — Dashboard, Organizations(+moderation),
+                            Trainers, Members, Subscriptions(verified), Payments,
+                            Coupons. Whole project lint-clean.
+                        [ ] Platform-wide follow-ups only: CF-back some writes,
+                            super-admin overlap decision, auto-expire CF, Tier-2.
 
-APP 3 alphaserena       [ ] UI only; not wired. Needs auth, data, rebrand (Part 11).
+APP 3 alphaserena       [x] CORE COMPLETE (2026-06-21): design system + quotes, real
+                            phone OTP, motivational onboarding, data linkage
+                            (claimClientAccount), Home, Workout(+video), Diet, Progress,
+                            Chat (real-time), Profile. Dark-first, brand, lint-clean.
+                        [ ] Tier-2 membership purchase (members buy the gym's plan via
+                            Razorpay) — needs design + a CF. iOS phone auth needs APNs.
 
 ==============================================================================
  PART 14 — FOUNDER GO-LIVE CHECKLIST
