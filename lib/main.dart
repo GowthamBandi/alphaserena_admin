@@ -3,19 +3,12 @@
 import 'package:alphaserena_admin_portel/controllers/admin_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/admin_login_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/admin_root_controller.dart';
-<<<<<<< HEAD
 import 'package:alphaserena_admin_portel/controllers/audit_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/communication_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/coupon_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/dashboard_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/operations_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/platform_staff_controller.dart';
-=======
-import 'package:alphaserena_admin_portel/controllers/client_controller.dart';
-import 'package:alphaserena_admin_portel/controllers/coupon_controller.dart';
-import 'package:alphaserena_admin_portel/controllers/dashboard_controller.dart';
-import 'package:alphaserena_admin_portel/controllers/payments_controller.dart';
->>>>>>> origin/main
 import 'package:alphaserena_admin_portel/controllers/subscription_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/support_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/trainer_controller.dart';
@@ -203,19 +196,14 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
       _safePut(DashboardController());
       _safePut(AdminController());
       _safePut(TrainerController());
-      _safePut(ClientController());
       _safePut(CouponController());
       _safePut(SubscriptionController());
-<<<<<<< HEAD
       _safePut(SupportController());
       _safePut(CommunicationController());
       _safePut(AuditController());
       // Operations Center derives from Admin/Support/Communication — register last.
       _safePut(OperationsController());
       _safePut(PlatformStaffController());
-=======
-      _safePut(PaymentsController());
->>>>>>> origin/main
 
       if (kDebugMode) debugPrint("✅ ALL CONTROLLERS INITIALIZED");
       isReady.value = true;

@@ -66,17 +66,8 @@ class CouponModel {
       code: (map["code"] ?? "").toString(),
       description: (map["description"] ?? "").toString(),
 
-<<<<<<< HEAD
       isPercentage: percent,
       discountValue: double.tryParse("${rawValue ?? 0}") ?? 0.0,
-=======
-      // Accept either shape: console fields OR trainersHQ canonical (type/value).
-      isPercentage:
-          map["isPercentage"] ?? (map["type"]?.toString() == "percent"),
-      discountValue:
-          double.tryParse((map["discountValue"] ?? map["value"]).toString()) ??
-              0.0,
->>>>>>> origin/main
 
       maxUsage: (map["maxUsage"] is num)
           ? (map["maxUsage"] as num).toInt()
@@ -87,17 +78,12 @@ class CouponModel {
 
       isActive: map["isActive"] != false,
 
-<<<<<<< HEAD
       validFrom: _toDate(rawFrom),
       // A coupon with NO expiry (e.g. created via the legacy platform screen,
       // which never writes expiresAt) is treated by the server's validateCoupon
       // as never-expiring. Default a missing expiry to the far future so the
       // console doesn't falsely show a live coupon as "Expired".
       validTo: rawExpiry == null ? DateTime(2100) : _toDate(rawExpiry),
-=======
-      validFrom: _toDate(map["validFrom"]),
-      validTo: _toDate(map["validTo"] ?? map["expiresAt"]),
->>>>>>> origin/main
 
       createdAt: _toDate(map["createdAt"]),
       updatedAt: _toDate(map["updatedAt"]),
@@ -127,33 +113,13 @@ class CouponModel {
       // ── Console-side extras (founder tracking + UI) — ignored by consumers.
       "docId": docId,
       "uid": uid,
-<<<<<<< HEAD
-=======
-      "code": code,
-      "description": description,
-
-      // ── Console fields ──
->>>>>>> origin/main
       "isPercentage": isPercentage,
       "discountValue": discountValue,
       "maxUsage": maxUsage,
       "usedCount": usedCount,
-<<<<<<< HEAD
       "validFrom": Timestamp.fromDate(validFrom),
       "validTo": Timestamp.fromDate(validTo),
       "updatedAt": Timestamp.fromDate(updatedAt),
-=======
-      "isActive": isActive,
-      "validFrom": validFrom.toIso8601String(),
-      "validTo": validTo.toIso8601String(),
-      "createdAt": createdAt.toIso8601String(),
-      "updatedAt": updatedAt.toIso8601String(),
-
-      // ── Canonical fields read by trainersHQ's previewCoupon CF ──
-      "type": isPercentage ? "percent" : "flat",
-      "value": discountValue,
-      "expiresAt": Timestamp.fromDate(validTo),
->>>>>>> origin/main
     };
   }
 }
