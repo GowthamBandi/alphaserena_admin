@@ -2,11 +2,21 @@
 //
 // Founder-console dashboard data. Reads the CANONICAL shared-backend collections
 // (with the super-admin god-read rules) and derives platform-wide metrics.
+//
+// Counting contract: trainer/member headcounts use Firestore aggregate count()
+// queries (total minus isDeleted == true), mirroring the backend's own
+// `countLive` in quotas.ts — the previous whole-collection streams both wasted
+// reads and OVERCOUNTED by including soft-deleted docs. Counts refresh when the
+// admins stream emits (org activity) and on explicit retry.
 
+import 'dart:async';
+
+import 'package:alphaserena_admin_portel/core/services/org_moderation_service.dart';
+import 'package:alphaserena_admin_portel/core/services/revenue_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import '../models/admin_model.dart';
+import '../models/subscription_model.dart';
 
 class MonthRevenue {
   final String label;
@@ -46,7 +56,6 @@ class DashboardController extends GetxController {
 
   final RxInt trainersTotal = 0.obs;
   final RxInt clientsTotal = 0.obs;
-  final RxInt plansTotal = 0.obs;
 
   // ── Revenue ─────────────────────────────────────────────────────────
   final RxDouble revenueTotal = 0.0.obs;
@@ -61,28 +70,56 @@ class DashboardController extends GetxController {
   final RxList<PaymentEntry> recentPayments = <PaymentEntry>[].obs;
   final RxList<TopOrg> topOrgs = <TopOrg>[].obs;
 
-  // ── Load flags ──────────────────────────────────────────────────────
+  // ── Load / error flags ──────────────────────────────────────────────
+  // A failed stream is an ERROR, not an empty platform — the screen renders a
+  // retry state instead of a misleading "all clear".
   final RxBool orgsLoaded = false.obs;
   final RxBool revenueLoaded = false.obs;
+  final RxBool countsLoaded = false.obs;
+  final RxBool orgsError = false.obs;
+  final RxBool revenueError = false.obs;
   bool get isLoading => !orgsLoaded.value;
 
   final Map<String, String> _orgNameById = {};
   Map<String, double> _revenueByOrg = {};
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _paymentDocs = [];
+  List<SubscriptionModel> _payments = [];
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _adminsSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _paymentsSub;
 
   @override
   void onInit() {
     super.onInit();
     _listenAdmins();
-    _listenTrainers();
-    _listenClients();
-    _listenPlans();
+    _listenPayments();
+    _refreshHeadcounts();
+  }
+
+  @override
+  void onClose() {
+    _adminsSub?.cancel();
+    _paymentsSub?.cancel();
+    super.onClose();
+  }
+
+  /// Re-attach a failed stream (surfaced by the card retry buttons).
+  void retryOrgs() {
+    orgsError.value = false;
+    orgsLoaded.value = false;
+    _listenAdmins();
+    _refreshHeadcounts();
+  }
+
+  void retryRevenue() {
+    revenueError.value = false;
+    revenueLoaded.value = false;
     _listenPayments();
   }
 
   // ── ADMINS (organizations) ──────────────────────────────────────────
   void _listenAdmins() {
-    _db.collection('admins').snapshots().listen((snap) {
+    _adminsSub?.cancel();
+    _adminsSub = _db.collection('admins').snapshots().listen((snap) {
       int active = 0, pending = 0, warning = 0, blocked = 0, subscribed = 0;
       final pendingList = <AdminModel>[];
       final expiring = <AdminModel>[];
@@ -92,8 +129,9 @@ class DashboardController extends GetxController {
 
       for (final d in snap.docs) {
         final a = AdminModel.fromSnapshot(d);
-        _orgNameById[d.id] =
-            a.organizationName.isNotEmpty ? a.organizationName : a.name;
+        _orgNameById[d.id] = a.organizationName.isNotEmpty
+            ? a.organizationName
+            : a.name;
 
         switch (a.status.toLowerCase()) {
           case 'active':
@@ -135,154 +173,166 @@ class DashboardController extends GetxController {
       );
       expiringSoon.value = expiring;
 
+      orgsError.value = false;
       orgsLoaded.value = true;
       _recomputeTopOrgs();
-    }, onError: (_) => orgsLoaded.value = true);
+      // Org activity is a cheap freshness signal for the headcount aggregates.
+      _refreshHeadcounts();
+    }, onError: (_) {
+      orgsError.value = true;
+      orgsLoaded.value = true;
+    });
   }
 
-  void _listenTrainers() {
-    _db.collection('trainers').snapshots().listen(
-          (s) => trainersTotal.value = s.size,
-          onError: (_) {},
-        );
+  // ── HEADCOUNTS (aggregate count(), backend countLive contract) ──────
+  /// Live count = total docs − soft-deleted docs, exactly how the backend's
+  /// quota sweep counts (`quotas.ts` countLive). Aggregate queries read no
+  /// documents, so this replaces two whole-collection streams.
+  Future<int?> _liveCount(String collection) async {
+    try {
+      final total = await _db.collection(collection).count().get();
+      final deleted = await _db
+          .collection(collection)
+          .where('isDeleted', isEqualTo: true)
+          .count()
+          .get();
+      final t = total.count ?? 0;
+      final d = deleted.count ?? 0;
+      return (t - d) < 0 ? 0 : t - d;
+    } catch (_) {
+      return null; // keep the previous value; not worth a card-level error
+    }
   }
 
-  void _listenClients() {
-    _db.collection('clients').snapshots().listen(
-          (s) => clientsTotal.value = s.size,
-          onError: (_) {},
-        );
+  bool _countsRefreshing = false;
+
+  Future<void> _refreshHeadcounts() async {
+    if (_countsRefreshing) return; // coalesce bursts of snapshot emissions
+    _countsRefreshing = true;
+    try {
+      final results = await Future.wait([
+        _liveCount('trainers'),
+        _liveCount('clients'),
+      ]);
+      if (results[0] != null) trainersTotal.value = results[0]!;
+      if (results[1] != null) clientsTotal.value = results[1]!;
+      if (results[0] != null || results[1] != null) {
+        countsLoaded.value = true;
+      }
+    } finally {
+      _countsRefreshing = false;
+    }
   }
 
-  void _listenPlans() {
-    _db.collection('subscription_plans').snapshots().listen(
-          (s) => plansTotal.value = s.size,
-          onError: (_) {},
-        );
-  }
-
-  // ── PAYMENTS (revenue engine) ───────────────────────────────────────
+  // ── PAYMENTS (shared RevenueEngine) ─────────────────────────────────
+  // All business math (refund netting, period sums, growth %) lives in
+  // RevenueEngine — the same engine PaymentsController uses — so the two
+  // screens can never disagree. Semantic notes vs the old inline math are
+  // documented on the engine itself.
   void _listenPayments() {
-    _db.collection('admin_payments_history').snapshots().listen((snap) {
-      _paymentDocs = snap.docs;
+    _paymentsSub?.cancel();
+    _paymentsSub =
+        _db.collection('admin_payments_history').snapshots().listen((snap) {
+      _payments = snap.docs
+          .map((d) => SubscriptionModel.fromMap(d.id, d.data()))
+          .toList();
       _recomputePayments();
+      revenueError.value = false;
       revenueLoaded.value = true;
-    }, onError: (_) => revenueLoaded.value = true);
+    }, onError: (_) {
+      revenueError.value = true;
+      revenueLoaded.value = true;
+    });
   }
 
   void _recomputePayments() {
-    final now = DateTime.now();
-    final thisKey = _monthKey(now);
-    final prevKey = _monthKey(DateTime(now.year, now.month - 1));
+    final report = RevenueEngine.compute(_payments, now: DateTime.now());
 
-    final buckets = <String, double>{};
-    final order = <String>[];
-    for (int i = 5; i >= 0; i--) {
-      final m = DateTime(now.year, now.month - i);
-      final k = _monthKey(m);
-      buckets[k] = 0;
-      order.add(k);
-    }
+    revenueTotal.value = report.totalRevenue;
+    revenueThisMonth.value = report.monthRevenue;
+    revenuePrevMonth.value = report.prevMonthRevenue;
+    revenueGrowthPct.value = report.monthlyGrowth;
 
-    double total = 0, thisMonth = 0, prevMonth = 0;
-    final byOrg = <String, double>{};
-    final entries = <PaymentEntry>[];
+    revenueByMonth.value = report.monthlyBuckets
+        .map((b) => MonthRevenue(b.label, b.value))
+        .toList();
 
-    for (final d in _paymentDocs) {
-      final data = d.data();
-      final amount = _toNum(
-        data['amount'] ?? data['price'] ?? data['paidAmount'] ?? data['totalAmount'],
-      );
-      total += amount;
+    recentPayments.value = report.paymentsByDateDesc
+        .take(6)
+        .map(
+          (s) => PaymentEntry(
+            orgId: s.adminUid,
+            amount: s.netAmount,
+            date: s.createdAt,
+            plan: s.planName,
+          ),
+        )
+        .toList();
 
-      final dt = _toDate(
-        data['createdAt'] ?? data['paidAt'] ?? data['timestamp'] ?? data['date'],
-      );
-      final k = dt != null ? _monthKey(dt) : '';
-      if (k == thisKey) thisMonth += amount;
-      if (k == prevKey) prevMonth += amount;
-      if (buckets.containsKey(k)) buckets[k] = buckets[k]! + amount;
-
-      final orgId = (data['adminId'] ?? data['adminUid'] ?? '').toString();
-      if (orgId.isNotEmpty) byOrg[orgId] = (byOrg[orgId] ?? 0) + amount;
-
-      entries.add(PaymentEntry(
-        orgId: orgId,
-        amount: amount,
-        date: dt,
-        plan: (data['planName'] ?? data['plan'] ?? data['title'] ?? '').toString(),
-      ));
-    }
-
-    revenueTotal.value = total;
-    revenueThisMonth.value = thisMonth;
-    revenuePrevMonth.value = prevMonth;
-    revenueGrowthPct.value = prevMonth > 0
-        ? ((thisMonth - prevMonth) / prevMonth) * 100
-        : (thisMonth > 0 ? 100 : 0);
-
-    revenueByMonth.value =
-        order.map((k) => MonthRevenue(_monthLabel(k), buckets[k] ?? 0)).toList();
-
-    entries.sort((a, b) => (b.date ?? DateTime(0)).compareTo(a.date ?? DateTime(0)));
-    recentPayments.value = entries.take(6).toList();
-
-    _revenueByOrg = byOrg;
+    _revenueByOrg = report.revenueByAdmin;
     _recomputeTopOrgs();
   }
 
   void _recomputeTopOrgs() {
-    final list = _revenueByOrg.entries
-        .map((e) => TopOrg(_orgNameById[e.key] ?? 'Organization', e.value))
-        .toList()
-      ..sort((a, b) => b.revenue.compareTo(a.revenue));
+    final list =
+        _revenueByOrg.entries
+            .map((e) => TopOrg(_orgNameById[e.key] ?? 'Organization', e.value))
+            .toList()
+          ..sort((a, b) => b.revenue.compareTo(a.revenue));
     topOrgs.value = list.take(5).toList();
   }
 
   // ── ACTIONS ─────────────────────────────────────────────────────────
-  /// Approve a pending organization. Writes ONLY moderation fields (matches the
-  /// security rules' super-admin branch).
-  Future<void> approveOrg(String docId) async {
+  bool _moderating = false; // re-entry guard (double-click = double CF call)
+
+  /// Approve a pending organization — same server-owned path as the
+  /// Organizations screen (`setAdminStatus` CF via OrgModerationService);
+  /// the former direct Firestore write skipped the audit log and the trainer
+  /// operate-state cascade, and the rules now deny it.
+  Future<void> approveOrg(String docId) => _moderate(
+        docId,
+        OrgModerationService.active,
+        reason: 'Approved by founder',
+        successTitle: 'Approved',
+        successMessage: 'Organization approved',
+      );
+
+  /// Reject a pending organization — sets `blocked` via the same CF (which
+  /// also disables the org's Firebase Auth account and cascades operate-state).
+  /// The screen confirms before calling this; blocking is reversible from the
+  /// Organizations screen.
+  Future<void> rejectOrg(String docId) => _moderate(
+        docId,
+        OrgModerationService.blocked,
+        reason: 'Rejected by founder at review',
+        successTitle: 'Rejected',
+        successMessage: 'Organization blocked — reversible from Organizations',
+      );
+
+  Future<void> _moderate(
+    String docId,
+    String status, {
+    required String reason,
+    required String successTitle,
+    required String successMessage,
+  }) async {
+    if (_moderating) return;
+    _moderating = true;
     try {
-      await _db.collection('admins').doc(docId).update({
-        'status': 'active',
-        'statusReason': 'Approved by founder',
-        'statusUpdatedAt': FieldValue.serverTimestamp(),
-        'statusUpdatedBy': FirebaseAuth.instance.currentUser?.uid,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      Get.snackbar('Approved', 'Organization approved',
-          snackPosition: SnackPosition.BOTTOM);
+      await OrgModerationService.setStatus(docId, status, reason: reason);
+      Get.snackbar(
+        successTitle,
+        successMessage,
+        snackPosition: SnackPosition.BOTTOM,
+      );
     } catch (e) {
-      Get.snackbar('Error', 'Could not approve organization',
-          snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Error',
+        'Could not update organization status',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      _moderating = false;
     }
-  }
-
-  // ── Helpers ─────────────────────────────────────────────────────────
-  static double _toNum(dynamic v) {
-    if (v is num) return v.toDouble();
-    if (v is String) return double.tryParse(v) ?? 0;
-    return 0;
-  }
-
-  static DateTime? _toDate(dynamic v) {
-    if (v is Timestamp) return v.toDate();
-    if (v is DateTime) return v;
-    if (v is String) return DateTime.tryParse(v);
-    return null;
-  }
-
-  static String _monthKey(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}';
-
-  static String _monthLabel(String key) {
-    const m = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    final parts = key.split('-');
-    final mi = int.tryParse(parts.length > 1 ? parts[1] : '1') ?? 1;
-    return m[(mi - 1).clamp(0, 11)];
   }
 }

@@ -1,0 +1,942 @@
+{
+  "version": 1,
+  "note": "FOOD PLATFORM V1 SEED — FROZEN MIGRATION DATA. This file was the runtime food source bundled into the TrainerHQ app; it is no longer read by any app. It exists solely so the Super Admin can import it once into the global Firestore food database (Global Food Database > Tools > Import seed catalog). Do not add foods here — add them to the global database, which is the single source of truth. Nutrition is per 100 g.",
+  "foods": [
+    {
+      "name": "Roti / Chapati (whole wheat)",
+      "per100": {
+        "calories": 297,
+        "protein": 11,
+        "carbs": 50,
+        "fat": 6
+      },
+      "portions": [
+        {
+          "label": "roti",
+          "grams": 40
+        }
+      ],
+      "tags": [
+        "staple",
+        "grain"
+      ]
+    },
+    {
+      "name": "Plain Paratha",
+      "per100": {
+        "calories": 330,
+        "protein": 8,
+        "carbs": 47,
+        "fat": 12
+      },
+      "portions": [
+        {
+          "label": "paratha",
+          "grams": 60
+        }
+      ],
+      "tags": [
+        "staple",
+        "grain"
+      ]
+    },
+    {
+      "name": "Cooked White Rice",
+      "per100": {
+        "calories": 130,
+        "protein": 2.7,
+        "carbs": 28,
+        "fat": 0.3
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "staple",
+        "grain"
+      ]
+    },
+    {
+      "name": "Cooked Brown Rice",
+      "per100": {
+        "calories": 123,
+        "protein": 2.7,
+        "carbs": 26,
+        "fat": 1
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "staple",
+        "grain"
+      ]
+    },
+    {
+      "name": "Toor Dal (cooked)",
+      "per100": {
+        "calories": 121,
+        "protein": 7,
+        "carbs": 18,
+        "fat": 1.5
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "dal",
+        "protein"
+      ]
+    },
+    {
+      "name": "Moong Dal (cooked)",
+      "per100": {
+        "calories": 105,
+        "protein": 7,
+        "carbs": 15,
+        "fat": 0.8
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "dal",
+        "protein"
+      ]
+    },
+    {
+      "name": "Chana Dal (cooked)",
+      "per100": {
+        "calories": 130,
+        "protein": 8,
+        "carbs": 20,
+        "fat": 2
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "dal",
+        "protein"
+      ]
+    },
+    {
+      "name": "Rajma (cooked)",
+      "per100": {
+        "calories": 140,
+        "protein": 9,
+        "carbs": 22,
+        "fat": 1.5
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "protein"
+      ]
+    },
+    {
+      "name": "Chole / Chickpea Curry",
+      "per100": {
+        "calories": 164,
+        "protein": 8,
+        "carbs": 22,
+        "fat": 5
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "protein"
+      ]
+    },
+    {
+      "name": "Idli",
+      "per100": {
+        "calories": 132,
+        "protein": 4,
+        "carbs": 27,
+        "fat": 0.5
+      },
+      "portions": [
+        {
+          "label": "idli",
+          "grams": 50
+        }
+      ],
+      "tags": [
+        "south-indian",
+        "breakfast"
+      ]
+    },
+    {
+      "name": "Plain Dosa",
+      "per100": {
+        "calories": 168,
+        "protein": 4,
+        "carbs": 30,
+        "fat": 4
+      },
+      "portions": [
+        {
+          "label": "dosa",
+          "grams": 80
+        }
+      ],
+      "tags": [
+        "south-indian",
+        "breakfast"
+      ]
+    },
+    {
+      "name": "Masala Dosa",
+      "per100": {
+        "calories": 185,
+        "protein": 4,
+        "carbs": 30,
+        "fat": 6
+      },
+      "portions": [
+        {
+          "label": "dosa",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "south-indian",
+        "breakfast"
+      ]
+    },
+    {
+      "name": "Medu Vada",
+      "per100": {
+        "calories": 245,
+        "protein": 7,
+        "carbs": 28,
+        "fat": 11
+      },
+      "portions": [
+        {
+          "label": "vada",
+          "grams": 50
+        }
+      ],
+      "tags": [
+        "south-indian",
+        "snack"
+      ]
+    },
+    {
+      "name": "Upma",
+      "per100": {
+        "calories": 150,
+        "protein": 4,
+        "carbs": 22,
+        "fat": 5
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "breakfast"
+      ]
+    },
+    {
+      "name": "Poha",
+      "per100": {
+        "calories": 130,
+        "protein": 2.5,
+        "carbs": 25,
+        "fat": 3
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "breakfast"
+      ]
+    },
+    {
+      "name": "Sambar",
+      "per100": {
+        "calories": 85,
+        "protein": 4,
+        "carbs": 12,
+        "fat": 2.5
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "south-indian",
+        "curry"
+      ]
+    },
+    {
+      "name": "Paneer (raw)",
+      "per100": {
+        "calories": 265,
+        "protein": 18,
+        "carbs": 6,
+        "fat": 20
+      },
+      "portions": [
+        {
+          "label": "cube",
+          "grams": 15
+        }
+      ],
+      "tags": [
+        "protein",
+        "dairy"
+      ]
+    },
+    {
+      "name": "Palak Paneer",
+      "per100": {
+        "calories": 180,
+        "protein": 9,
+        "carbs": 7,
+        "fat": 13
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "curry",
+        "protein"
+      ]
+    },
+    {
+      "name": "Paneer Butter Masala",
+      "per100": {
+        "calories": 230,
+        "protein": 8,
+        "carbs": 9,
+        "fat": 18
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "curry",
+        "protein"
+      ]
+    },
+    {
+      "name": "Mixed Vegetable Sabzi",
+      "per100": {
+        "calories": 110,
+        "protein": 3,
+        "carbs": 12,
+        "fat": 6
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "vegetable"
+      ]
+    },
+    {
+      "name": "Aloo Gobi",
+      "per100": {
+        "calories": 120,
+        "protein": 3,
+        "carbs": 14,
+        "fat": 6
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "vegetable"
+      ]
+    },
+    {
+      "name": "Bhindi (Okra) Sabzi",
+      "per100": {
+        "calories": 105,
+        "protein": 2.5,
+        "carbs": 9,
+        "fat": 7
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "vegetable"
+      ]
+    },
+    {
+      "name": "Curd / Dahi (plain)",
+      "per100": {
+        "calories": 60,
+        "protein": 3.5,
+        "carbs": 4.7,
+        "fat": 3.3
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "dairy"
+      ]
+    },
+    {
+      "name": "Full-fat Milk",
+      "per100": {
+        "calories": 62,
+        "protein": 3.2,
+        "carbs": 4.8,
+        "fat": 3.3
+      },
+      "portions": [
+        {
+          "label": "glass",
+          "grams": 200
+        }
+      ],
+      "tags": [
+        "dairy"
+      ]
+    },
+    {
+      "name": "Toned Milk",
+      "per100": {
+        "calories": 50,
+        "protein": 3.1,
+        "carbs": 4.7,
+        "fat": 1.5
+      },
+      "portions": [
+        {
+          "label": "glass",
+          "grams": 200
+        }
+      ],
+      "tags": [
+        "dairy"
+      ]
+    },
+    {
+      "name": "Boiled Egg",
+      "per100": {
+        "calories": 155,
+        "protein": 13,
+        "carbs": 1.1,
+        "fat": 11
+      },
+      "portions": [
+        {
+          "label": "egg",
+          "grams": 50
+        }
+      ],
+      "tags": [
+        "protein"
+      ]
+    },
+    {
+      "name": "Egg Omelette",
+      "per100": {
+        "calories": 190,
+        "protein": 11,
+        "carbs": 1.5,
+        "fat": 15
+      },
+      "portions": [
+        {
+          "label": "egg",
+          "grams": 60
+        }
+      ],
+      "tags": [
+        "protein",
+        "breakfast"
+      ]
+    },
+    {
+      "name": "Chicken Curry",
+      "per100": {
+        "calories": 165,
+        "protein": 16,
+        "carbs": 4,
+        "fat": 9
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "protein",
+        "non-veg"
+      ]
+    },
+    {
+      "name": "Grilled Chicken Breast",
+      "per100": {
+        "calories": 165,
+        "protein": 31,
+        "carbs": 0,
+        "fat": 3.6
+      },
+      "portions": [
+        {
+          "label": "piece",
+          "grams": 100
+        }
+      ],
+      "tags": [
+        "protein",
+        "non-veg"
+      ]
+    },
+    {
+      "name": "Fish Curry",
+      "per100": {
+        "calories": 130,
+        "protein": 14,
+        "carbs": 4,
+        "fat": 6
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "protein",
+        "non-veg"
+      ]
+    },
+    {
+      "name": "Mutton Curry",
+      "per100": {
+        "calories": 230,
+        "protein": 16,
+        "carbs": 4,
+        "fat": 16
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "protein",
+        "non-veg"
+      ]
+    },
+    {
+      "name": "Chicken Biryani",
+      "per100": {
+        "calories": 185,
+        "protein": 9,
+        "carbs": 22,
+        "fat": 7
+      },
+      "portions": [
+        {
+          "label": "plate",
+          "grams": 250
+        }
+      ],
+      "tags": [
+        "non-veg",
+        "rice"
+      ]
+    },
+    {
+      "name": "Veg Pulao",
+      "per100": {
+        "calories": 155,
+        "protein": 3.5,
+        "carbs": 26,
+        "fat": 4
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "rice"
+      ]
+    },
+    {
+      "name": "Banana",
+      "per100": {
+        "calories": 89,
+        "protein": 1.1,
+        "carbs": 23,
+        "fat": 0.3
+      },
+      "portions": [
+        {
+          "label": "banana",
+          "grams": 120
+        }
+      ],
+      "tags": [
+        "fruit"
+      ]
+    },
+    {
+      "name": "Apple",
+      "per100": {
+        "calories": 52,
+        "protein": 0.3,
+        "carbs": 14,
+        "fat": 0.2
+      },
+      "portions": [
+        {
+          "label": "apple",
+          "grams": 180
+        }
+      ],
+      "tags": [
+        "fruit"
+      ]
+    },
+    {
+      "name": "Mango",
+      "per100": {
+        "calories": 60,
+        "protein": 0.8,
+        "carbs": 15,
+        "fat": 0.4
+      },
+      "portions": [
+        {
+          "label": "mango",
+          "grams": 200
+        }
+      ],
+      "tags": [
+        "fruit"
+      ]
+    },
+    {
+      "name": "Papaya",
+      "per100": {
+        "calories": 43,
+        "protein": 0.5,
+        "carbs": 11,
+        "fat": 0.3
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 140
+        }
+      ],
+      "tags": [
+        "fruit"
+      ]
+    },
+    {
+      "name": "Almonds",
+      "per100": {
+        "calories": 579,
+        "protein": 21,
+        "carbs": 22,
+        "fat": 50
+      },
+      "portions": [
+        {
+          "label": "almond",
+          "grams": 1.2
+        },
+        {
+          "label": "handful",
+          "grams": 28
+        }
+      ],
+      "tags": [
+        "nuts"
+      ]
+    },
+    {
+      "name": "Peanuts (roasted)",
+      "per100": {
+        "calories": 567,
+        "protein": 26,
+        "carbs": 16,
+        "fat": 49
+      },
+      "portions": [
+        {
+          "label": "handful",
+          "grams": 30
+        }
+      ],
+      "tags": [
+        "nuts"
+      ]
+    },
+    {
+      "name": "Roasted Chana",
+      "per100": {
+        "calories": 364,
+        "protein": 19,
+        "carbs": 61,
+        "fat": 6
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 60
+        }
+      ],
+      "tags": [
+        "snack",
+        "protein"
+      ]
+    },
+    {
+      "name": "Samosa",
+      "per100": {
+        "calories": 260,
+        "protein": 5,
+        "carbs": 30,
+        "fat": 13
+      },
+      "portions": [
+        {
+          "label": "samosa",
+          "grams": 100
+        }
+      ],
+      "tags": [
+        "snack",
+        "fried"
+      ]
+    },
+    {
+      "name": "Dhokla",
+      "per100": {
+        "calories": 160,
+        "protein": 6,
+        "carbs": 25,
+        "fat": 4
+      },
+      "portions": [
+        {
+          "label": "piece",
+          "grams": 40
+        }
+      ],
+      "tags": [
+        "snack",
+        "gujarati"
+      ]
+    },
+    {
+      "name": "Idiyappam",
+      "per100": {
+        "calories": 170,
+        "protein": 3,
+        "carbs": 38,
+        "fat": 0.5
+      },
+      "portions": [
+        {
+          "label": "piece",
+          "grams": 60
+        }
+      ],
+      "tags": [
+        "south-indian"
+      ]
+    },
+    {
+      "name": "Chapati with Ghee",
+      "per100": {
+        "calories": 340,
+        "protein": 10,
+        "carbs": 48,
+        "fat": 11
+      },
+      "portions": [
+        {
+          "label": "roti",
+          "grams": 42
+        }
+      ],
+      "tags": [
+        "staple",
+        "grain"
+      ]
+    },
+    {
+      "name": "Naan",
+      "per100": {
+        "calories": 310,
+        "protein": 9,
+        "carbs": 50,
+        "fat": 8
+      },
+      "portions": [
+        {
+          "label": "naan",
+          "grams": 90
+        }
+      ],
+      "tags": [
+        "staple",
+        "grain"
+      ]
+    },
+    {
+      "name": "Dal Makhani",
+      "per100": {
+        "calories": 145,
+        "protein": 6,
+        "carbs": 14,
+        "fat": 7
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 150
+        }
+      ],
+      "tags": [
+        "dal",
+        "curry"
+      ]
+    },
+    {
+      "name": "Rava Idli",
+      "per100": {
+        "calories": 145,
+        "protein": 4,
+        "carbs": 26,
+        "fat": 3
+      },
+      "portions": [
+        {
+          "label": "idli",
+          "grams": 55
+        }
+      ],
+      "tags": [
+        "south-indian",
+        "breakfast"
+      ]
+    },
+    {
+      "name": "Sprouts Salad",
+      "per100": {
+        "calories": 100,
+        "protein": 8,
+        "carbs": 16,
+        "fat": 1
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 100
+        }
+      ],
+      "tags": [
+        "salad",
+        "protein"
+      ]
+    },
+    {
+      "name": "Whey Protein (scoop)",
+      "per100": {
+        "calories": 380,
+        "protein": 75,
+        "carbs": 8,
+        "fat": 6
+      },
+      "portions": [
+        {
+          "label": "scoop",
+          "grams": 30
+        }
+      ],
+      "tags": [
+        "supplement",
+        "protein"
+      ]
+    },
+    {
+      "name": "Oats (dry)",
+      "per100": {
+        "calories": 389,
+        "protein": 17,
+        "carbs": 66,
+        "fat": 7
+      },
+      "portions": [
+        {
+          "label": "katori",
+          "grams": 40
+        }
+      ],
+      "tags": [
+        "breakfast",
+        "grain"
+      ]
+    }
+  ],
+  "frozen": true
+}

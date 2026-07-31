@@ -52,7 +52,11 @@ class CouponModel {
         : map["isPercentage"] == true;
     final dynamic rawValue = map["value"] ?? map["discountValue"];
     final dynamic rawExpiry = map["expiresAt"] ?? map["validTo"];
-    final dynamic rawFrom = map["validFrom"] ?? map["createdAt"];
+    // Start-date parity with the backend gate, which reads
+    // `validFrom ?? startsAt` — createdAt is only the last-resort display
+    // fallback so the console badge can never disagree with the server.
+    final dynamic rawFrom =
+        map["validFrom"] ?? map["startsAt"] ?? map["createdAt"];
 
     return CouponModel(
       id: docId,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer';
 import 'package:alphaserena_admin_portel/screens/admins_screen.dart';
 import 'package:alphaserena_admin_portel/screens/audit_log_screen.dart';
@@ -5,6 +6,7 @@ import 'package:alphaserena_admin_portel/screens/clients_screen.dart';
 import 'package:alphaserena_admin_portel/screens/communication_screen.dart';
 import 'package:alphaserena_admin_portel/screens/coupon_code_screen.dart';
 import 'package:alphaserena_admin_portel/screens/dash_board_responsive_screen.dart';
+import 'package:alphaserena_admin_portel/screens/global_food_screen.dart';
 import 'package:alphaserena_admin_portel/screens/operations_screen.dart';
 import 'package:alphaserena_admin_portel/screens/payments_screen.dart';
 import 'package:alphaserena_admin_portel/screens/platform_staff_screen.dart';
@@ -37,7 +39,7 @@ class AdminRootController extends GetxController {
   final RxInt selectedIndex = 0.obs;
 
   /// Prevent invalid index crashes
-  final int maxIndex = 11;
+  final int maxIndex = 12;
 
   // ===========================================================================
   // PAGE CACHE (LAZY LOADED)
@@ -55,6 +57,8 @@ class AdminRootController extends GetxController {
   // ===========================================================================
   final Rxn<User> currentUser = Rxn<User>();
 
+  StreamSubscription<User?>? _authSub;
+
   // ===========================================================================
   // LIFECYCLE
   // ===========================================================================
@@ -67,11 +71,19 @@ class AdminRootController extends GetxController {
     _bindAuthState();
   }
 
+  @override
+  void onClose() {
+    _authSub?.cancel();
+    super.onClose();
+  }
+
   // ===========================================================================
   // AUTH STATE LISTENER (SAFE)
+  // Navigation/authorization stays with SessionController + RootGate; this
+  // subscription only mirrors the user for UI and resets nav state on logout.
   // ===========================================================================
   void _bindAuthState() {
-    _auth.authStateChanges().listen((user) {
+    _authSub = _auth.authStateChanges().listen((user) {
       currentUser.value = user;
 
       if (user == null) {
@@ -169,6 +181,10 @@ class AdminRootController extends GetxController {
         return OperationsScreen();
       case 11:
         return PlatformStaffScreen();
+      // FOOD PLATFORM V1 — the Super Admin's sole authoring surface for the
+      // global food library every organization reads.
+      case 12:
+        return const GlobalFoodScreen();
       default:
         return const SizedBox();
     }

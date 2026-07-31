@@ -1,6 +1,7 @@
 // lib/controllers/admin_login_controller.dart
 
 import 'package:alphaserena_admin_portel/widgets/app_snackbar.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 
@@ -17,12 +18,18 @@ class AdminLoginController extends GetxController {
     required String email,
     required String password,
   }) async {
+    // Duplicate-submit guard: the button disables itself while loading, but
+    // the password field's Enter-to-submit path does not — gate here so every
+    // entry point is covered.
+    if (isLoading.value) return;
     try {
       isLoading.value = true;
 
+      // The password is passed verbatim — trimming here would reject any
+      // password that legitimately contains edge whitespace.
       await _auth.signInWithEmailAndPassword(
         email: email.trim(),
-        password: password.trim(),
+        password: password,
       );
 
       // ✅ Success. SessionController now verifies master status + routes.
@@ -57,7 +64,38 @@ class AdminLoginController extends GetxController {
     }
   }
 
-  Future<void> logout() async {
-    await _auth.signOut();
+  final RxBool isResetting = false.obs;
+
+  /// Owner-only password recovery. The server (`requestOwnerPasswordReset`)
+  /// decides eligibility — only the platform owner receives an email — and the
+  /// response is identical for owner, non-owner, and unknown emails, so this
+  /// flow cannot be used to probe which accounts exist.
+  ///
+  /// Returns true when the request completed (show the generic confirmation),
+  /// false only for a client-side transport failure (safe to surface — it
+  /// reveals nothing about the account).
+  Future<bool> requestOwnerPasswordReset(String email) async {
+    if (isResetting.value) return false;
+    try {
+      isResetting.value = true;
+      await FirebaseFunctions.instance
+          .httpsCallable('requestOwnerPasswordReset')
+          .call<void>({'email': email.trim()});
+      return true;
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
+        AppSnackbar.show(
+          title: 'Network error',
+          message: 'Check your connection and try again.',
+        );
+        return false;
+      }
+      // Any server-side outcome stays generic — never reveal eligibility.
+      return true;
+    } catch (_) {
+      return true;
+    } finally {
+      isResetting.value = false;
+    }
   }
 }

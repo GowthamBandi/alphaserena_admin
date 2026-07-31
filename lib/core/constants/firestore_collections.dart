@@ -23,6 +23,38 @@ class FsCollections {
   static const String workoutPlans = 'workoutPlans';
   static const String dietPlans = 'dietPlans';
 
+  // ── Food Platform V1 ───────────────────────────────────────────────
+  /// ONE collection holding BOTH food tiers, discriminated by `scope`:
+  /// 'global' (platform-curated, owned by THIS console, `adminId` empty) and
+  /// 'org' (owned by admins/{adminId}). A document with no `scope` is a pre-V1
+  /// organization food.
+  ///
+  /// This console READS global foods directly and writes NOTHING: every
+  /// privileged operation goes through a Cloud Function, and the security rules
+  /// deny client writes to the collection outright — including from a super
+  /// admin. A compromised console session therefore cannot poison the library
+  /// every organization on the platform reads.
+  static const String foodDatabase = 'foodDatabase';
+
+  /// The platform food taxonomy. Owned by this console (via Cloud Functions),
+  /// read by every organization and trainer.
+  static const String foodCategories = 'foodCategories';
+
+  // ── Nutrition Intelligence Platform (NIP) ──────────────────────────
+  /// Community food requests (new food / promote org food / correction),
+  /// deduped by `normalizedKey` with a `demandCount` per distinct asker.
+  /// Created by member/trainer apps; THIS console reads the queue and resolves
+  /// exclusively through the `resolveFoodRequest` Cloud Function — the rules
+  /// deny client writes so the status machine and audit trail stay
+  /// server-owned.
+  static const String foodRequests = 'food_requests';
+
+  /// Daily food-search telemetry, one doc per calendar day keyed `yyyy-MM-dd`
+  /// (so a documentId range IS a date range). Written only by the backend
+  /// aggregator; read here to surface zero-result queries — the library's
+  /// demand signal.
+  static const String foodSearchStats = 'food_search_stats';
+
   // ── Feedback / reviews / support (Journey 6) ───────────────────────
   /// Org/admin → super-admin feedback + complaints. THIS console reads all and
   /// responds/resolves (rules: `read + update: if isSuperAdmin()`).

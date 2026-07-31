@@ -26,9 +26,14 @@ class CouponController extends GetxController {
   final codeCtrl = TextEditingController();
   final descCtrl = TextEditingController();
   final discountCtrl = TextEditingController();
-  final maxUsageCtrl = TextEditingController(text: "1");
+  // 0 = unlimited redemptions (matches the backend cap gate `maxUsage > 0`).
+  final maxUsageCtrl = TextEditingController(text: "0");
 
   RxBool isPercentage = false.obs;
+
+  /// DRAFT Active value for the edit dialog — only written on Save, so
+  /// flipping the switch then pressing Cancel changes nothing.
+  RxBool draftActive = true.obs;
   Rx<DateTime> validFrom = DateTime.now().obs;
   Rx<DateTime> validTo = DateTime.now().add(const Duration(days: 30)).obs;
 
@@ -87,9 +92,10 @@ class CouponController extends GetxController {
     codeCtrl.clear();
     descCtrl.clear();
     discountCtrl.clear();
-    maxUsageCtrl.text = "1";
+    maxUsageCtrl.text = "0";
 
     isPercentage.value = false;
+    draftActive.value = true;
     validFrom.value = DateTime.now();
     validTo.value = DateTime.now().add(const Duration(days: 30));
   }
@@ -106,6 +112,7 @@ class CouponController extends GetxController {
     maxUsageCtrl.text = coupon.maxUsage.toString();
 
     isPercentage.value = coupon.isPercentage;
+    draftActive.value = coupon.isActive;
     validFrom.value = coupon.validFrom;
     validTo.value = coupon.validTo;
   }
@@ -114,12 +121,27 @@ class CouponController extends GetxController {
   // CREATE OR UPDATE COUPON
   // ---------------------------------------------------------------------------
   Future<void> saveCoupon() async {
+    if (isSaving.value) return; // re-entry guard (double-click)
+
     final code = codeCtrl.text.trim();
     final discount = double.tryParse(discountCtrl.text) ?? 0;
-    final maxUsage = int.tryParse(maxUsageCtrl.text) ?? 1;
+    final maxUsage = int.tryParse(maxUsageCtrl.text) ?? 0;
 
     if (code.isEmpty || discount <= 0) {
       Get.snackbar("Error", "Coupon code & discount are required");
+      return;
+    }
+    if (isPercentage.value && discount > 100) {
+      Get.snackbar("Error", "A percentage discount cannot exceed 100%");
+      return;
+    }
+    if (maxUsage < 0) {
+      Get.snackbar(
+          "Error", "Max redemptions cannot be negative (0 = unlimited)");
+      return;
+    }
+    if (!validTo.value.isAfter(validFrom.value)) {
+      Get.snackbar("Error", "Valid To must be after Valid From");
       return;
     }
 
@@ -137,35 +159,70 @@ class CouponController extends GetxController {
         ? _db.collection(collectionName).doc().id
         : editDocId.value;
 
-    final coupon = CouponModel(
-      id: docId,          // both id & docId use same Firestore ID
-      docId: docId,
-      uid: adminUid,
-      code: toCaps(code),
-      description: descCtrl.text.trim(),
-      isPercentage: isPercentage.value,
-      discountValue: discount,
-      maxUsage: maxUsage,
-      usedCount: 0,
-      isActive: true,
-      validFrom: validFrom.value,
-      validTo: validTo.value,
-      createdAt: now,
-      updatedAt: now,
+    // The backend redeems by code lookup — duplicate codes make redemption
+    // ambiguous, so reject a code already used by a different coupon.
+    final normalizedCode = toCaps(code);
+    final duplicate = coupons.any(
+      (c) => c.code == normalizedCode && c.docId != docId,
     );
+    if (duplicate) {
+      Get.snackbar("Error", "A coupon with this code already exists");
+      return;
+    }
+
+    final isEdit = editDocId.value.isNotEmpty;
 
     isSaving.value = true;
 
     try {
-      await _db.collection(collectionName).doc(docId).set(coupon.toMap());
+      if (isEdit) {
+        // EDIT: update() ONLY the founder-editable fields. `usedCount` is
+        // server-owned (redeemed at checkout) and `createdAt` is immutable —
+        // rewriting them from a stale console snapshot could un-cap a capped
+        // coupon or falsify its history, so they are never written here.
+        await _db.collection(collectionName).doc(docId).update({
+          "code": normalizedCode,
+          "type": isPercentage.value ? "percent" : "flat",
+          "value": discount,
+          "isActive": draftActive.value,
+          "description": descCtrl.text.trim(),
+          "expiresAt": Timestamp.fromDate(validTo.value),
+          "isPercentage": isPercentage.value,
+          "discountValue": discount,
+          "maxUsage": maxUsage,
+          "validFrom": Timestamp.fromDate(validFrom.value),
+          "validTo": Timestamp.fromDate(validTo.value),
+          "updatedAt": Timestamp.fromDate(now),
+        });
+      } else {
+        final coupon = CouponModel(
+          id: docId, // both id & docId use same Firestore ID
+          docId: docId,
+          uid: adminUid,
+          code: normalizedCode,
+          description: descCtrl.text.trim(),
+          isPercentage: isPercentage.value,
+          discountValue: discount,
+          maxUsage: maxUsage,
+          usedCount: 0,
+          isActive: true,
+          validFrom: validFrom.value,
+          validTo: validTo.value,
+          createdAt: now,
+          updatedAt: now,
+        );
+        await _db.collection(collectionName).doc(docId).set(coupon.toMap());
+      }
 
       Get.back();
       Get.snackbar(
         "Success",
-        editDocId.value.isEmpty ? "Coupon Created" : "Coupon Updated",
+        isEdit ? "Coupon Updated" : "Coupon Created",
       );
 
       clearForm();
+    } catch (_) {
+      Get.snackbar("Error", "Could not save the coupon. Try again.");
     } finally {
       isSaving.value = false;
     }

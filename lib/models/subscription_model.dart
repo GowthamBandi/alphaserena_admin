@@ -16,12 +16,32 @@ class SubscriptionModel {
   final int discountAmount;
 
   final String paymentId;
+
+  /// The razorpay `pay_…` id exactly as stored on the history doc — the id
+  /// the backend `refundPayment` callable requires. Unlike [paymentId] this
+  /// NEVER falls back to the doc id: empty means the doc carries no gateway
+  /// payment id and the payment cannot be refunded from the console.
+  final String razorpayPaymentId;
+
   final String? orderId;
   final String? signature;
 
   final DateTime startAt;
   final DateTime expiryAt;
   final DateTime createdAt;
+
+  /// Rupees refunded by the founder via the refundPayment Cloud Function
+  /// (`refund.amount` on the history doc); 0 when never refunded.
+  final double refundAmount;
+
+  /// Money actually kept after refunds — use this for revenue math.
+  double get netAmount =>
+      (amountPaid - refundAmount) < 0 ? 0 : (amountPaid - refundAmount);
+
+  /// Nothing left to refund — the founder refund action hides itself here.
+  /// Requires a real positive payment: a ₹0 receipt is "nothing paid", never
+  /// "fully refunded".
+  bool get isFullyRefunded => amountPaid > 0 && netAmount <= 0;
 
   // LIMITS
   final int maxAdmins;
@@ -43,11 +63,13 @@ class SubscriptionModel {
     this.couponCode,
     required this.discountAmount,
     required this.paymentId,
+    this.razorpayPaymentId = '',
     this.orderId,
     this.signature,
     required this.startAt,
     required this.expiryAt,
     required this.createdAt,
+    this.refundAmount = 0,
 
     // Limits
     required this.maxAdmins,
@@ -78,9 +100,16 @@ class SubscriptionModel {
     return null;
   }
 
+  static double _double(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0;
+    return 0;
+  }
+
   factory SubscriptionModel.fromMap(String id, Map<String, dynamic> map) {
     final rawLimits = map['limits'];
     final Map limits = rawLimits is Map ? rawLimits : const {};
+    final rawRefund = map['refund'];
     int lim(String flat, String nested) =>
         _int(map[flat] ?? limits[nested] ?? limits[flat]);
 
@@ -108,6 +137,10 @@ class SubscriptionModel {
 
       paymentId:
           (map['paymentId'] ?? map['razorpayPaymentId'] ?? id).toString(),
+      // NO fallback to paymentId: the backend's historyDocMatches requires the
+      // literal `razorpayPaymentId` field on the doc — a fallback id would
+      // offer a refund action that always fails server-side.
+      razorpayPaymentId: (map['razorpayPaymentId'] ?? '').toString(),
       orderId: map['orderId']?.toString(),
       signature: map['signature']?.toString(),
 
@@ -119,6 +152,7 @@ class SubscriptionModel {
               map['timestamp'] ??
               map['date']) ??
           DateTime.now(),
+      refundAmount: rawRefund is Map ? _double(rawRefund['amount']) : 0,
 
       maxAdmins: lim('maxAdmins', 'admins'),
       maxTrainers: lim('maxTrainers', 'trainers'),

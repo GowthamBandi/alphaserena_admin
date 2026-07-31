@@ -140,7 +140,8 @@ class OperationsScreen extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: AppRadii.cardR,
-        onTap: () => Get.find<AdminRootController>().changePage(a.navIndex),
+        onTap: a.onTap ??
+            () => Get.find<AdminRootController>().changePage(a.navIndex),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -241,7 +242,7 @@ class OperationsScreen extends StatelessWidget {
               style: AppText.title(size: 18).copyWith(color: p.textPrimary)),
           const SizedBox(height: 4),
           Text(
-            'No approvals, lapses, open tickets or delivery issues need you right now.',
+            'No approvals, lapses, payment incidents, quota breaches, open tickets or delivery issues need you right now.',
             textAlign: TextAlign.center,
             style: AppText.body(size: 13).copyWith(color: p.textMuted),
           ),

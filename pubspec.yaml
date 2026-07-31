@@ -37,11 +37,16 @@ dependencies:
   firebase_core: ^4.2.1
   firebase_auth: ^6.1.2
   cloud_firestore: ^6.1.0
+  cloud_functions: ^6.3.2
   firebase_messaging: ^16.0.4
   firebase_storage: ^13.0.4
 
   get: ^4.7.3
   intl: ^0.20.2
+
+  # Bulk import needs a real file dialog on web and desktop; Flutter ships no
+  # portable picker of its own.
+  file_picker: ^8.1.7
 
   google_fonts: ^8.1.0
   fl_chart: ^0.69.0
@@ -68,6 +73,12 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    # FOOD PLATFORM V1 — frozen migration seed. Formerly the runtime food
+    # source bundled into TrainerHQ; now read ONLY by the Global Food Database
+    # console's one-time import tool.
+    - assets/data/global_food_seed.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:

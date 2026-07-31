@@ -21,7 +21,12 @@ import '../models/platform_announcement_model.dart';
 import '../widgets/app_snackbar.dart';
 
 /// What the founder intends when submitting the composer.
-enum AnnouncementIntent { draft, schedule, sendNow }
+///
+/// `schedule` is REAL as of EP-4: `campaignScheduler` enqueues due campaigns
+/// every minute, so a scheduled campaign is genuinely picked up. The console
+/// still cannot author any outcome state (publishing/published/completed/
+/// failed) — those are facts the backend observes, and the rules reject them.
+enum AnnouncementIntent { draft, ready, schedule, sendNow }
 
 class CommunicationController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -90,27 +95,31 @@ class CommunicationController extends GetxController {
   void retry() => _listen();
 
   // ── Derived state ───────────────────────────────────────────────────
-  List<PlatformAnnouncementModel> get filtered {
-    if (statusFilter.value == 'all') return announcements.toList();
-    if (statusFilter.value == 'sent') {
-      // Group the terminal delivery states under "Sent" history.
-      return announcements
-          .where((a) => a.isSent || a.statusEnum == AnnouncementStatus.failed)
-          .toList();
+  /// Whether a campaign belongs under a filter chip.
+  ///
+  /// Matching is on the NORMALISED lifecycle state, not the raw stored string,
+  /// so a legacy `sent` document files under Published rather than vanishing
+  /// from every chip.
+  bool _matches(PlatformAnnouncementModel a, String filter) {
+    switch (filter) {
+      case 'all':
+        // Archived campaigns are hidden from the working list; they have their
+        // own chip. Otherwise a founder's list only grows.
+        return !a.isArchived;
+      case 'inflight':
+        return a.statusEnum.isInFlight;
+      case 'sent':
+        return a.isSent;
+      default:
+        return a.statusEnum.id == filter;
     }
-    return announcements
-        .where((a) => a.status == statusFilter.value)
-        .toList();
   }
 
-  int countByStatus(String id) {
-    if (id == 'sent') {
-      return announcements
-          .where((a) => a.isSent || a.statusEnum == AnnouncementStatus.failed)
-          .length;
-    }
-    return announcements.where((a) => a.status == id).length;
-  }
+  List<PlatformAnnouncementModel> get filtered =>
+      announcements.where((a) => _matches(a, statusFilter.value)).toList();
+
+  int countByStatus(String id) =>
+      announcements.where((a) => _matches(a, id)).length;
 
   // ── Compose / edit ──────────────────────────────────────────────────
   /// Create or update an announcement. Returns true on success.
@@ -122,13 +131,36 @@ class CommunicationController extends GetxController {
     List<String> targetIds = const [],
     required AnnouncementChannels channels,
     required AnnouncementIntent intent,
-    DateTime? scheduledAt,
-    bool recurring = false,
-    String? recurrence,
+    // ── EP-3 content ──
+    String templateId = '',
+    Map<String, String> variables = const {},
+    String imageUrl = '',
+    String locale = 'en',
+    CampaignSchedule schedule = const CampaignSchedule(),
   }) async {
     // ── Validation ──
-    if (title.trim().isEmpty || body.trim().isEmpty) {
+    // These limits mirror `validateAnnouncement` in the backend worker and the
+    // caps in firestore.rules. All three must agree, or the console would let
+    // the founder compose something the server then silently rejects.
+    final t = title.trim();
+    final b = body.trim();
+    // A template supplies its own copy, rendered server-side, so title/body are
+    // required only for free-text authoring. The backend re-validates the
+    // RENDERED content either way — that is the authoritative gate.
+    if (templateId.isEmpty && (t.isEmpty || b.isEmpty)) {
       AppSnackbar.show(title: 'Missing', message: 'Title and message are required');
+      return false;
+    }
+    if (t.length > kAnnouncementMaxTitle) {
+      AppSnackbar.show(
+          title: 'Title too long',
+          message: 'Keep the title under $kAnnouncementMaxTitle characters');
+      return false;
+    }
+    if (b.length > kAnnouncementMaxBody) {
+      AppSnackbar.show(
+          title: 'Message too long',
+          message: 'Keep the message under $kAnnouncementMaxBody characters');
       return false;
     }
     if (!channels.any) {
@@ -137,53 +169,68 @@ class CommunicationController extends GetxController {
       return false;
     }
     if (audience.needsSelection && targetIds.isEmpty) {
+      // The noun follows the audience: selection audiences now pick orgs,
+      // trainers, members OR subscription plans.
+      final noun = switch (audience.idKind!) {
+        TargetIdKind.org => 'organization',
+        TargetIdKind.trainer => 'trainer',
+        TargetIdKind.member => 'member',
+        TargetIdKind.plan => 'subscription plan',
+      };
       AppSnackbar.show(
-          title: 'Pick orgs', message: 'Select at least one organization');
+          title: 'Pick a target', message: 'Select at least one $noun');
       return false;
     }
-    if (intent == AnnouncementIntent.schedule) {
-      if (scheduledAt == null || scheduledAt.isBefore(DateTime.now())) {
-        AppSnackbar.show(
-            title: 'Bad time', message: 'Pick a future date & time to schedule');
-        return false;
-      }
+    if (targetIds.length > kAnnouncementMaxTargets) {
+      AppSnackbar.show(
+          title: 'Too many orgs',
+          message: 'Select at most $kAnnouncementMaxTargets organizations');
+      return false;
     }
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final status = switch (intent) {
       AnnouncementIntent.draft => AnnouncementStatus.draft,
+      AnnouncementIntent.ready => AnnouncementStatus.ready,
       AnnouncementIntent.schedule => AnnouncementStatus.scheduled,
       AnnouncementIntent.sendNow => AnnouncementStatus.queued,
     };
 
     final data = <String, dynamic>{
-      'title': title.trim(),
-      'body': body.trim(),
+      'title': t,
+      'body': b,
       'audience': audience.id,
       'targetIds': audience.needsSelection ? targetIds : <String>[],
       'channels': channels.toMap(),
+      // EP-3 content authoring. The worker renders this: a templateId selects
+      // catalog copy, `variables` bind its {{tokens}}, and free text still goes
+      // through the same server-side variable engine. No client substitutes.
+      'templateId': templateId,
+      'variables': variables,
+      'imageUrl': imageUrl.trim(),
+      'locale': locale,
+      // EP-4 campaign rule. The backend computes the absolute run instant from
+      // this (timezone-aware, DST-correct) — the console never computes it,
+      // so a client clock can never move a campaign.
+      'schedule': schedule.toMap(),
       'status': status.id,
-      'recurring': recurring,
-      'recurrence': recurring ? recurrence : null,
-      'scheduledAt': (intent == AnnouncementIntent.schedule && scheduledAt != null)
-          ? Timestamp.fromDate(scheduledAt)
-          : null,
       'queuedAt': intent == AnnouncementIntent.sendNow
           ? FieldValue.serverTimestamp()
           : null,
       'createdBy': uid,
       'updatedAt': FieldValue.serverTimestamp(),
     };
+    // NOTE: the delivery record (targetCount / sentCount / pushedCount /
+    // failedCount / sentAt / fanOutAt / lastError) is deliberately absent. It
+    // is written ONLY by `fanoutAnnouncement`, and firestore.rules reject it
+    // from this client. Seeding zeros here used to make an undelivered
+    // announcement render as "0 sent · 0 failed" — a fabricated result.
 
     try {
       isProcessing.value = true;
       final coll = _db.collection(FsCollections.platformAnnouncements);
       if (id == null) {
-        // New doc: seed the delivery counters + createdAt.
         data['createdAt'] = FieldValue.serverTimestamp();
-        data['targetCount'] = 0;
-        data['sentCount'] = 0;
-        data['failedCount'] = 0;
         await coll.add(data);
       } else {
         await coll.doc(id).set(data, SetOptions(merge: true));
@@ -235,6 +282,24 @@ class CommunicationController extends GetxController {
     } catch (e) {
       debugPrint('cancel error: $e');
       AppSnackbar.show(title: 'Error', message: 'Could not cancel');
+    } finally {
+      isProcessing.value = false;
+    }
+  }
+
+  /// Archive a finished campaign — hides it from the working list without
+  /// destroying the delivery record, which stays as history.
+  Future<void> archive(String id) async {
+    try {
+      isProcessing.value = true;
+      await _db.collection(FsCollections.platformAnnouncements).doc(id).update({
+        'status': AnnouncementStatus.archived.id,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      AppSnackbar.show(title: 'Archived', message: 'Campaign archived');
+    } catch (e) {
+      debugPrint('archive error: $e');
+      AppSnackbar.show(title: 'Error', message: 'Could not archive');
     } finally {
       isProcessing.value = false;
     }

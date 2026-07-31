@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
+import '../../controllers/admin_root_controller.dart';
 import '../../controllers/dashboard_controller.dart';
+import '../../controllers/operations_controller.dart';
 import '../../widgets/page_shell.dart';
 
 // Status palette (self-contained — consistent in light & dark).
@@ -42,6 +44,8 @@ class DashboardScreenResponsive extends StatelessWidget {
             ),
             const SizedBox(height: 18),
 
+            _attentionStrip(context),
+
             _FadeInUp(delayMs: 0, child: _kpiGrid(context, ctrl)),
             const SizedBox(height: 22),
 
@@ -55,6 +59,69 @@ class DashboardScreenResponsive extends StatelessWidget {
     );
   }
 
+  // ── ATTENTION STRIP ─────────────────────────────────────────────────
+  /// The 30-second answer to "what needs me?" — a one-line summary of the
+  /// Operations Center feed (which owns all the attention logic), shown only
+  /// when something actually needs the founder. Tapping opens the feed.
+  Widget _attentionStrip(BuildContext context) {
+    if (!Get.isRegistered<OperationsController>()) {
+      return const SizedBox.shrink();
+    }
+    final ops = Get.find<OperationsController>();
+    const opsNavIndex = 10; // Operations Center in the sidebar
+    return Obx(() {
+      final total = ops.totalCount;
+      if (total == 0) return const SizedBox.shrink();
+      final critical = ops.criticalCount;
+      final c = critical > 0 ? _cBlocked : _cWarning;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: AppRadii.cardR,
+            onTap: () =>
+                Get.find<AdminRootController>().changePage(opsNavIndex),
+            child: Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: c.withValues(alpha: 0.08),
+                borderRadius: AppRadii.cardR,
+                border: Border.all(color: c.withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                      critical > 0
+                          ? Icons.priority_high_rounded
+                          : Icons.notifications_active_outlined,
+                      size: 18,
+                      color: c),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      critical > 0
+                          ? "$total item${total == 1 ? '' : 's'} need${total == 1 ? 's' : ''} your attention — $critical critical"
+                          : "$total item${total == 1 ? '' : 's'} need${total == 1 ? 's' : ''} your attention",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.label(size: 13).copyWith(color: c),
+                    ),
+                  ),
+                  Text("Open Operations Center",
+                      style: AppText.label(size: 12).copyWith(color: c)),
+                  Icon(Icons.chevron_right, size: 18, color: c),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
   // ── KPI GRID ────────────────────────────────────────────────────────
   Widget _kpiGrid(BuildContext context, DashboardController ctrl) {
     return Wrap(
@@ -66,37 +133,43 @@ class DashboardScreenResponsive extends StatelessWidget {
             icon: Icons.business_outlined,
             accent: _cPending,
             value: () => ctrl.orgsTotal.value.toDouble(),
-            fmt: _count),
+            fmt: _count,
+            loaded: () => ctrl.orgsLoaded.value),
         _stat(context,
             label: "Active subscriptions",
             icon: Icons.verified_outlined,
             accent: _cActive,
             value: () => ctrl.orgsSubscribed.value.toDouble(),
-            fmt: _count),
+            fmt: _count,
+            loaded: () => ctrl.orgsLoaded.value),
         _stat(context,
             label: "Trainers",
             icon: Icons.fitness_center_outlined,
             accent: const Color(0xFF6C5CE7),
             value: () => ctrl.trainersTotal.value.toDouble(),
-            fmt: _count),
+            fmt: _count,
+            loaded: () => ctrl.countsLoaded.value),
         _stat(context,
             label: "Members",
             icon: Icons.people_outline,
             accent: const Color(0xFF0E8FA8),
             value: () => ctrl.clientsTotal.value.toDouble(),
-            fmt: _count),
+            fmt: _count,
+            loaded: () => ctrl.countsLoaded.value),
         _stat(context,
             label: "Total revenue",
             icon: Icons.account_balance_wallet_outlined,
             accent: _cWarning,
             value: () => ctrl.revenueTotal.value,
-            fmt: _money),
+            fmt: _money,
+            loaded: () => ctrl.revenueLoaded.value),
         _stat(context,
             label: "This month",
             icon: Icons.trending_up,
             accent: context.palette.accent,
             value: () => ctrl.revenueThisMonth.value,
             fmt: _money,
+            loaded: () => ctrl.revenueLoaded.value,
             trend: () => ctrl.revenueGrowthPct.value),
       ],
     );
@@ -109,6 +182,7 @@ class DashboardScreenResponsive extends StatelessWidget {
     required Color accent,
     required double Function() value,
     required String Function(double) fmt,
+    required bool Function() loaded,
     double Function()? trend,
   }) {
     final p = context.palette;
@@ -147,11 +221,18 @@ class DashboardScreenResponsive extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            Obx(() => _CountUp(
-                  value: value(),
-                  format: fmt,
-                  style: AppText.title(size: 26).copyWith(color: p.textPrimary),
-                )),
+            // Until the source has loaded, a real 0 and "not yet known" are
+            // indistinguishable — show a dash instead of a misleading 0.
+            Obx(() => loaded()
+                ? _CountUp(
+                    value: value(),
+                    format: fmt,
+                    style:
+                        AppText.title(size: 26).copyWith(color: p.textPrimary),
+                  )
+                : Text("—",
+                    style: AppText.title(size: 26)
+                        .copyWith(color: p.textMuted))),
             const SizedBox(height: 4),
             Text(label,
                 style: AppText.body(size: 13).copyWith(color: p.textMuted)),
@@ -191,6 +272,9 @@ class DashboardScreenResponsive extends StatelessWidget {
           style: AppText.title(size: 20).copyWith(color: p.textPrimary))),
       child: Obx(() {
         if (!ctrl.revenueLoaded.value) return _loadingBox(180);
+        if (ctrl.revenueError.value) {
+          return _errorState(context, ctrl.retryRevenue);
+        }
         if (ctrl.revenueTotal.value <= 0) {
           return _empty(context, Icons.show_chart,
               "No revenue yet", "Payments appear here once gyms subscribe.");
@@ -216,6 +300,9 @@ class DashboardScreenResponsive extends StatelessWidget {
       subtitle: "By status",
       child: Obx(() {
         if (!ctrl.orgsLoaded.value) return _loadingBox(180);
+        if (ctrl.orgsError.value) {
+          return _errorState(context, ctrl.retryOrgs);
+        }
         if (ctrl.orgsTotal.value == 0) {
           return _empty(context, Icons.business,
               "No organizations yet", "Gyms that sign up will show here.");
@@ -282,31 +369,140 @@ class DashboardScreenResponsive extends StatelessWidget {
   // ── INSIGHTS ROW ────────────────────────────────────────────────────
   Widget _insightsRow(BuildContext context, DashboardController ctrl) {
     return LayoutBuilder(builder: (_, box) {
-      final pending = _pendingCard(context, ctrl);
-      final expiring = _expiringCard(context, ctrl);
-      final payments = _paymentsCard(context, ctrl);
+      final cards = [
+        _pendingCard(context, ctrl),
+        _expiringCard(context, ctrl),
+        _paymentsCard(context, ctrl),
+        _topOrgsCard(context, ctrl),
+      ];
+      Widget row(List<Widget> children) => IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (int i = 0; i < children.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 16),
+                  Expanded(child: children[i]),
+                ],
+              ],
+            ),
+          );
+      // Large monitor: all four abreast. Desktop: 2×2. Narrow: stacked.
+      if (box.maxWidth > 1500) return row(cards);
       if (box.maxWidth > 1000) {
-        return IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: pending),
-              const SizedBox(width: 16),
-              Expanded(child: expiring),
-              const SizedBox(width: 16),
-              Expanded(child: payments),
-            ],
-          ),
-        );
+        return Column(children: [
+          row(cards.sublist(0, 2)),
+          const SizedBox(height: 16),
+          row(cards.sublist(2, 4)),
+        ]);
       }
       return Column(children: [
-        pending,
-        const SizedBox(height: 16),
-        expiring,
-        const SizedBox(height: 16),
-        payments,
+        for (int i = 0; i < cards.length; i++) ...[
+          if (i > 0) const SizedBox(height: 16),
+          cards[i],
+        ],
       ]);
     });
+  }
+
+  Widget _topOrgsCard(BuildContext context, DashboardController ctrl) {
+    final p = context.palette;
+    return _sectionCard(
+      context,
+      title: "Top organizations",
+      subtitle: "By net revenue",
+      child: Obx(() {
+        if (!ctrl.revenueLoaded.value) return _loadingBox(120);
+        if (ctrl.revenueError.value) {
+          return _errorState(context, ctrl.retryRevenue);
+        }
+        final list = ctrl.topOrgs;
+        if (list.isEmpty) {
+          return _empty(context, Icons.leaderboard_outlined, "No revenue yet",
+              "Top-earning gyms rank here.");
+        }
+        final maxRevenue = list.first.revenue;
+        return Column(
+          children: [
+            for (int i = 0; i < list.length; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      child: Text("${i + 1}",
+                          style: AppText.label(size: 12)
+                              .copyWith(color: p.textMuted)),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(list[i].name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppText.label(size: 13)
+                                  .copyWith(color: p.textPrimary)),
+                          const SizedBox(height: 4),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: maxRevenue <= 0
+                                  ? 0
+                                  : (list[i].revenue / maxRevenue)
+                                      .clamp(0.0, 1.0),
+                              minHeight: 4,
+                              backgroundColor: p.border,
+                              valueColor:
+                                  AlwaysStoppedAnimation(p.accent),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(_money(list[i].revenue),
+                        style: AppText.label(size: 13)
+                            .copyWith(color: p.textPrimary)),
+                  ],
+                ),
+              ),
+          ],
+        );
+      }),
+    );
+  }
+
+  /// Confirmation before the destructive path: reject = `blocked` via the
+  /// setAdminStatus CF, which also disables the org's sign-in.
+  void _confirmReject(BuildContext context, DashboardController ctrl,
+      String docId, String orgName) {
+    final p = context.palette;
+    Get.dialog(AlertDialog(
+      backgroundColor: p.surface,
+      title: Text("Reject $orgName?",
+          style: AppText.cardTitle(size: 16).copyWith(color: p.textPrimary)),
+      content: Text(
+        "The organization is blocked and its owner can no longer sign in. "
+        "You can reverse this later from the Organizations screen.",
+        style: AppText.body(size: 13).copyWith(color: p.textSecondary),
+      ),
+      actions: [
+        TextButton(
+          onPressed: Get.back,
+          child: const Text("Cancel"),
+        ),
+        TextButton(
+          onPressed: () {
+            Get.back();
+            ctrl.rejectOrg(docId);
+          },
+          style: TextButton.styleFrom(foregroundColor: _cBlocked),
+          child: const Text("Reject organization"),
+        ),
+      ],
+    ));
   }
 
   Widget _pendingCard(BuildContext context, DashboardController ctrl) {
@@ -315,6 +511,9 @@ class DashboardScreenResponsive extends StatelessWidget {
       context,
       title: "Pending approvals",
       child: Obx(() {
+        if (ctrl.orgsError.value) {
+          return _errorState(context, ctrl.retryOrgs);
+        }
         final list = ctrl.pendingApprovals;
         if (list.isEmpty) {
           return _empty(context, Icons.inbox_outlined, "All clear",
@@ -359,6 +558,18 @@ class DashboardScreenResponsive extends StatelessWidget {
                           const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     ),
                     child: const Text("Approve"),
+                  ),
+                  TextButton(
+                    onPressed: () => _confirmReject(context, ctrl, a.docId,
+                        a.organizationName.isNotEmpty
+                            ? a.organizationName
+                            : a.name),
+                    style: TextButton.styleFrom(
+                      foregroundColor: _cBlocked,
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    ),
+                    child: const Text("Reject"),
                   ),
                 ],
               ),
@@ -431,6 +642,9 @@ class DashboardScreenResponsive extends StatelessWidget {
       title: "Recent payments",
       child: Obx(() {
         if (!ctrl.revenueLoaded.value) return _loadingBox(120);
+        if (ctrl.revenueError.value) {
+          return _errorState(context, ctrl.retryRevenue);
+        }
         final list = ctrl.recentPayments;
         if (list.isEmpty) {
           return _empty(context, Icons.receipt_long_outlined, "No payments yet",
@@ -556,6 +770,32 @@ class DashboardScreenResponsive extends StatelessWidget {
           Text(sub,
               textAlign: TextAlign.center,
               style: AppText.body(size: 12).copyWith(color: p.textMuted)),
+        ],
+      ),
+    );
+  }
+
+  /// A failed stream renders as an explicit error with retry — never as a
+  /// misleading empty state.
+  Widget _errorState(BuildContext context, VoidCallback onRetry) {
+    final p = context.palette;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 22),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          Icon(Icons.cloud_off_outlined,
+              size: 30, color: _cBlocked.withValues(alpha: 0.7)),
+          const SizedBox(height: 10),
+          Text("Couldn't load this data",
+              style: AppText.label(size: 13).copyWith(color: p.textSecondary)),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text("Retry"),
+          ),
         ],
       ),
     );

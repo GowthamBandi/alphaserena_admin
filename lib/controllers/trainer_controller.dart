@@ -55,6 +55,18 @@ class TrainerController extends GetxController {
   final experienceCtrl = TextEditingController();
   final bioCtrl = TextEditingController();
 
+  /// Experience is free TEXT across the platform — the backend's `createTrainer`
+  /// writes `optionalString(experience)` and TrainerHQ's profile editor writes
+  /// the coach's own wording ("8 years"). This console used to save
+  /// `int.tryParse(experienceCtrl.text)`, which turned any non-numeric value
+  /// into null: opening a coach who had written "8 years" showed an empty
+  /// field, and saving anything else on that trainer silently WIPED their
+  /// experience.
+  String? _experienceOrNull() {
+    final s = experienceCtrl.text.trim();
+    return s.isEmpty ? null : s;
+  }
+
   final RxString assignedByCtrl = ''.obs;
   final RxString selectedStatusForForm = 'pending'.obs;
 
@@ -80,7 +92,7 @@ class TrainerController extends GetxController {
     emailCtrl.text = t.email;
     phoneCtrl.text = t.phone;
     specializationCtrl.text = t.specialization ?? "";
-    experienceCtrl.text = t.experience?.toString() ?? "";
+    experienceCtrl.text = t.experience ?? '';
     bioCtrl.text = t.bio ?? "";
 
     assignedByCtrl.value = t.assignedBy ?? "";
@@ -295,7 +307,7 @@ class TrainerController extends GetxController {
     emailCtrl.text = t.email;
     phoneCtrl.text = t.phone;
     specializationCtrl.text = t.specialization ?? '';
-    experienceCtrl.text = t.experience?.toString() ?? '';
+    experienceCtrl.text = t.experience ?? '';
     bioCtrl.text = t.bio ?? '';
     assignedByCtrl.value = t.assignedBy ?? '';
     selectedStatusForForm.value = t.status;
@@ -329,7 +341,7 @@ class TrainerController extends GetxController {
         email: emailCtrl.text.trim(),
         phone: phoneCtrl.text.trim(),
         specialization: specializationCtrl.text.trim(),
-        experience: int.tryParse(experienceCtrl.text),
+        experience: _experienceOrNull(),
         bio: bioCtrl.text.trim(),
         status: selectedStatusForForm.value,
         assignedBy: assignedByCtrl.value.isEmpty ? null : assignedByCtrl.value,
@@ -361,7 +373,7 @@ class TrainerController extends GetxController {
         "name": nameCtrl.text.trim(),
         "phone": phoneCtrl.text.trim(),
         "specialization": specializationCtrl.text.trim(),
-        "experience": int.tryParse(experienceCtrl.text),
+        "experience": _experienceOrNull(),
         "bio": bioCtrl.text.trim(),
         "status": selectedStatusForForm.value,
         "assignedBy": assignedByCtrl.value.isEmpty

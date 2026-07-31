@@ -1,17 +1,18 @@
 // lib/controllers/admin_controller.dart
 //
 // Organizations (gym owners) list + founder MODERATION.
-// All writes touch ONLY the moderation fields the security rules allow for a
-// super admin (status / statusReason / statusUpdatedAt / statusUpdatedBy /
-// updatedAt). Creating/editing an admin profile is NOT done here — admins are
-// created by the registerAdmin Cloud Function / self sign-up.
+// Moderation goes through the `setAdminStatus` Cloud Function
+// (OrgModerationService) — the server owns status transitions (enum
+// validation, audit log, trainer operate-state cascade, owner notification).
+// Creating/editing an admin profile is NOT done here — admins are created by
+// the registerAdmin Cloud Function / self sign-up.
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../core/services/org_moderation_service.dart';
 import '../models/admin_model.dart';
 import '../widgets/app_snackbar.dart';
 
@@ -77,7 +78,7 @@ class AdminController extends GetxController {
   int countByStatus(String status) =>
       admins.where((a) => a.status.toLowerCase() == status).length;
 
-  // ── Moderation (rules: super-admin may set ONLY these fields) ────────
+  // ── Moderation (server-owned via the setAdminStatus CF) ─────────────
   Future<void> _setStatus(
     String docId,
     String status, {
@@ -86,35 +87,45 @@ class AdminController extends GetxController {
   }) async {
     try {
       isProcessing.value = true;
-      await _db.collection('admins').doc(docId).update({
-        'status': status,
-        if (reason != null && reason.trim().isNotEmpty)
-          'statusReason': reason.trim(),
-        'statusUpdatedAt': FieldValue.serverTimestamp(),
-        'statusUpdatedBy': FirebaseAuth.instance.currentUser?.uid,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      await OrgModerationService.setStatus(docId, status, reason: reason);
       AppSnackbar.show(
         title: 'Done',
         message: okMessage,
         background: Colors.green.shade700,
       );
     } catch (e) {
+      debugPrint('setAdminStatus failed: $e');
       AppSnackbar.show(title: 'Error', message: 'Could not update status');
     } finally {
       isProcessing.value = false;
     }
   }
 
-  Future<void> approve(String docId) =>
-      _setStatus(docId, 'active', reason: 'Approved by founder', okMessage: 'Organization approved');
+  Future<void> approve(String docId) => _setStatus(
+        docId,
+        OrgModerationService.active,
+        reason: 'Approved by founder',
+        okMessage: 'Organization approved',
+      );
 
-  Future<void> reactivate(String docId) =>
-      _setStatus(docId, 'active', reason: 'Reactivated by founder', okMessage: 'Organization reactivated');
+  Future<void> reactivate(String docId) => _setStatus(
+        docId,
+        OrgModerationService.active,
+        reason: 'Reactivated by founder',
+        okMessage: 'Organization reactivated',
+      );
 
-  Future<void> warn(String docId, String reason) =>
-      _setStatus(docId, 'warning', reason: reason, okMessage: 'Warning issued');
+  Future<void> warn(String docId, String reason) => _setStatus(
+        docId,
+        OrgModerationService.warning,
+        reason: reason,
+        okMessage: 'Warning issued',
+      );
 
-  Future<void> block(String docId, String reason) =>
-      _setStatus(docId, 'blocked', reason: reason, okMessage: 'Organization blocked');
+  Future<void> block(String docId, String reason) => _setStatus(
+        docId,
+        OrgModerationService.blocked,
+        reason: reason,
+        okMessage: 'Organization blocked',
+      );
 }

@@ -2,7 +2,11 @@
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../core/services/refund_service.dart';
+import '../core/services/revenue_engine.dart';
 import '../models/subscription_model.dart';
 
 class PaymentsController extends GetxController {
@@ -101,124 +105,85 @@ class PaymentsController extends GetxController {
   }
 
   // ============================================================
-  // MASTER ANALYTICS ENGINE
+  // MASTER ANALYTICS — delegated to the shared RevenueEngine
+  // (single source of business math for this and the dashboard).
   // ============================================================
   void _computeAllAnalytics() {
-    _computeRevenue();
-    _computePlanBreakdown();
-    _computeAdminBreakdown();
-    _computeGrowth();
+    final report = RevenueEngine.compute(subscriptions, now: DateTime.now());
+
+    totalRevenue.value = report.totalRevenue;
+    todayRevenue.value = report.todayRevenue;
+    weekRevenue.value = report.weekRevenue;
+    monthRevenue.value = report.monthRevenue;
+    totalTransactions.value = report.totalTransactions;
+
+    dailyGrowth.value = report.dailyGrowth;
+    monthlyGrowth.value = report.monthlyGrowth;
+
+    revenueByPlan.assignAll(report.revenueByPlan);
+    revenueByAdmin.assignAll(report.revenueByAdmin);
   }
 
   // ============================================================
-  // REVENUE CALCULATIONS
+  // FOUNDER REFUND ACTION
   // ============================================================
-  void _computeRevenue() {
-    double total = 0;
-    double today = 0;
-    double week = 0;
-    double month = 0;
+  final RxBool isRefunding = false.obs;
 
-    final now = DateTime.now();
-
-    for (final s in subscriptions) {
-      final amount = s.amountPaid.toDouble();
-      final date = s.createdAt;
-
-      total += amount;
-
-      if (_isSameDay(date, now)) {
-        today += amount;
+  /// Refunds [s] via the backend `refundPayment` callable (RefundService).
+  /// [amount] is INTEGER rupees — null means FULL refund. Returns true on
+  /// success; failures surface the backend's message. The history stream
+  /// refreshes the receipt (refund stamp → netAmount) automatically.
+  Future<bool> refundPayment(
+    SubscriptionModel s, {
+    int? amount,
+    required String reason,
+    bool revokeAccess = false,
+  }) async {
+    if (isRefunding.value) return false;
+    isRefunding.value = true;
+    try {
+      final result = await RefundService.refund(
+        paymentId: s.razorpayPaymentId,
+        historyDocId: s.id,
+        amount: amount,
+        reason: reason,
+        revokeAccess: revokeAccess,
+      );
+      Get.snackbar(
+        "Refunded",
+        "Refunded ₹${result.amount.toInt()} — receipt updated",
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      // The refund itself succeeded, but the backend flagged follow-ups the
+      // founder must know about (e.g. a post-refund step that failed).
+      if (result.warnings.isNotEmpty) {
+        Get.snackbar(
+          "Refund succeeded with follow-ups",
+          result.warnings.join("; "),
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.orange.shade100,
+          colorText: Colors.orange.shade900,
+          duration: const Duration(seconds: 8),
+        );
       }
-
-      if (now.difference(date).inDays <= 7) {
-        week += amount;
-      }
-
-      if (date.year == now.year && date.month == now.month) {
-        month += amount;
-      }
+      return true;
+    } on FirebaseFunctionsException catch (e) {
+      Get.snackbar(
+        "Refund failed",
+        e.message ?? "Refund failed",
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return false;
+    } catch (_) {
+      Get.snackbar(
+        "Refund failed",
+        "Something went wrong — check the payment history before retrying",
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return false;
+    } finally {
+      isRefunding.value = false;
     }
-
-    totalRevenue.value = total;
-    todayRevenue.value = today;
-    weekRevenue.value = week;
-    monthRevenue.value = month;
-    totalTransactions.value = subscriptions.length;
-  }
-
-  // ============================================================
-  // PLAN ANALYTICS
-  // ============================================================
-  void _computePlanBreakdown() {
-    final Map<String, double> map = {};
-
-    for (final s in subscriptions) {
-      map[s.planName] = (map[s.planName] ?? 0) + s.amountPaid.toDouble();
-    }
-
-    revenueByPlan.assignAll(map);
-  }
-
-  // ============================================================
-  // ADMIN ANALYTICS (TOP CUSTOMERS)
-  // ============================================================
-  void _computeAdminBreakdown() {
-    final Map<String, double> map = {};
-
-    for (final s in subscriptions) {
-      map[s.adminUid] = (map[s.adminUid] ?? 0) + s.amountPaid.toDouble();
-    }
-
-    revenueByAdmin.assignAll(map);
-  }
-
-  // ============================================================
-  // GROWTH METRICS
-  // ============================================================
-  void _computeGrowth() {
-    final now = DateTime.now();
-
-    double today = 0;
-    double yesterday = 0;
-
-    double thisMonth = 0;
-    double lastMonth = 0;
-
-    for (final s in subscriptions) {
-      final amount = s.amountPaid.toDouble();
-      final date = s.createdAt;
-
-      // Today vs Yesterday
-      if (_isSameDay(date, now)) today += amount;
-
-      if (_isSameDay(date, now.subtract(const Duration(days: 1)))) {
-        yesterday += amount;
-      }
-
-      // Month vs Last Month
-      if (date.year == now.year && date.month == now.month) {
-        thisMonth += amount;
-      }
-
-      final prev = DateTime(now.year, now.month - 1);
-
-      if (date.year == prev.year && date.month == prev.month) {
-        lastMonth += amount;
-      }
-    }
-
-    dailyGrowth.value = _calcGrowth(today, yesterday);
-    monthlyGrowth.value = _calcGrowth(thisMonth, lastMonth);
-  }
-
-  double _calcGrowth(double current, double previous) {
-    if (previous == 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / previous) * 100;
-  }
-
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   // ============================================================

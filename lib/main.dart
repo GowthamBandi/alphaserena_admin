@@ -18,6 +18,7 @@ import 'package:alphaserena_admin_portel/core/theme/app_theme.dart';
 import 'package:alphaserena_admin_portel/screens/admin_root_screen.dart';
 import 'package:alphaserena_admin_portel/screens/auth/admin_login_screen.dart';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -28,19 +29,79 @@ import 'package:firebase_auth/firebase_auth.dart';
 /// =============================================================
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await _start();
+}
 
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: "AIzaSyDGN75XqBCS2gI3adaM1AkZgQbZDxCJyHk",
-      authDomain: "trainershq-f5ded.firebaseapp.com",
-      projectId: "trainershq-f5ded",
-      storageBucket: "trainershq-f5ded.firebasestorage.app",
-      messagingSenderId: "790123355865",
-      appId: "1:790123355865:web:720324d19e8d7a49d6a8c8",
-    ),
-  );
+const FirebaseOptions _firebaseOptions = FirebaseOptions(
+  apiKey: "AIzaSyDGN75XqBCS2gI3adaM1AkZgQbZDxCJyHk",
+  authDomain: "trainershq-f5ded.firebaseapp.com",
+  projectId: "trainershq-f5ded",
+  storageBucket: "trainershq-f5ded.firebasestorage.app",
+  messagingSenderId: "790123355865",
+  appId: "1:790123355865:web:720324d19e8d7a49d6a8c8",
+);
 
-  runApp(const AlphaSerenaAdminApp());
+/// Boot with a recoverable failure path: a failed Firebase init (offline
+/// startup, blocked network) shows a retry screen instead of a blank crash
+/// before the first frame.
+Future<void> _start() async {
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(options: _firebaseOptions);
+    }
+    runApp(const AlphaSerenaAdminApp());
+  } catch (e) {
+    if (kDebugMode) debugPrint("🔥 FIREBASE INIT FAILED → $e");
+    runApp(const _BootstrapErrorApp());
+  }
+}
+
+/// Minimal, dependency-free failure screen shown when Firebase itself could
+/// not initialize. Deliberately generic — no internals are surfaced.
+class _BootstrapErrorApp extends StatelessWidget {
+  const _BootstrapErrorApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off_outlined, size: 48),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Couldn't start the console",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Check your internet connection and try again.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: _start,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// =============================================================
@@ -128,7 +189,7 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    debugPrint("🚀 MASTER ADMIN BOOT → ${user.uid}");
+    if (kDebugMode) debugPrint("🚀 MASTER ADMIN BOOT → ${user.uid}");
 
     try {
       _safePut(AdminRootController());
@@ -144,17 +205,50 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
       _safePut(OperationsController());
       _safePut(PlatformStaffController());
 
-      debugPrint("✅ ALL CONTROLLERS INITIALIZED");
+      if (kDebugMode) debugPrint("✅ ALL CONTROLLERS INITIALIZED");
       isReady.value = true;
     } catch (e, s) {
-      debugPrint("🔥 BOOT ERROR → $e");
-      debugPrint("📍 STACK → $s");
+      if (kDebugMode) {
+        debugPrint("🔥 BOOT ERROR → $e");
+        debugPrint("📍 STACK → $s");
+      }
     }
   }
 
   void _safePut<T>(T controller) {
     if (!Get.isRegistered<T>()) {
       Get.put<T>(controller, permanent: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    // The console subtree is being unmounted (logout / access revoked). Tear
+    // down every console controller so streams close and a later sign-in
+    // boots from clean state instead of inheriting cached data.
+    Future.microtask(_teardownConsoleControllers);
+  }
+
+  static void _teardownConsoleControllers() {
+    // Derived controllers first, AdminRootController last.
+    _safeDelete<OperationsController>();
+    _safeDelete<PlatformStaffController>();
+    _safeDelete<AuditController>();
+    _safeDelete<CommunicationController>();
+    _safeDelete<SupportController>();
+    _safeDelete<SubscriptionController>();
+    _safeDelete<CouponController>();
+    _safeDelete<TrainerController>();
+    _safeDelete<AdminController>();
+    _safeDelete<DashboardController>();
+    _safeDelete<AdminRootController>();
+    if (kDebugMode) debugPrint("🧹 CONSOLE CONTROLLERS TORN DOWN");
+  }
+
+  static void _safeDelete<T>() {
+    if (Get.isRegistered<T>()) {
+      Get.delete<T>(force: true);
     }
   }
 

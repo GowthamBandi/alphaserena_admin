@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 
 /// Standard text field matching the auth/login styling: filled, rounded 14,
@@ -13,6 +14,10 @@ class AppTextField extends StatefulWidget {
   final TextAlign textAlign;
   final int maxLines;
   final ValueChanged<String>? onSubmitted;
+  final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
+  final bool autofocus;
+  final List<TextInputFormatter>? inputFormatters;
 
   const AppTextField({
     super.key,
@@ -25,6 +30,10 @@ class AppTextField extends StatefulWidget {
     this.textAlign = TextAlign.start,
     this.maxLines = 1,
     this.onSubmitted,
+    this.textInputAction,
+    this.autofillHints,
+    this.autofocus = false,
+    this.inputFormatters,
   });
 
   @override
@@ -46,6 +55,10 @@ class _AppTextFieldState extends State<AppTextField> {
       maxLines: widget.isPassword ? 1 : widget.maxLines,
       cursorColor: p.accent,
       onSubmitted: widget.onSubmitted,
+      textInputAction: widget.textInputAction,
+      autofillHints: widget.autofillHints,
+      autofocus: widget.autofocus,
+      inputFormatters: widget.inputFormatters,
       style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         labelText: widget.label,

@@ -10,7 +10,14 @@ class TrainerModel {
   final String phone;
   final String? profilePicUrl;
   final String? specialization;
-  final int? experience;
+  /// Free TEXT, e.g. "8 years" — NOT a number.
+  ///
+  /// The canonical type is set by the two writers that own this document:
+  /// the backend's `createTrainer` writes `optionalString(experience)`, and
+  /// TrainerHQ's profile editor writes the coach's own free text. This console
+  /// previously modelled it as `int?`, so `int.tryParse("8 years")` read null
+  /// and the next save here silently WIPED the coach's experience.
+  final String? experience;
   final String? bio;
   final String status; // pending | active | blocked | suspended
   final String? assignedBy; // adminDocId or adminUid
@@ -57,12 +64,15 @@ class TrainerModel {
     return DateTime.now();
   }
 
-  static int? _parseInt(dynamic v) {
+  /// Tolerant read for the free-text experience field.
+  ///
+  /// Legacy documents this console itself wrote hold a NUMBER, so a plain cast
+  /// would throw on them. Coercing preserves those values as text ("8") rather
+  /// than discarding them, and reads TrainerHQ's free text ("8 years") intact.
+  static String? _experienceText(dynamic v) {
     if (v == null) return null;
-    if (v is int) return v;
-    if (v is double) return v.toInt();
-    if (v is String) return int.tryParse(v);
-    return null;
+    final s = v.toString().trim();
+    return s.isEmpty ? null : s;
   }
 
   // ----------------------------------------------------------------------
@@ -78,7 +88,7 @@ class TrainerModel {
       phone: map['phone'] ?? '',
       profilePicUrl: map['profilePicUrl'],
       specialization: map['specialization'],
-      experience: _parseInt(map['experience']),
+      experience: _experienceText(map['experience']),
       bio: map['bio'],
       status: map['status'] ?? 'pending',
       assignedBy: map['assignedBy'],
@@ -136,7 +146,7 @@ class TrainerModel {
     String? phone,
     String? profilePicUrl,
     String? specialization,
-    int? experience,
+    String? experience,
     String? bio,
     String? status,
     String? assignedBy,

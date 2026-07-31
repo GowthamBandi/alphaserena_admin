@@ -1,6 +1,7 @@
 // lib/screens/coupon/coupon_code_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../controllers/coupon_controller.dart';
 import '../../models/coupon_model.dart';
@@ -9,15 +10,6 @@ class CouponCodeScreen extends StatelessWidget {
   CouponCodeScreen({super.key});
 
   final ctrl = Get.find<CouponController>();
-
-  // Safe lookup of the coupon being edited — avoids a firstWhere StateError
-  // crash if the doc is removed from the stream while the edit dialog is open.
-  bool _editedCouponActive() {
-    for (final c in ctrl.coupons) {
-      if (c.docId == ctrl.editDocId.value) return c.isActive;
-    }
-    return true;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +125,14 @@ class CouponCodeScreen extends StatelessWidget {
         children: [
           Expanded(child: Text(c.code, style: _rowTxt)),
           Expanded(child: Text(_discountText(c), style: _rowTxt)),
-          Expanded(child: Text("${c.usedCount}/${c.maxUsage}", style: _rowTxt)),
+          Expanded(
+            child: Text(
+              c.maxUsage > 0
+                  ? "${c.usedCount}/${c.maxUsage}"
+                  : "${c.usedCount} used · no cap",
+              style: _rowTxt,
+            ),
+          ),
           Expanded(
             child: Text(
               "${_fmt(c.validFrom)} → ${_fmt(c.validTo)}",
@@ -147,9 +146,13 @@ class CouponCodeScreen extends StatelessWidget {
                 onPressed: () => _openEdit(c),
                 icon: const Icon(Icons.edit),
               ),
+              // deleteCoupon is a soft-disable (the doc is kept so redeemed
+              // history stays intact) — the affordance says so honestly, and
+              // asks before acting.
               IconButton(
-                onPressed: () => ctrl.deleteCoupon(c.id),
-                icon: const Icon(Icons.delete, color: Colors.red),
+                tooltip: 'Deactivate coupon',
+                onPressed: () => _confirmDeactivate(c),
+                icon: const Icon(Icons.block, color: Colors.red),
               ),
             ],
           ),
@@ -159,20 +162,39 @@ class CouponCodeScreen extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------------------
+  // Mirrors the server-side `subscriptionCouponGate`: a coupon the backend will
+  // reject must not read "Active" here. Order matches the gate's precedence.
   Widget _statusBadge(CouponModel c) {
-    bool expired = DateTime.now().isAfter(c.validTo);
-    final active = c.isActive && !expired;
+    final now = DateTime.now();
+    late final String label;
+    late final bool ok;
+    if (!c.isActive) {
+      label = "Inactive";
+      ok = false;
+    } else if (now.isBefore(c.validFrom)) {
+      label = "Scheduled";
+      ok = false;
+    } else if (now.isAfter(c.validTo)) {
+      label = "Expired";
+      ok = false;
+    } else if (c.maxUsage > 0 && c.usedCount >= c.maxUsage) {
+      label = "Used up";
+      ok = false;
+    } else {
+      label = "Active";
+      ok = true;
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: active ? Colors.green.shade100 : Colors.red.shade100,
+        color: ok ? Colors.green.shade100 : Colors.red.shade100,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        active ? "Active" : "Inactive",
+        label,
         style: TextStyle(
-          color: active ? Colors.green.shade700 : Colors.red.shade700,
+          color: ok ? Colors.green.shade700 : Colors.red.shade700,
           fontSize: 12,
           fontWeight: FontWeight.bold,
         ),
@@ -181,6 +203,31 @@ class CouponCodeScreen extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------------------
+  void _confirmDeactivate(CouponModel c) {
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text("Deactivate coupon?"),
+        content: Text(
+          "\"${c.code}\" will stop being accepted at checkout immediately. "
+          "The coupon and its redemption history are kept, and you can "
+          "re-activate it later from Edit.",
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              Get.back();
+              ctrl.deleteCoupon(c.id);
+            },
+            child: const Text("Deactivate"),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openCreate() {
     ctrl.clearForm();
     _openFormDialog(isEdit: false);
@@ -243,8 +290,13 @@ class CouponCodeScreen extends StatelessWidget {
                     Expanded(
                       child: TextField(
                         controller: ctrl.maxUsageCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                         decoration: const InputDecoration(
-                          labelText: "Max Usage Count",
+                          labelText: "Max Redemptions (0 = unlimited)",
+                          helperText: "0 = unlimited redemptions",
                         ),
                       ),
                     ),
@@ -272,7 +324,8 @@ class CouponCodeScreen extends StatelessWidget {
 
                 const SizedBox(height: 16),
 
-                // ACTIVE / INACTIVE TOGGLE (NEW)
+                // ACTIVE / INACTIVE TOGGLE — a local DRAFT value, persisted
+                // only when Save is pressed (Cancel discards it).
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -281,11 +334,9 @@ class CouponCodeScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 16),
                     ),
                     Switch(
-                      value: isEdit ? _editedCouponActive() : true,
+                      value: isEdit ? ctrl.draftActive.value : true,
                       onChanged: isEdit
-                          ? (value) {
-                              ctrl.toggleCoupon(ctrl.editDocId.value, !value);
-                            }
+                          ? (value) => ctrl.draftActive.value = value
                           : null, // disable toggle for new coupon
                     ),
                   ],

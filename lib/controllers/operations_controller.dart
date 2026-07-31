@@ -4,11 +4,20 @@
 // across the whole platform right now" triage surface. This is NOT the KPI
 // dashboard — it is an actionable, severity-ranked risk feed.
 //
-// It DERIVES everything from data already streamed by other registered
-// controllers (AdminController, SupportController, CommunicationController) — no
-// new Firestore streams, no duplicated business logic. Each alert links to the
-// section where the founder acts.
+// It DERIVES org/support/communication signals from data already streamed by
+// other registered controllers (AdminController, SupportController,
+// CommunicationController), and owns the ONLY console streams of the two
+// backend incident queues no other controller reads:
+//   • `paymentAlerts`  — money-integrity incidents the reconcile sweep and
+//     refund path write (charged-not-activated, refund-inconsistent); founder
+//     read + status-resolution is rules-sanctioned.
+//   • `quotaAlerts`    — one self-healing doc per org exceeding its plan
+//     limits (the backend deletes it when usage drops back under).
+// Each alert links to the section where the founder acts.
 
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -38,6 +47,10 @@ class OpsAlert {
   final int navIndex;
   final int count;
 
+  /// Optional override — when set, tapping the card runs this instead of
+  /// navigating to [navIndex] (used by the telemetry retry alert).
+  final VoidCallback? onTap;
+
   const OpsAlert({
     required this.severity,
     required this.icon,
@@ -46,15 +59,80 @@ class OpsAlert {
     required this.actionLabel,
     required this.navIndex,
     this.count = 0,
+    this.onTap,
   });
 }
 
 // Nav page indices (AdminRootController._buildPage). Kept in sync with the shell.
 const int _navAdmins = 1;
+const int _navPayments = 5;
 const int _navSupport = 7;
 const int _navCommunication = 8;
 
 class OperationsController extends GetxController {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // ── Backend incident queues (own streams — nobody else reads these) ───
+  /// Open money-integrity incidents (charged-not-activated / refund drift).
+  final RxInt paymentAlertsOpen = 0.obs;
+
+  /// Organizations currently over one or more plan limits (doc per org).
+  final RxInt quotaAlertOrgs = 0.obs;
+
+  final RxBool telemetryLoaded = false.obs;
+  final RxBool telemetryError = false.obs;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _paymentAlertsSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _quotaAlertsSub;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _listenTelemetry();
+  }
+
+  @override
+  void onClose() {
+    _paymentAlertsSub?.cancel();
+    _quotaAlertsSub?.cancel();
+    super.onClose();
+  }
+
+  void _listenTelemetry() {
+    _paymentAlertsSub?.cancel();
+    _paymentAlertsSub = _db
+        .collection('paymentAlerts')
+        .where('status', isEqualTo: 'open')
+        .snapshots()
+        .listen((s) {
+      paymentAlertsOpen.value = s.size;
+      telemetryError.value = false;
+      telemetryLoaded.value = true;
+    }, onError: (_) {
+      telemetryError.value = true;
+      telemetryLoaded.value = true;
+    });
+
+    _quotaAlertsSub?.cancel();
+    // Every quotaAlerts doc is an open violation by contract — the backend
+    // sweep deletes it once the org drops back under its limits.
+    _quotaAlertsSub = _db.collection('quotaAlerts').snapshots().listen((s) {
+      quotaAlertOrgs.value = s.size;
+      telemetryError.value = false;
+      telemetryLoaded.value = true;
+    }, onError: (_) {
+      telemetryError.value = true;
+      telemetryLoaded.value = true;
+    });
+  }
+
+  /// Re-attach the incident streams after a failure (retry alert card).
+  void retryTelemetry() {
+    telemetryError.value = false;
+    telemetryLoaded.value = false;
+    _listenTelemetry();
+  }
+
   AdminController? get _admins =>
       Get.isRegistered<AdminController>() ? Get.find<AdminController>() : null;
   SupportController? get _support =>
@@ -68,6 +146,53 @@ class OperationsController extends GetxController {
   List<OpsAlert> get alerts {
     final now = DateTime.now();
     final out = <OpsAlert>[];
+
+    // ── Backend incident queues (own streams) ────────────────────────────
+    final payAlerts = paymentAlertsOpen.value;
+    if (payAlerts > 0) {
+      out.add(OpsAlert(
+        severity: OpsSeverity.critical,
+        icon: Icons.gpp_bad_outlined,
+        title:
+            '$payAlerts open payment integrity alert${payAlerts == 1 ? '' : 's'}',
+        detail:
+            'A buyer was charged without activation, or a refund left records '
+            'inconsistent — investigate before it becomes a dispute.',
+        actionLabel: 'Investigate',
+        navIndex: _navPayments,
+        count: payAlerts,
+      ));
+    }
+
+    final quotaOrgs = quotaAlertOrgs.value;
+    if (quotaOrgs > 0) {
+      out.add(OpsAlert(
+        severity: OpsSeverity.warning,
+        icon: Icons.trending_up_outlined,
+        title:
+            '$quotaOrgs organization${quotaOrgs == 1 ? '' : 's'} over plan limits',
+        detail:
+            'Usage exceeds what their plan allows — an upsell conversation, '
+            'or enforcement, is due.',
+        actionLabel: 'Review',
+        navIndex: _navAdmins,
+        count: quotaOrgs,
+      ));
+    }
+
+    if (telemetryError.value) {
+      out.add(OpsAlert(
+        severity: OpsSeverity.warning,
+        icon: Icons.cloud_off_outlined,
+        title: 'Incident feeds unavailable',
+        detail:
+            'Payment and quota alert streams failed to load — incidents may '
+            'be hidden. Tap to retry.',
+        actionLabel: 'Retry',
+        navIndex: _navAdmins,
+        onTap: retryTelemetry,
+      ));
+    }
 
     // ── Organizations (from AdminController.admins) ──────────────────────
     final admins = _admins?.admins ?? const [];
@@ -192,32 +317,42 @@ class OperationsController extends GetxController {
         ));
       }
 
-      final overdue = comms.announcements.where((a) {
-        final s = a.scheduledAt;
-        return a.isScheduled && s != null && s.isBefore(now);
-      }).length;
-      if (overdue > 0) {
+      // Legacy `scheduled` docs are stranded: the composer can no longer author
+      // that status and no scheduler exists to deliver it. This alert is now a
+      // one-time cleanup prompt, not a "still pending" notice.
+      final stranded =
+          comms.announcements.where((a) => a.isScheduled).length;
+      if (stranded > 0) {
         out.add(OpsAlert(
           severity: OpsSeverity.warning,
           icon: Icons.event_busy_outlined,
-          title: '$overdue scheduled announcement${overdue == 1 ? '' : 's'} overdue',
-          detail: 'Scheduled time passed but not yet delivered.',
+          title: '$stranded legacy scheduled announcement'
+              '${stranded == 1 ? '' : 's'} will never send',
+          detail: 'Scheduling was removed. Edit and resend, or delete.',
           actionLabel: 'Open',
           navIndex: _navCommunication,
-          count: overdue,
+          count: stranded,
         ));
       }
 
-      final queued = comms.announcements.where((a) => a.isQueued).length;
-      if (queued > 0) {
+      // Queued means the worker is mid-fan-out. A doc still queued well after
+      // it was handed over is a genuine stall (crashed/undeployed worker) —
+      // only THAT is worth alerting on. A freshly queued announcement is
+      // normal and silent, so the founder is never nagged by a healthy send.
+      final stalled = comms.announcements.where((a) {
+        if (!a.isQueued) return false;
+        final q = a.queuedAt;
+        return q != null && now.difference(q) > const Duration(minutes: 15);
+      }).length;
+      if (stalled > 0) {
         out.add(OpsAlert(
-          severity: OpsSeverity.info,
+          severity: OpsSeverity.critical,
           icon: Icons.outbox_outlined,
-          title: '$queued announcement${queued == 1 ? '' : 's'} queued for delivery',
-          detail: 'Awaiting the delivery worker.',
+          title: '$stalled announcement${stalled == 1 ? '' : 's'} stuck in queue',
+          detail: 'Queued over 15 minutes ago — the delivery worker may be down.',
           actionLabel: 'Open',
           navIndex: _navCommunication,
-          count: queued,
+          count: stalled,
         ));
       }
     }
@@ -248,6 +383,7 @@ class OperationsController extends GetxController {
     final a = _admins, s = _support, c = _comms;
     return (a == null || a.isLoading.value) ||
         (s == null || s.feedbackLoading.value || s.reviewsLoading.value) ||
-        (c == null || c.isLoading.value);
+        (c == null || c.isLoading.value) ||
+        !telemetryLoaded.value;
   }
 }

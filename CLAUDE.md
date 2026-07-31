@@ -167,20 +167,17 @@ Backend: `trainershq-f5ded`. Canonical collection names live in trainersHQ at
 `lib/core/constants/firestore_collections.dart` (`FsCollections`). This app has **no
 such constants file** — it hardcodes strings. Add one and align.
 
-### ⚠️ DRIFT 1 — subscription plan schema (HIGH PRIORITY)
-This app's `SubscriptionPlanModel` writes **flat** fields:
-`planName`, `durationMonths`, `price`, `oldPrice`, `points[]`, and flat limits
-`maxAdmins / maxTrainers / maxClients / maxWorkoutPlans / maxWorkouts / maxDietPlans`.
-
-trainersHQ's `subscription_plans` schema (what the org app + its
-`verifyAndActivateSubscription` Cloud Function READ) expects:
-`title`, `duration` (str), **`months`** (num), `price`, `points[]`, `isActive`,
-`order`, and a **nested** `limits: { trainers, clients, workoutPlans, dietPlans, workouts }`.
-
-➡️ As-is, plans the founder creates here will **NOT be read correctly** by trainersHQ
-(different field names + flat vs nested limits). **Pick ONE schema and make both apps
-agree.** Recommended: adopt trainersHQ's schema (it's the consumer + the CF derives
-limits/months from the plan doc) and update this app's model/dialog to match.
+### ✅ DRIFT 1 — subscription plan schema (RESOLVED)
+`SubscriptionPlanModel.toMap()` now writes the canonical consumer schema first —
+`title`, `price`, `months`, `duration` (str), `points[]`, `isActive`, `order`, and
+nested `limits: { admins, trainers, clients, workoutPlans, dietPlans, workouts,
+exerciseLibrary }` — exactly what trainersHQ and `verifyAndActivateSubscription`
+read. V2 catalog fields (`planName`, `monthlyPrice`, `yearlyPrice`, `capabilities`,
+`capabilityKeys`, `sortOrder`, `badge`, `featured`, `archived`, `customPoints`) are
+written additively and are ignored by the backend/TrainerHQ until a governed change
+consumes them. `badge`/`featured` are console-only organization labels (buyers never
+see them); the legacy `oldPrice` strike-through field was removed — TrainerHQ never
+rendered it.
 
 ### ⚠️ DRIFT 2 — `clients` vs `clints`
 Canonical client collection is **`clients`**. This app's model file is `clints_model.dart`
