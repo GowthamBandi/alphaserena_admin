@@ -103,6 +103,34 @@ void main() {
     expect(errs.any((e) => e.contains('higher than 12 months')), isTrue);
   });
 
+  // BOTH prices are charged now — the buyer picks a term in the app and the
+  // backend charges the matching field from this one plan. A typo in the
+  // non-default term used to be inert; it is now a live price.
+  test('a year priced below a single month is rejected', () {
+    final errs = _run(period: BillingPeriod.monthly, monthly: 999, yearly: 50);
+    expect(errs.any((e) => e.contains('lower than a single month')), isTrue,
+        reason: 'buyers could get a whole year for 50 rupees');
+  });
+
+  test('the floor applies whichever term is the default', () {
+    final errs = _run(period: BillingPeriod.yearly, monthly: 999, yearly: 50);
+    expect(errs.any((e) => e.contains('lower than a single month')), isTrue);
+  });
+
+  test('a genuine annual discount still passes', () {
+    // 10 months' worth for a year — a normal, intended incentive.
+    expect(_run(monthly: 999, yearly: 9990), isEmpty);
+  });
+
+  test('yearly equal to monthly is allowed (no saving, but not a typo)', () {
+    expect(_run(monthly: 999, yearly: 999), isEmpty);
+  });
+
+  test('an unpriced term is not a typo — it just is not offered', () {
+    expect(_run(period: BillingPeriod.monthly, monthly: 999, yearly: 0),
+        isEmpty);
+  });
+
   test('featured but inactive fails', () {
     expect(_run(active: false, featured: true, monthly: 500),
         contains('A featured plan must be active — you cannot feature a hidden plan.'));

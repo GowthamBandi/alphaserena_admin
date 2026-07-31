@@ -107,6 +107,16 @@ class PlanValidation {
       errors.add(
           'The yearly price is higher than 12 months at the monthly rate — customers would pay more to commit annually.');
     }
+    // BOTH prices are now genuinely charged: the buyer picks a term in the app
+    // and the backend charges the matching field from this ONE plan. Until
+    // that change the non-default term's price was inert data, so a typo in it
+    // cost nothing. A year priced below a single month is never intentional —
+    // and it would be sold at that price to everyone who toggled Yearly.
+    if (monthlyPrice > 0 && yearlyPrice > 0 && yearlyPrice < monthlyPrice) {
+      errors.add(
+          'The yearly price is lower than a single month — customers could buy '
+          'a whole year for less than one month.');
+    }
 
     // ── Limits ────────────────────────────────────────────────────────────
     for (final entry in limits.entries) {
