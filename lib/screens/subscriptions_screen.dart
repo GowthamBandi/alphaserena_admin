@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../models/subscription_plan_model.dart';
+import '../widgets/billing_config_dialog.dart';
 import '../widgets/page_shell.dart';
 import '../widgets/plan_comparison_dialog.dart';
 import '../widgets/subscription_plan_dialog.dart';
@@ -143,6 +144,10 @@ class SubscriptionsScreen extends StatelessWidget {
     Get.dialog(TrainerPreviewDialog(plans: ctrl.publishedPlans));
   }
 
+  void _billing() {
+    Get.dialog(const BillingConfigDialog());
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
@@ -153,6 +158,13 @@ class SubscriptionsScreen extends StatelessWidget {
         spacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
+          // Platform-wide pricing rules live beside the plans they price —
+          // this screen is the commercial source of truth.
+          OutlinedButton.icon(
+            onPressed: _billing,
+            icon: const Icon(Icons.receipt_long_outlined, size: 18),
+            label: const Text("Billing & taxes"),
+          ),
           OutlinedButton.icon(
             onPressed: _preview,
             icon: const Icon(Icons.visibility_outlined, size: 18),

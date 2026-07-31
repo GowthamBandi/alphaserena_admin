@@ -367,12 +367,41 @@ class _SubscriptionPlanDialogState extends State<SubscriptionPlanDialog> {
           }
           return Text(
             ctrl.selectedPeriod == BillingPeriod.yearly
-                ? "Charged once per year (12 months of access)."
-                : "Charged once per month (1 month of access).",
+                ? "This plan's default term is yearly (12 months of access)."
+                : "This plan's default term is monthly (1 month of access).",
             style: AppText.body(size: 12).copyWith(color: p.textMuted),
           );
         }),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
+        // The dual-price contract, stated plainly. BOTH prices below are live:
+        // the buyer picks a term in the app and the server charges the matching
+        // one from this single plan. Previously only the default term's price
+        // was ever charged and the other field was inert data — which is why
+        // the Monthly/Yearly control never appeared to buyers at all.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: p.accent.withValues(alpha: 0.07),
+            borderRadius: AppRadii.smR,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.swap_horiz, size: 16, color: p.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Buyers choose their term in the app and are charged the "
+                  "matching price below. Leave a price blank to not offer "
+                  "that term at all.",
+                  style:
+                      AppText.body(size: 12).copyWith(color: p.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
