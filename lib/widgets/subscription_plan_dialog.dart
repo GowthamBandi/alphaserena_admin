@@ -763,7 +763,13 @@ class _SubscriptionPlanDialogState extends State<SubscriptionPlanDialog> {
                 style: AppText.body(size: 12).copyWith(color: p.textMuted)),
           ),
           const SizedBox(height: 14),
-          child,
+          // The section's own background lives on the Container's decoration
+          // above. A ListTile (and every *ListTile that builds one) paints its
+          // background and ink splash on the NEAREST Material ancestor — which
+          // without this would be the one behind that decoration, so the splash
+          // rendered UNDER the card and was invisible. A transparent Material
+          // here is nearer than the decoration, so taps ripple on top of it.
+          Material(type: MaterialType.transparency, child: child),
         ],
       ),
     );
