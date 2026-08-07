@@ -1,0 +1,845 @@
+name,category
+Barbell Bench Press,Chest
+Incline Barbell Bench Press,Chest
+Decline Barbell Bench Press,Chest
+Close-Grip Bench Press,Chest
+Wide-Grip Bench Press,Chest
+Reverse-Grip Bench Press,Chest
+Floor Press,Chest
+Larsen Press,Chest
+Spoto Press,Chest
+Board Press,Chest
+Pin Press,Chest
+Banded Bench Press,Chest
+Chain Bench Press,Chest
+Dumbbell Bench Press,Chest
+Incline Dumbbell Bench Press,Chest
+Decline Dumbbell Bench Press,Chest
+Dumbbell Floor Press,Chest
+Neutral-Grip Dumbbell Press,Chest
+Alternating Dumbbell Bench Press,Chest
+Dumbbell Squeeze Press,Chest
+Dumbbell Fly,Chest
+Incline Dumbbell Fly,Chest
+Decline Dumbbell Fly,Chest
+Dumbbell Pullover,Chest
+Cable Crossover,Chest
+High-to-Low Cable Crossover,Chest
+Low-to-High Cable Crossover,Chest
+Cable Fly,Chest
+Incline Cable Fly,Chest
+Single-Arm Cable Fly,Chest
+Cable Chest Press,Chest
+Incline Cable Chest Press,Chest
+Pec Deck Fly,Chest
+Machine Chest Press,Chest
+Incline Machine Chest Press,Chest
+Decline Machine Chest Press,Chest
+Hammer Strength Chest Press,Chest
+Smith Machine Bench Press,Chest
+Smith Machine Incline Press,Chest
+Chest Dip,Chest
+Weighted Chest Dip,Chest
+Ring Chest Dip,Chest
+Push-Up,Chest
+Wide-Grip Push-Up,Chest
+Diamond Push-Up,Chest
+Incline Push-Up,Chest
+Decline Push-Up,Chest
+Deficit Push-Up,Chest
+Weighted Push-Up,Chest
+Archer Push-Up,Chest
+Ring Push-Up,Chest
+Svend Press,Chest
+Landmine Chest Press,Chest
+Guillotine Press,Chest
+Isometric Chest Squeeze,Chest
+Conventional Deadlift,Back
+Sumo Deadlift,Back
+Deficit Deadlift,Back
+Rack Pull,Back
+Snatch-Grip Deadlift,Back
+Trap Bar Deadlift,Back
+Paused Deadlift,Back
+Block Pull,Back
+Barbell Bent-Over Row,Back
+Pendlay Row,Back
+Yates Row,Back
+Underhand Barbell Row,Back
+T-Bar Row,Back
+Chest-Supported T-Bar Row,Back
+Meadows Row,Back
+Landmine Row,Back
+Seal Row,Back
+Gorilla Row,Back
+Dumbbell Bent-Over Row,Back
+Single-Arm Dumbbell Row,Back
+Chest-Supported Dumbbell Row,Back
+Incline Dumbbell Row,Back
+Kroc Row,Back
+Pull-Up,Back
+Wide-Grip Pull-Up,Back
+Chin-Up,Back
+Neutral-Grip Pull-Up,Back
+Weighted Pull-Up,Back
+Weighted Chin-Up,Back
+Commando Pull-Up,Back
+Towel Pull-Up,Back
+Assisted Pull-Up,Back
+Negative Pull-Up,Back
+Archer Pull-Up,Back
+Sternum Pull-Up,Back
+Scapular Pull-Up,Back
+Inverted Row,Back
+Ring Row,Back
+Lat Pulldown,Back
+Wide-Grip Lat Pulldown,Back
+Close-Grip Lat Pulldown,Back
+Reverse-Grip Lat Pulldown,Back
+Single-Arm Lat Pulldown,Back
+Kneeling Lat Pulldown,Back
+Straight-Arm Pulldown,Back
+Seated Cable Row,Back
+Wide-Grip Seated Cable Row,Back
+Single-Arm Seated Cable Row,Back
+Cable Rope Row,Back
+Chest-Supported Machine Row,Back
+Hammer Strength Row,Back
+Machine High Row,Back
+Machine Low Row,Back
+Smith Machine Bent-Over Row,Back
+Barbell Shrug,Back
+Dumbbell Shrug,Back
+Trap Bar Shrug,Back
+Cable Shrug,Back
+Behind-the-Back Barbell Shrug,Back
+Back Extension,Back
+45-Degree Back Extension,Back
+Reverse Hyperextension,Back
+Good Morning,Back
+Seated Good Morning,Back
+Cable Pullover,Back
+Machine Pullover,Back
+Overhead Press,Shoulders
+Seated Overhead Press,Shoulders
+Standing Barbell Press,Shoulders
+Behind-the-Neck Press,Shoulders
+Push Press,Shoulders
+Z Press,Shoulders
+Bradford Press,Shoulders
+Landmine Press,Shoulders
+Half-Kneeling Landmine Press,Shoulders
+Viking Press,Shoulders
+Dumbbell Shoulder Press,Shoulders
+Seated Dumbbell Shoulder Press,Shoulders
+Arnold Press,Shoulders
+Alternating Dumbbell Press,Shoulders
+Neutral-Grip Dumbbell Shoulder Press,Shoulders
+Single-Arm Dumbbell Press,Shoulders
+Machine Shoulder Press,Shoulders
+Smith Machine Shoulder Press,Shoulders
+Hammer Strength Shoulder Press,Shoulders
+Dumbbell Lateral Raise,Shoulders
+Seated Dumbbell Lateral Raise,Shoulders
+Leaning Cable Lateral Raise,Shoulders
+Cable Lateral Raise,Shoulders
+Machine Lateral Raise,Shoulders
+Band Lateral Raise,Shoulders
+Lu Raise,Shoulders
+Dumbbell Front Raise,Shoulders
+Barbell Front Raise,Shoulders
+Plate Front Raise,Shoulders
+Cable Front Raise,Shoulders
+Dumbbell Rear Delt Fly,Shoulders
+Seated Rear Delt Fly,Shoulders
+Reverse Pec Deck,Shoulders
+Cable Reverse Fly,Shoulders
+Rope Face Pull,Shoulders
+Band Face Pull,Shoulders
+Prone Incline Rear Delt Raise,Shoulders
+Barbell Upright Row,Shoulders
+Dumbbell Upright Row,Shoulders
+Cable Upright Row,Shoulders
+Wide-Grip Upright Row,Shoulders
+Dumbbell Scaption,Shoulders
+Cuban Press,Shoulders
+Bottoms-Up Press,Shoulders
+Handstand Push-Up,Shoulders
+Pike Push-Up,Shoulders
+Wall-Supported Handstand Hold,Shoulders
+Dumbbell Y-Raise,Shoulders
+Incline Y-Raise,Shoulders
+Barbell Overhead Hold,Shoulders
+Plate Halo,Shoulders
+Shoulder Circles,Shoulders
+Barbell Back Squat,Legs
+High-Bar Back Squat,Legs
+Low-Bar Back Squat,Legs
+Front Squat,Legs
+Zercher Squat,Legs
+Overhead Squat,Legs
+Box Squat,Legs
+Pause Squat,Legs
+Tempo Squat,Legs
+Anderson Squat,Legs
+Safety Bar Squat,Legs
+Smith Machine Squat,Legs
+Hack Squat,Legs
+Machine Hack Squat,Legs
+Belt Squat,Legs
+Goblet Squat,Legs
+Dumbbell Front Squat,Legs
+Split Squat,Legs
+Bulgarian Split Squat,Legs
+Barbell Bulgarian Split Squat,Legs
+Deficit Split Squat,Legs
+Walking Lunge,Legs
+Reverse Lunge,Legs
+Forward Lunge,Legs
+Lateral Lunge,Legs
+Curtsy Lunge,Legs
+Deficit Reverse Lunge,Legs
+Barbell Walking Lunge,Legs
+Dumbbell Walking Lunge,Legs
+Step-Up,Legs
+Lateral Step-Up,Legs
+Weighted Step-Up,Legs
+Pistol Squat,Legs
+Shrimp Squat,Legs
+Sissy Squat,Legs
+Cossack Squat,Legs
+Wall Sit,Legs
+Leg Press,Legs
+Single-Leg Press,Legs
+Narrow-Stance Leg Press,Legs
+Wide-Stance Leg Press,Legs
+Leg Extension,Legs
+Single-Leg Extension,Legs
+Romanian Deadlift,Legs
+Dumbbell Romanian Deadlift,Legs
+Single-Leg Romanian Deadlift,Legs
+Stiff-Leg Deadlift,Legs
+Lying Leg Curl,Legs
+Seated Leg Curl,Legs
+Standing Leg Curl,Legs
+Nordic Hamstring Curl,Legs
+Glute-Ham Raise,Legs
+Barbell Hip Thrust,Legs
+Single-Leg Hip Thrust,Legs
+Machine Hip Thrust,Legs
+Glute Bridge,Legs
+Single-Leg Glute Bridge,Legs
+Frog Pump,Legs
+Cable Glute Kickback,Legs
+Machine Glute Kickback,Legs
+Hip Abduction Machine,Legs
+Hip Adduction Machine,Legs
+Standing Calf Raise,Legs
+Seated Calf Raise,Legs
+Donkey Calf Raise,Legs
+Leg Press Calf Raise,Legs
+Single-Leg Calf Raise,Legs
+Tibialis Raise,Legs
+Barbell Calf Raise,Legs
+Smith Machine Calf Raise,Legs
+Adductor Machine,Legs
+Copenhagen Plank,Legs
+Barbell Curl,Arms
+EZ-Bar Curl,Arms
+Wide-Grip Barbell Curl,Arms
+Close-Grip Barbell Curl,Arms
+Cheat Curl,Arms
+Drag Curl,Arms
+21s Barbell Curl,Arms
+Dumbbell Curl,Arms
+Alternating Dumbbell Curl,Arms
+Hammer Curl,Arms
+Cross-Body Hammer Curl,Arms
+Incline Dumbbell Curl,Arms
+Concentration Curl,Arms
+Zottman Curl,Arms
+Spider Curl,Arms
+Preacher Curl,Arms
+Dumbbell Preacher Curl,Arms
+Machine Preacher Curl,Arms
+Cable Curl,Arms
+Rope Hammer Curl,Arms
+High Cable Curl,Arms
+Bayesian Cable Curl,Arms
+Reverse Curl,Arms
+Reverse EZ-Bar Curl,Arms
+Cable Reverse Curl,Arms
+Band Curl,Arms
+Machine Biceps Curl,Arms
+Chin-Up Curl Hold,Arms
+Close-Grip Barbell Press,Arms
+Skull Crusher,Arms
+EZ-Bar Skull Crusher,Arms
+Dumbbell Skull Crusher,Arms
+JM Press,Arms
+Overhead Triceps Extension,Arms
+Dumbbell Overhead Triceps Extension,Arms
+Cable Overhead Triceps Extension,Arms
+Single-Arm Overhead Extension,Arms
+Triceps Pushdown,Arms
+Rope Triceps Pushdown,Arms
+V-Bar Pushdown,Arms
+Reverse-Grip Pushdown,Arms
+Single-Arm Cable Pushdown,Arms
+Triceps Kickback,Arms
+Cable Kickback,Arms
+Bench Dip,Arms
+Machine Triceps Extension,Arms
+Tate Press,Arms
+California Press,Arms
+Diamond Push-Up Hold,Arms
+Band Triceps Extension,Arms
+Wrist Curl,Arms
+Reverse Wrist Curl,Arms
+Behind-the-Back Wrist Curl,Arms
+Dumbbell Wrist Curl,Arms
+Cable Wrist Curl,Arms
+Farmer Hold,Arms
+Plate Pinch Hold,Arms
+Wrist Roller,Arms
+Radial Deviation,Arms
+Ulnar Deviation,Arms
+Forearm Pronation,Arms
+Forearm Supination,Arms
+Grip Crusher Squeeze,Arms
+Dead Hang,Arms
+Towel Hang,Arms
+Plank,Core
+Forearm Plank,Core
+Extended Plank,Core
+Weighted Plank,Core
+Side Plank,Core
+Side Plank with Reach,Core
+Plank Shoulder Tap,Core
+Plank Up-Down,Core
+Plank Jack,Core
+Body Saw,Core
+RKC Plank,Core
+Bird Dog,Core
+Dead Bug,Core
+Weighted Dead Bug,Core
+Hollow Body Hold,Core
+Hollow Body Rock,Core
+Arch Hold,Core
+Crunch,Core
+Weighted Crunch,Core
+Cable Crunch,Core
+Machine Crunch,Core
+Bicycle Crunch,Core
+Reverse Crunch,Core
+Toe Touch Crunch,Core
+V-Up,Core
+Tuck-Up,Core
+Sit-Up,Core
+Weighted Sit-Up,Core
+Decline Sit-Up,Core
+GHD Sit-Up,Core
+Janda Sit-Up,Core
+Hanging Knee Raise,Core
+Hanging Leg Raise,Core
+Hanging Windshield Wiper,Core
+Captain's Chair Leg Raise,Core
+Lying Leg Raise,Core
+Flutter Kick,Core
+Scissor Kick,Core
+L-Sit Hold,Core
+Ab Wheel Rollout,Core
+Barbell Rollout,Core
+Kneeling Rollout,Core
+Standing Rollout,Core
+Russian Twist,Core
+Weighted Russian Twist,Core
+Landmine Rotation,Core
+Landmine Rainbow,Core
+Cable Woodchop,Core
+Reverse Cable Woodchop,Core
+Pallof Press,Core
+Kneeling Pallof Press,Core
+Standing Oblique Crunch,Core
+Side Bend,Core
+Suitcase Deadlift,Core
+Dragon Flag,Core
+Windshield Wiper,Core
+Stir the Pot,Core
+Turkish Sit-Up,Core
+Hip Dip Plank,Core
+Bear Crawl Hold,Core
+Treadmill Run,Cardio
+Treadmill Incline Walk,Cardio
+Treadmill Sprint Interval,Cardio
+Outdoor Run,Cardio
+Tempo Run,Cardio
+Interval Run,Cardio
+Fartlek Run,Cardio
+Hill Sprint,Cardio
+Track Sprint,Cardio
+Shuttle Run,Cardio
+Stationary Bike Ride,Cardio
+Air Bike Sprint,Cardio
+Spin Bike Interval,Cardio
+Rowing Machine Row,Cardio
+Rowing Interval,Cardio
+Ski Erg,Cardio
+Elliptical Trainer,Cardio
+Stair Climber,Cardio
+Stair Sprint,Cardio
+VersaClimber,Cardio
+Jacobs Ladder,Cardio
+Jump Rope,Cardio
+Double Under,Cardio
+Jump Rope High Knees,Cardio
+High Knees,Cardio
+Butt Kicks,Cardio
+Mountain Climber,Cardio
+Jumping Jack,Cardio
+Seal Jack,Cardio
+Skater Hop,Cardio
+Swimming Freestyle,Cardio
+Swimming Breaststroke,Cardio
+Aqua Jogging,Cardio
+Battle Rope Wave,Cardio
+Battle Rope Slam,Cardio
+Battle Rope Circle,Cardio
+Shadow Boxing,Cardio
+Heavy Bag Round,Cardio
+Speed Bag Round,Cardio
+Incline Walk,Cardio
+Cat-Cow,Mobility
+Thoracic Rotation,Mobility
+Open Book Rotation,Mobility
+Thread the Needle,Mobility
+Thoracic Extension over Foam Roller,Mobility
+World's Greatest Stretch,Mobility
+Hip Airplane,Mobility
+90-90 Hip Switch,Mobility
+Hip CARs,Mobility
+Shoulder CARs,Mobility
+Neck CARs,Mobility
+Ankle CARs,Mobility
+Ankle Dorsiflexion Rock,Mobility
+Deep Squat Hold,Mobility
+Squat to Stand,Mobility
+Cossack Rock,Mobility
+Frog Rock,Mobility
+Adductor Rock Back,Mobility
+Scapular Wall Slide,Mobility
+Wall Angel,Mobility
+Prone Swimmer,Mobility
+Band Shoulder Dislocate,Mobility
+Stick Shoulder Pass-Through,Mobility
+Wrist Rocks,Mobility
+Quadruped Rock Back,Mobility
+Bretzel Stretch,Mobility
+Couch Stretch Rock,Mobility
+Lizard Rock,Mobility
+Jefferson Curl,Mobility
+Toe Yoga,Mobility
+Sit and Reach Flow,Mobility
+Downward Dog to Cobra,Mobility
+Inchworm Walkout,Mobility
+Leg Swing (Front to Back),Mobility
+Leg Swing (Lateral),Mobility
+Arm Circles,Mobility
+Torso Twist,Mobility
+Hip Circles,Mobility
+Segmental Cat-Camel,Mobility
+Foam Roll Thoracic Spine,Mobility
+Standing Hamstring Stretch,Stretching
+Seated Hamstring Stretch,Stretching
+Lying Hamstring Stretch,Stretching
+Standing Quad Stretch,Stretching
+Kneeling Quad Stretch,Stretching
+Couch Stretch,Stretching
+Kneeling Hip Flexor Stretch,Stretching
+Pigeon Pose,Stretching
+Figure Four Stretch,Stretching
+Butterfly Stretch,Stretching
+Straddle Stretch,Stretching
+Frog Stretch,Stretching
+Adductor Stretch,Stretching
+Standing Calf Stretch,Stretching
+Wall Calf Stretch,Stretching
+Soleus Stretch,Stretching
+Downward Dog,Stretching
+Child's Pose,Stretching
+Cobra Stretch,Stretching
+Sphinx Stretch,Stretching
+Cat Stretch,Stretching
+Seated Spinal Twist,Stretching
+Supine Spinal Twist,Stretching
+Knee to Chest Stretch,Stretching
+Doorway Chest Stretch,Stretching
+Wall Pec Stretch,Stretching
+Cross-Body Shoulder Stretch,Stretching
+Overhead Triceps Stretch,Stretching
+Behind-the-Back Shoulder Stretch,Stretching
+Lat Stretch on Rack,Stretching
+Wrist Flexor Stretch,Stretching
+Wrist Extensor Stretch,Stretching
+Neck Side Stretch,Stretching
+Upper Trap Stretch,Stretching
+Levator Scapulae Stretch,Stretching
+Standing Forward Fold,Stretching
+Seated Forward Fold,Stretching
+Side Bend Stretch,Stretching
+Standing IT Band Stretch,Stretching
+Piriformis Stretch,Stretching
+Psoas Stretch,Stretching
+Hamstring PNF Stretch,Stretching
+Banded Hamstring Floss,Stretching
+Banded Hip Distraction,Stretching
+Foam Roll Quadriceps,Stretching
+Snatch,Olympic
+Power Snatch,Olympic
+Hang Snatch,Olympic
+Hang Power Snatch,Olympic
+Muscle Snatch,Olympic
+Snatch Balance,Olympic
+Snatch Pull,Olympic
+High Hang Snatch,Olympic
+Snatch from Blocks,Olympic
+Overhead Squat (Snatch Grip),Olympic
+Clean,Olympic
+Power Clean,Olympic
+Hang Clean,Olympic
+Hang Power Clean,Olympic
+Muscle Clean,Olympic
+Clean Pull,Olympic
+Clean from Blocks,Olympic
+High Hang Clean,Olympic
+Clean and Jerk,Olympic
+Split Jerk,Olympic
+Power Jerk,Olympic
+Squat Jerk,Olympic
+Jerk from Blocks,Olympic
+Jerk Balance,Olympic
+Jerk Dip,Olympic
+Push Press (Olympic),Olympic
+Clean High Pull,Olympic
+Snatch High Pull,Olympic
+Snatch Grip Push Press,Olympic
+Sots Press,Olympic
+Behind-the-Neck Jerk,Olympic
+Complex Clean and Front Squat,Olympic
+Air Squat,Bodyweight
+Bodyweight Squat Jump,Bodyweight
+Prisoner Squat,Bodyweight
+Bodyweight Lunge,Bodyweight
+Bodyweight Split Squat,Bodyweight
+Glute Bridge March,Bodyweight
+Superman Hold,Bodyweight
+Reverse Snow Angel,Bodyweight
+Muscle-Up,Bodyweight
+Ring Muscle-Up,Bodyweight
+Bar Muscle-Up,Bodyweight
+Front Lever,Bodyweight
+Front Lever Tuck Hold,Bodyweight
+Back Lever,Bodyweight
+Planche Lean,Bodyweight
+Tuck Planche,Bodyweight
+Straddle Planche,Bodyweight
+Human Flag,Bodyweight
+Handstand Hold,Bodyweight
+Freestanding Handstand,Bodyweight
+Handstand Walk,Bodyweight
+Crow Pose,Bodyweight
+Elbow Lever,Bodyweight
+Skin the Cat,Bodyweight
+Ring Support Hold,Bodyweight
+Ring Dip,Bodyweight
+Korean Dip,Bodyweight
+Straight Bar Dip,Bodyweight
+Typewriter Pull-Up,Bodyweight
+One-Arm Push-Up,Bodyweight
+Pseudo Planche Push-Up,Bodyweight
+Hindu Push-Up,Bodyweight
+Spiderman Push-Up,Bodyweight
+Clap Push-Up,Bodyweight
+Bear Crawl,Bodyweight
+Crab Walk,Bodyweight
+Duck Walk,Bodyweight
+Inchworm,Bodyweight
+Get-Up to Stand,Bodyweight
+Wall Walk,Bodyweight
+Sissy Squat Hold,Bodyweight
+Nordic Curl Negative,Bodyweight
+Single-Leg Box Squat,Bodyweight
+Assisted Pistol Squat,Bodyweight
+Rope Climb,Bodyweight
+Sled Push,Machines
+Sled Push (High Handle),Machines
+Sled Push (Low Handle),Machines
+Prowler Push,Machines
+Sled Drag (Forward),Machines
+Sled Drag (Backward),Machines
+Sled Lateral Drag,Machines
+Sled Row,Machines
+Sled Chest Press,Machines
+Sled Rope Pull,Machines
+Sled Sprint,Machines
+Assisted Pull-Up Machine,Machines
+Assisted Dip Machine,Machines
+Smith Machine Complex,Machines
+Curved Treadmill Push,Machines
+Hip Belt Machine March,Machines
+Plate-Loaded Sled Drive,Machines
+Standing Torso Rotation Machine,Machines
+Multi-Hip Machine,Machines
+Seated Dip Machine,Machines
+Cable Pull-Through,Cable
+Cable Woodchop High to Low,Cable
+Cable Woodchop Low to High,Cable
+Cable Half-Kneeling Chop,Cable
+Cable Half-Kneeling Lift,Cable
+Cable Anti-Rotation Hold,Cable
+Cable Squat to Row,Cable
+Cable Deadlift,Cable
+Cable Hip Abduction,Cable
+Cable Hip Adduction,Cable
+Cable Standing Hip Flexion,Cable
+Cable Rotational Press,Cable
+Cable Split Squat,Cable
+Cable Lateral Lunge,Cable
+Cable Reverse Lunge,Cable
+Cable Front Squat,Cable
+Cable Thruster,Cable
+Cable Single-Arm Standing Press,Cable
+Cable Single-Arm Standing Row,Cable
+Cable Push-Pull,Cable
+Cable Resisted March,Cable
+Cable Sprinter Start,Cable
+Cable Lateral Walk,Cable
+Cable Overhead Carry,Cable
+Cable Suitcase Hold,Cable
+Cable Alternating Press,Cable
+Cable Cross-Body Chop,Cable
+Cable Rope Hip Hinge,Cable
+Cable Standing Trunk Rotation,Cable
+Cable Kneeling Anti-Extension,Cable
+Cable Bear Stance Row,Cable
+Cable Step-Through,Cable
+Dumbbell Complex,Dumbbells
+Dumbbell Thruster,Dumbbells
+Dumbbell Clean and Press,Dumbbells
+Dumbbell Snatch,Dumbbells
+Dumbbell Clean,Dumbbells
+Dumbbell Hang Clean,Dumbbells
+Dumbbell Push Press,Dumbbells
+Dumbbell Push Jerk,Dumbbells
+Dumbbell Man Maker,Dumbbells
+Dumbbell Devil Press,Dumbbells
+Dumbbell Renegade Row,Dumbbells
+Dumbbell Burpee,Dumbbells
+Dumbbell Farmer Walk,Dumbbells
+Dumbbell Suitcase Carry,Dumbbells
+Dumbbell Overhead Carry,Dumbbells
+Dumbbell Waiter Walk,Dumbbells
+Dumbbell Turkish Get-Up,Dumbbells
+Dumbbell Windmill,Dumbbells
+Dumbbell Bear Complex,Dumbbells
+Dumbbell Squat Clean Thruster,Dumbbells
+Dumbbell Alternating Snatch,Dumbbells
+Dumbbell Ground to Overhead,Dumbbells
+Dumbbell Bent Press,Dumbbells
+Dumbbell Sots Press,Dumbbells
+Dumbbell Rack Walking Lunge,Dumbbells
+Barbell Complex,Barbell
+Barbell Thruster,Barbell
+Barbell Clean and Press,Barbell
+Barbell Push Press,Barbell
+Barbell Push Jerk,Barbell
+Barbell Bear Complex,Barbell
+Barbell Ground to Overhead,Barbell
+Barbell Bent Press,Barbell
+Barbell Sots Press,Barbell
+Barbell Turkish Get-Up,Barbell
+Barbell Zercher Carry,Barbell
+Barbell Front Rack Carry,Barbell
+Barbell Overhead Carry,Barbell
+Barbell Windmill,Barbell
+Barbell Steinborn Lift,Barbell
+Barbell Continental Clean,Barbell
+Barbell Sumo Deadlift High Pull,Barbell
+Barbell Deadlift to Overhead,Barbell
+Barbell Curl and Press,Barbell
+Barbell Javelin Press,Barbell
+Kettlebell Swing (Two-Hand),Kettlebell
+Kettlebell Swing (Single-Arm),Kettlebell
+Kettlebell American Swing,Kettlebell
+Kettlebell Deadstop Swing,Kettlebell
+Kettlebell Clean,Kettlebell
+Kettlebell Dead Clean,Kettlebell
+Kettlebell Clean and Press,Kettlebell
+Kettlebell Snatch,Kettlebell
+Kettlebell High Pull,Kettlebell
+Kettlebell Push Press,Kettlebell
+Kettlebell Jerk,Kettlebell
+Kettlebell Long Cycle,Kettlebell
+Kettlebell Thruster,Kettlebell
+Kettlebell Turkish Get-Up,Kettlebell
+Kettlebell Windmill,Kettlebell
+Kettlebell Bent Press,Kettlebell
+Kettlebell Halo,Kettlebell
+Kettlebell Figure Eight,Kettlebell
+Kettlebell Around the World,Kettlebell
+Kettlebell Goblet Squat,Kettlebell
+Kettlebell Double Front Squat,Kettlebell
+Kettlebell Overhead Squat,Kettlebell
+Kettlebell Pistol Squat,Kettlebell
+Kettlebell Bottoms-Up Press,Kettlebell
+Kettlebell Sots Press,Kettlebell
+Kettlebell Renegade Row,Kettlebell
+Kettlebell Bent-Over Row,Kettlebell
+Kettlebell Romanian Deadlift,Kettlebell
+Kettlebell Sumo Deadlift,Kettlebell
+Kettlebell Single-Leg Deadlift,Kettlebell
+Kettlebell Rack Carry,Kettlebell
+Kettlebell Suitcase Carry,Kettlebell
+Kettlebell Waiter Carry,Kettlebell
+Kettlebell Farmer Walk,Kettlebell
+Kettlebell Overhead Walking Lunge,Kettlebell
+Band Pull-Apart,Bands
+Band Over-and-Back,Bands
+Band Shoulder External Rotation,Bands
+Band Shoulder Internal Rotation,Bands
+Band Chest Press,Bands
+Band Push-Up,Bands
+Band Row,Bands
+Band Seated Row,Bands
+Band Lat Pulldown,Bands
+Band Straight-Arm Pulldown,Bands
+Band Overhead Press,Bands
+Band Front Raise,Bands
+Band Upright Row,Bands
+Band Squat,Bands
+Band Front Squat,Bands
+Band Good Morning,Bands
+Band Deadlift,Bands
+Band Romanian Deadlift,Bands
+Band Hip Thrust,Bands
+Band Glute Bridge,Bands
+Band Lateral Walk,Bands
+Band Monster Walk,Bands
+Band Clamshell,Bands
+Band Standing Hip Abduction,Bands
+Band Kickback,Bands
+Band Leg Curl,Bands
+Band Leg Extension,Bands
+Band Pallof Press,Bands
+Band Woodchop,Bands
+Band Resisted Sprint,Bands
+Band Assisted Pull-Up,Bands
+Band Triceps Pushdown,Bands
+Farmer Walk,Functional
+Suitcase Carry,Functional
+Overhead Carry,Functional
+Front Rack Carry,Functional
+Yoke Walk,Functional
+Trap Bar Carry,Functional
+Sandbag Carry,Functional
+Sandbag Clean,Functional
+Sandbag Shoulder,Functional
+Sandbag Over Shoulder Toss,Functional
+Sandbag Squat,Functional
+Atlas Stone Lift,Functional
+Log Clean and Press,Functional
+Tire Flip,Functional
+Sledgehammer Strike,Functional
+Keg Carry,Functional
+Burpee,Functional
+Burpee Box Jump Over,Functional
+Bear Complex,Functional
+Turkish Get-Up,Functional
+Crawl Complex,Functional
+Sandbag Bear Hug Carry,Functional
+Loaded Step-Up Carry,Functional
+Zercher Carry,Functional
+Waiter Carry,Functional
+Anti-Rotation March,Functional
+Rotational Med Ball Throw,Functional
+Med Ball Slam,Functional
+Med Ball Chest Pass,Functional
+Med Ball Overhead Throw,Functional
+Med Ball Scoop Toss,Functional
+Med Ball Russian Twist,Functional
+Wall Ball Shot,Functional
+Sled Push Complex,Functional
+Devil Press,Functional
+Box Jump,Plyometric
+Box Jump (Step Down),Plyometric
+Depth Jump,Plyometric
+Depth Drop,Plyometric
+Broad Jump,Plyometric
+Standing Long Jump,Plyometric
+Vertical Jump,Plyometric
+Tuck Jump,Plyometric
+Squat Jump,Plyometric
+Jump Squat (Weighted),Plyometric
+Split Squat Jump,Plyometric
+Lunge Jump,Plyometric
+Lateral Bound,Plyometric
+Skater Bound,Plyometric
+Single-Leg Box Jump,Plyometric
+Single-Leg Hop,Plyometric
+Hurdle Hop,Plyometric
+Lateral Hurdle Hop,Plyometric
+Pogo Hop,Plyometric
+Ankle Hop,Plyometric
+Bounding,Plyometric
+Power Skip,Plyometric
+A-Skip,Plyometric
+B-Skip,Plyometric
+Plyo Push-Up,Plyometric
+Clap Pull-Up,Plyometric
+Explosive Step-Up,Plyometric
+Box Drop to Sprint,Plyometric
+Kneeling Jump to Stand,Plyometric
+Seated Box Jump,Plyometric
+Continuous Box Jump,Plyometric
+Broad Jump to Sprint,Plyometric
+Med Ball Jump Throw,Plyometric
+Countermovement Jump,Plyometric
+Drop Squat,Plyometric
+Split Jump to Stick,Plyometric
+Lateral Skater Jump,Plyometric
+Rebound Jump,Plyometric
+Scapular Retraction,Rehabilitation
+Scapular Push-Up,Rehabilitation
+Serratus Wall Slide,Rehabilitation
+Prone T Raise,Rehabilitation
+Prone Y Raise,Rehabilitation
+Prone W Raise,Rehabilitation
+Prone I Raise,Rehabilitation
+Side-Lying External Rotation,Rehabilitation
+Standing External Rotation,Rehabilitation
+Internal Rotation at 90 Degrees,Rehabilitation
+Sleeper Stretch,Rehabilitation
+Rotator Cuff Band Rotation,Rehabilitation
+Clamshell,Rehabilitation
+Side-Lying Hip Abduction,Rehabilitation
+Fire Hydrant,Rehabilitation
+Monster Walk,Rehabilitation
+Terminal Knee Extension,Rehabilitation
+Short Arc Quad,Rehabilitation
+Straight Leg Raise,Rehabilitation
+Wall Slide Squat,Rehabilitation
+Heel Raise (Eccentric),Rehabilitation
+Ankle Alphabet,Rehabilitation
+Single-Leg Balance,Rehabilitation
+Single-Leg Balance (Eyes Closed),Rehabilitation
+Bosu Balance Hold,Rehabilitation
+Towel Scrunch,Rehabilitation
+Calf Eccentric Lowering,Rehabilitation
+Isometric Wall Push,Rehabilitation
+Chin Tuck,Rehabilitation
+Neck Isometric Hold,Rehabilitation
+Deep Neck Flexor Activation,Rehabilitation
+Diaphragmatic Breathing,Rehabilitation
+90-90 Breathing,Rehabilitation
+Pelvic Tilt,Rehabilitation
+McGill Curl-Up,Rehabilitation

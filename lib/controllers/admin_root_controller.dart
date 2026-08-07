@@ -6,6 +6,7 @@ import 'package:alphaserena_admin_portel/screens/clients_screen.dart';
 import 'package:alphaserena_admin_portel/screens/communication_screen.dart';
 import 'package:alphaserena_admin_portel/screens/coupon_code_screen.dart';
 import 'package:alphaserena_admin_portel/screens/dash_board_responsive_screen.dart';
+import 'package:alphaserena_admin_portel/screens/global_exercise_screen.dart';
 import 'package:alphaserena_admin_portel/screens/global_food_screen.dart';
 import 'package:alphaserena_admin_portel/screens/operations_screen.dart';
 import 'package:alphaserena_admin_portel/screens/payments_screen.dart';
@@ -39,7 +40,7 @@ class AdminRootController extends GetxController {
   final RxInt selectedIndex = 0.obs;
 
   /// Prevent invalid index crashes
-  final int maxIndex = 12;
+  final int maxIndex = 13;
 
   // ===========================================================================
   // PAGE CACHE (LAZY LOADED)
@@ -185,6 +186,11 @@ class AdminRootController extends GetxController {
       // global food library every organization reads.
       case 12:
         return const GlobalFoodScreen();
+      // GLOBAL EXERCISE LIBRARY — the Super Admin's master exercise catalog.
+      // Appended at 13 so every existing nav index stays stable (the
+      // Operations Center's jump targets rely on them).
+      case 13:
+        return const GlobalExerciseScreen();
       default:
         return const SizedBox();
     }

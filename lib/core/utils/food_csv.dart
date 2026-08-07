@@ -1,106 +1,24 @@
 /// FOOD PLATFORM — spreadsheet ingestion for the bulk importer.
 ///
 /// Nutrition datasets arrive as CSV exports from spreadsheets, and a curator
-/// should not have to hand-convert one into JSON to load it. This parser is
-/// deliberately small and strict rather than clever: it understands quoting and
-/// header aliases, and it REFUSES anything it cannot interpret instead of
-/// guessing — a bulk import that guesses is how a library every organization
-/// reads gets poisoned.
+/// should not have to hand-convert one into JSON to load it.
 ///
-/// Excel (.xlsx) is a ZIP of XML and cannot be parsed without a dependency the
-/// console does not carry. The importer therefore accepts CSV and JSON, and
-/// tells the operator to export .xlsx as CSV — which every spreadsheet does in
-/// one click — rather than silently failing on a binary file.
+/// The PARSING lives in `csv_table.dart` and is shared with the Global Exercise
+/// Library's importer — quoting, CRLF, Excel's BOM and blank-row handling are
+/// not food-specific, and a second copy would be a second set of edge cases to
+/// get wrong. What remains here is the part that genuinely is food: the column
+/// vocabulary, and the row shaping the food callable accepts.
+///
+/// This library RE-EXPORTS `csv_table.dart`, so every existing
+/// `import 'food_csv.dart'` keeps resolving `CsvTable`, `CsvError`,
+/// `parseCsvRows`, `parseCsvTable` and `unmappedCsvHeaders` unchanged.
 library;
 
 import 'dart:convert';
 
-/// One parsed sheet: the header row plus the data rows, already trimmed.
-class CsvTable {
-  final List<String> headers;
-  final List<List<String>> rows;
+import 'csv_table.dart';
 
-  const CsvTable({required this.headers, required this.rows});
-
-  bool get isEmpty => rows.isEmpty;
-}
-
-/// A problem the operator must fix before the import can proceed.
-class CsvError implements Exception {
-  final String message;
-  const CsvError(this.message);
-  @override
-  String toString() => message;
-}
-
-/// Splits CSV text into rows, honouring RFC-4180 quoting.
-///
-/// Handles quoted fields containing commas, escaped `""` quotes, and both LF
-/// and CRLF line endings — the three things that break every naive
-/// `split(',')` implementation on real spreadsheet exports.
-List<List<String>> parseCsvRows(String input) {
-  final rows = <List<String>>[];
-  var row = <String>[];
-  final field = StringBuffer();
-  var inQuotes = false;
-  var i = 0;
-
-  // A UTF-8 BOM from Excel would otherwise become part of the first header.
-  var text = input;
-  if (text.isNotEmpty && text.codeUnitAt(0) == 0xFEFF) text = text.substring(1);
-
-  void endField() {
-    row.add(field.toString());
-    field.clear();
-  }
-
-  void endRow() {
-    endField();
-    // Skip rows that are entirely empty — trailing newlines are universal.
-    if (row.any((c) => c.trim().isNotEmpty)) rows.add(row);
-    row = <String>[];
-  }
-
-  while (i < text.length) {
-    final ch = text[i];
-    if (inQuotes) {
-      if (ch == '"') {
-        if (i + 1 < text.length && text[i + 1] == '"') {
-          field.write('"');
-          i += 2;
-          continue;
-        }
-        inQuotes = false;
-      } else {
-        field.write(ch);
-      }
-    } else {
-      if (ch == '"') {
-        inQuotes = true;
-      } else if (ch == ',') {
-        endField();
-      } else if (ch == '\n') {
-        endRow();
-      } else if (ch != '\r') {
-        field.write(ch);
-      }
-    }
-    i++;
-  }
-  if (field.isNotEmpty || row.isNotEmpty) endRow();
-  return rows;
-}
-
-/// Parses CSV text into a header + rows table.
-CsvTable parseCsvTable(String input) {
-  final rows = parseCsvRows(input);
-  if (rows.isEmpty) throw const CsvError('That file has no rows.');
-  final headers = rows.first.map((h) => h.trim()).toList();
-  if (headers.every((h) => h.isEmpty)) {
-    throw const CsvError('The first row must be a header row.');
-  }
-  return CsvTable(headers: headers, rows: rows.skip(1).toList());
-}
+export 'csv_table.dart';
 
 /// Header spellings the importer accepts for each canonical field.
 ///
@@ -128,42 +46,12 @@ const Map<String, List<String>> kCsvFieldAliases = {
   'sourceRef': ['sourceref', 'source ref', 'external id', 'fdcid', 'fdc id'],
 };
 
-String _normalizeHeader(String raw) =>
-    raw.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
-
-/// Maps a sheet's headers onto canonical field names.
+/// Maps a sheet's headers onto canonical FOOD field names.
 ///
 /// Returns `columnIndex -> fieldName`. Unrecognised columns are simply not
 /// mapped; they are reported to the operator rather than dropped in silence.
-Map<int, String> mapCsvHeaders(List<String> headers) {
-  final lookup = <String, String>{};
-  kCsvFieldAliases.forEach((field, aliases) {
-    for (final alias in aliases) {
-      lookup[_normalizeHeader(alias)] = field;
-    }
-  });
-
-  final mapping = <int, String>{};
-  final claimed = <String>{};
-  for (var i = 0; i < headers.length; i++) {
-    final field = lookup[_normalizeHeader(headers[i])];
-    // First column wins a duplicate mapping, so a sheet with both "Protein"
-    // and "Protein (g)" does not have its values overwritten by the later one.
-    if (field != null && claimed.add(field)) mapping[i] = field;
-  }
-  return mapping;
-}
-
-/// Columns the sheet contains that the importer does not understand.
-List<String> unmappedCsvHeaders(List<String> headers, Map<int, String> mapping) {
-  final out = <String>[];
-  for (var i = 0; i < headers.length; i++) {
-    if (!mapping.containsKey(i) && headers[i].trim().isNotEmpty) {
-      out.add(headers[i]);
-    }
-  }
-  return out;
-}
+Map<int, String> mapCsvHeaders(List<String> headers) =>
+    mapHeadersWith(headers, kCsvFieldAliases);
 
 double? _number(String raw) {
   final cleaned = raw.replaceAll(RegExp(r'[^0-9.\-]'), '').trim();

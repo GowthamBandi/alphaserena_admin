@@ -23,6 +23,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 /// =============================================================
 /// 🚀 ENTRY POINT
@@ -44,10 +46,39 @@ const FirebaseOptions _firebaseOptions = FirebaseOptions(
 /// Boot with a recoverable failure path: a failed Firebase init (offline
 /// startup, blocked network) shows a retry screen instead of a blank crash
 /// before the first frame.
+/// Points the console at a local Firebase emulator suite instead of the live
+/// project. OFF unless explicitly asked for at build time:
+///
+/// ```bash
+/// flutter run -d chrome --dart-define=USE_FIREBASE_EMULATOR=true
+/// ```
+///
+/// This exists so the console's WRITE paths — every one of which goes through a
+/// Cloud Function — can be exercised end to end without pointing a test run at
+/// the project that serves live organizations. With the flag absent the value
+/// is the empty string, so production boot is byte-identical to before.
+const String _useEmulator = String.fromEnvironment('USE_FIREBASE_EMULATOR');
+
+/// Host the emulators are reachable on. Overridable so the console can be
+/// driven from a different machine than the one running the suite.
+const String _emulatorHost = String.fromEnvironment(
+  'FIREBASE_EMULATOR_HOST',
+  defaultValue: 'localhost',
+);
+
 Future<void> _start() async {
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(options: _firebaseOptions);
+    }
+    // Deliberately AFTER initializeApp and guarded by BOTH the opt-in flag and
+    // kDebugMode: a release build can never be talked into a local backend even
+    // if the define is passed by mistake.
+    if (_useEmulator == 'true' && kDebugMode) {
+      FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
+      FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
+      FirebaseFunctions.instance.useFunctionsEmulator(_emulatorHost, 5001);
+      debugPrint('EMULATOR MODE — not talking to production');
     }
     runApp(const AlphaSerenaAdminApp());
   } catch (e) {

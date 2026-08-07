@@ -79,6 +79,11 @@ flutter:
     # console's one-time import tool.
     - assets/data/global_food_seed.json
 
+    # GLOBAL EXERCISE LIBRARY — the master exercise catalog dataset (844 rows,
+    # 20 categories, clean names only). Founding material: read ONLY by the
+    # Exercise Library console's one-time import tool, never at runtime.
+    - assets/data/global_exercise_seed.csv
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

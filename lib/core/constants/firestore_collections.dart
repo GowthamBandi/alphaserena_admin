@@ -40,6 +40,36 @@ class FsCollections {
   /// read by every organization and trainer.
   static const String foodCategories = 'foodCategories';
 
+  // ── Global Exercise Library ────────────────────────────────────────
+  /// The MASTER exercise catalog, owned by the Super Admin. One global tier —
+  /// there is no per-organization tier inside it.
+  ///
+  /// DELIBERATELY NOT the same collection as [exercises], and deliberately not
+  /// a `scope` discriminator inside it (which IS how [foodDatabase] holds its
+  /// two tiers). Three reasons the two stay disjoint:
+  ///
+  ///   • `exercises` is counted against the paid `limits.exerciseLibrary`
+  ///     quota. Hundreds of platform rows inside it would inflate every
+  ///     organization's usage against a library it does not own.
+  ///   • The `exercises` rules grant reads by `adminId` equality. Exposing a
+  ///     global row would mean widening a tenancy predicate that currently
+  ///     isolates gyms from each other — real blast radius, for a feature
+  ///     nothing consumes yet.
+  ///   • The catalog is a SOURCE, not a tier: an organization will IMPORT from
+  ///     it by COPYING a row into its own `exercises` library. That copy
+  ///     boundary is what keeps a catalog edit — or a catalog delete — from
+  ///     ever mutating a workout a member is part-way through, and it is why
+  ///     this collection can support real deletion while [foodDatabase] cannot.
+  ///
+  /// This console READS the catalog directly and writes NOTHING: every
+  /// privileged operation goes through a Cloud Function, and the rules deny
+  /// client writes outright — including from a super admin.
+  static const String exerciseCatalog = 'exerciseCatalog';
+
+  /// Each ORGANIZATION's own exercise library (`adminId`-scoped). Named here so
+  /// the boundary above is explicit; this console neither reads nor writes it.
+  static const String exercises = 'exercises';
+
   // ── Nutrition Intelligence Platform (NIP) ──────────────────────────
   /// Community food requests (new food / promote org food / correction),
   /// deduped by `normalizedKey` with a `demandCount` per distinct asker.
