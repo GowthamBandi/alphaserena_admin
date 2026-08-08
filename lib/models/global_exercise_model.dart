@@ -301,6 +301,37 @@ const List<String> kExerciseCategories = [
   'Rehabilitation',
 ];
 
+/// The three CLOSED vocabularies the server resolves with `pickEnum`, mirrored
+/// here for the same reason [kExerciseCategories] is.
+///
+/// ⚠️ THE STORED VALUES ARE LOWERCASE and the empty string is a legitimate
+/// member of each list — it means "not stated", which is different from a wrong
+/// answer. `pickEnum` silently falls back to `''` for anything it does not
+/// recognise, so a console that offered a prettier label than the server knows
+/// would appear to save and then quietly store nothing. These lists are the
+/// wire values; the console capitalises them only for display.
+const List<String> kExerciseDifficulties = [
+  '',
+  'beginner',
+  'intermediate',
+  'advanced',
+];
+
+const List<String> kExerciseMechanics = ['', 'compound', 'isolation'];
+
+const List<String> kExerciseForces = ['', 'push', 'pull', 'static'];
+
+/// Server-side caps from `validateExercise`. Mirrored so the form can refuse
+/// over-long input inline instead of letting the server silently TRUNCATE it —
+/// a save that appears to succeed while dropping the operator's last two
+/// coaching cues is worse than one that explains the limit.
+const int kMaxPrimaryMuscles = 6;
+const int kMaxSecondaryMuscles = 8;
+const int kMaxTips = 10;
+const int kMaxTipLength = 240;
+const int kMaxInstructionsLength = 4000;
+const int kMaxEquipmentLength = 60;
+
 /// One category with its live document counts. Server-computed, because
 /// tallying 900 rows client-side means downloading 900 rows.
 class ExerciseCategoryCount {

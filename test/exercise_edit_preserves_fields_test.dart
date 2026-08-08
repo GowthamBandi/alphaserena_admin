@@ -68,9 +68,9 @@ GlobalExerciseModel richRow() => GlobalExerciseModel(
   sourceRef: 'ref-1',
   primaryMuscles: const ['Quads'],
   secondaryMuscles: const ['Glutes', 'Core'],
-  difficulty: 'Advanced',
-  mechanics: 'Compound',
-  force: 'Push',
+  difficulty: 'advanced',
+  mechanics: 'compound',
+  force: 'push',
   instructions: 'Hold the bar in the crook of the elbows and squat.',
   tips: const ['Keep the elbows high', 'Brace hard'],
   thumbnailUrl: 'https://cdn/zercher.jpg',
@@ -169,7 +169,12 @@ void main() {
     final payload = service.sent!.toCallablePayload();
     expect(payload['instructions'], richRow().instructions);
     expect(payload['primaryMuscles'], richRow().primaryMuscles);
-    expect(payload['difficulty'], 'Advanced');
+    // LOWERCASE is the wire value. `pickEnum` on the server lowercases
+    // whatever it is given, so 'Advanced' and 'advanced' both STORE as
+    // 'advanced'; the form now resolves to the stored vocabulary up front so
+    // the control shows the value that will actually be persisted rather than
+    // a display-cased string that only looks preserved.
+    expect(payload['difficulty'], 'advanced');
     expect(payload['thumbnailUrl'], richRow().thumbnailUrl);
     expect(payload['videoDurationSec'], 42);
   });

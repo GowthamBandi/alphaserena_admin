@@ -17,10 +17,13 @@ import 'csv_table.dart';
 
 /// Header spellings the importer accepts for each canonical field.
 ///
-/// The future-ready columns (equipment, muscles, difficulty…) are recognised so
-/// that a dataset carrying them imports cleanly today. The server stores them
-/// and nothing reads them yet — which is the point: no re-import is needed the
-/// day something does.
+/// The richer columns (equipment, muscles, difficulty, instructions…) are
+/// recognised because IMPORT IS THE ONLY WAY TO SET THEM — the console's own
+/// create/edit form owns just name, category, aliases, videoUrl, equipment and
+/// isActive. They are not future-ready spare capacity: `equipment`,
+/// `primaryMuscles`, `difficulty` and `instructions` are all carried on the
+/// member wire by `exerciseMediaFor` and rendered by AlphaSerena, so a column
+/// left out of the sheet is a blank on a member's workout screen.
 const Map<String, List<String>> kExerciseCsvFieldAliases = {
   'name': ['name', 'exercise', 'exercise name', 'movement', 'title', 'item'],
   'category': ['category', 'group', 'muscle group', 'body part', 'bodypart', 'section'],

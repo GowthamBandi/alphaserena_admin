@@ -624,9 +624,31 @@ class GlobalExerciseController extends GetxController {
   }
 
   /// Renders rows as CSV in the exact shape the importer accepts.
+  ///
+  /// EVERY IMPORTABLE FIELD IS EMITTED, and that is load-bearing rather than
+  /// tidy. This is what the visible "Export CSV" button produces, an operator
+  /// reasonably treats it as a backup, and `bulkImportGlobalExercises` in
+  /// `conflictMode: 'update'` REPLACES a row rather than merging into it. So a
+  /// column missing from here is a column silently blanked on the round trip:
+  /// export → edit one cell in a spreadsheet → re-import would have wiped
+  /// `instructions`, `primaryMuscles`, `secondaryMuscles`, `mechanics`,
+  /// `force` and `sourceRef` off every exported exercise, platform-wide.
+  ///
+  /// That is the same defect the server-side `exportGlobalExercises` was fixed
+  /// for; this button never got the fix, and it is the one a curator actually
+  /// clicks. The list fields use `;` because that is what the importer splits
+  /// on — a comma would be read as a column break.
+  ///
+  /// `tips`, `thumbnailUrl`, `videoProvider` and `videoDurationSec` are NOT
+  /// emitted because the importer does not accept them; a column it cannot map
+  /// is reported as unrecognised rather than stored. They are also unreachable
+  /// from this console entirely, which is recorded as a known limitation.
   String exportCsv(List<GlobalExerciseModel> rows) {
     const headers = [
-      'name', 'category', 'videoUrl', 'aliases', 'equipment', 'difficulty',
+      'name', 'category', 'videoUrl', 'aliases', 'equipment',
+      'primaryMuscles', 'secondaryMuscles', 'difficulty', 'mechanics', 'force',
+      'instructions', 'sourceRef',
+      // Informational only — the importer maps neither, and reports them.
       'isActive', 'source', 'revision',
     ];
     String cell(Object? v) {
@@ -641,7 +663,10 @@ class GlobalExerciseController extends GetxController {
     for (final e in rows) {
       buffer.writeln([
         cell(e.name), cell(e.category), cell(e.videoUrl),
-        cell(e.aliases.join('; ')), cell(e.equipment), cell(e.difficulty),
+        cell(e.aliases.join('; ')), cell(e.equipment),
+        cell(e.primaryMuscles.join('; ')), cell(e.secondaryMuscles.join('; ')),
+        cell(e.difficulty), cell(e.mechanics), cell(e.force),
+        cell(e.instructions), cell(e.sourceRef),
         cell(e.isActive), cell(e.source), cell(e.revision),
       ].join(','));
     }

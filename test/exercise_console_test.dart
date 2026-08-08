@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:alphaserena_admin_portel/controllers/global_exercise_controller.dart';
 import 'package:alphaserena_admin_portel/core/services/exercise_catalog_service.dart';
 import 'package:alphaserena_admin_portel/core/utils/console_errors.dart';
+import 'package:alphaserena_admin_portel/core/utils/exercise_csv.dart';
 import 'package:alphaserena_admin_portel/models/global_exercise_model.dart';
 import 'package:alphaserena_admin_portel/widgets/exercise/exercise_form_dialog.dart';
 import 'package:alphaserena_admin_portel/widgets/exercise/exercise_list_panel.dart';
@@ -66,6 +67,26 @@ class _FakeService extends ExerciseCatalogService {
   Future<ExerciseAnalytics> analytics() async {
     if (throwOnAnalytics != null) throw throwOnAnalytics!;
     return analyticsResult ?? const ExerciseAnalytics();
+  }
+
+  /// The model the LAST upsert was actually given. This is the real
+  /// persistence path — `ExerciseCatalogService.upsert` is what serialises a
+  /// draft with `toCallablePayload()` and hands it to the callable — so
+  /// asserting on it proves what would reach Firestore, not merely what a pure
+  /// helper returns.
+  GlobalExerciseModel? lastUpsert;
+  bool? lastUpsertIsActive;
+
+  @override
+  Future<({String id, int revision, List<String> warnings})> upsert(
+    GlobalExerciseModel exercise, {
+    bool? isActive,
+  }) async {
+    lastUpsert = exercise;
+    lastUpsertIsActive = isActive;
+    return (id: exercise.id.isEmpty ? 'new-id' : exercise.id,
+            revision: 2,
+            warnings: const <String>[]);
   }
 
   /// Ids the last bulk call was actually given.
@@ -567,6 +588,61 @@ void main() {
       expect(parsed.rows.first['name'], 'Swing, "Russian"');
       expect(parsed.rows.first['category'], 'Kettlebell');
     });
+
+    // WHY THIS EXISTS. The test above round-trips a row that carries nothing but
+    // a name and a category, so it cannot notice an exporter that drops every
+    // other field — and for a long time that is exactly what this one did. The
+    // visible "Export CSV" button emitted 9 columns; the importer accepts 12.
+    // Because `conflictMode: 'update'` REPLACES a row rather than merging into
+    // it, export → edit a cell → re-import silently blanked instructions,
+    // both muscle lists, mechanics, force and sourceRef on every exported row.
+    //
+    // A backup that quietly discards most of what it was backing up is worse
+    // than no backup, so this asserts the round trip on a FULLY POPULATED row.
+    test('a fully populated row survives export → import with nothing dropped', () {
+      final c = _mount(_FakeService());
+      final csv = c.exportCsv([
+        const GlobalExerciseModel(
+          id: '1',
+          name: 'Landmine Half-Kneeling Press',
+          category: 'Shoulders',
+          videoUrl: 'https://example.com/v.mp4',
+          aliases: ['Half-Kneeling Landmine Press', 'Tall Kneeling Press'],
+          equipment: 'Landmine attachment, barbell',
+          primaryMuscles: ['Anterior Deltoid'],
+          secondaryMuscles: ['Triceps Brachii', 'Serratus Anterior'],
+          difficulty: 'intermediate',
+          mechanics: 'compound',
+          force: 'push',
+          instructions: 'Brace the trunk, press up and slightly forward.',
+          sourceRef: 'AS-LM-001',
+        ),
+      ]);
+
+      final row = c.parseImportFile('x.csv', csv).rows.single;
+
+      expect(row['instructions'], 'Brace the trunk, press up and slightly forward.');
+      expect(row['primaryMuscles'], ['Anterior Deltoid']);
+      expect(row['secondaryMuscles'], ['Triceps Brachii', 'Serratus Anterior']);
+      expect(row['difficulty'], 'intermediate');
+      expect(row['mechanics'], 'compound');
+      expect(row['force'], 'push');
+      expect(row['sourceRef'], 'AS-LM-001');
+      expect(row['equipment'], 'Landmine attachment, barbell');
+      expect(row['aliases'], ['Half-Kneeling Landmine Press', 'Tall Kneeling Press']);
+      expect(row['videoUrl'], 'https://example.com/v.mp4');
+
+      // Every field the importer can map must be present, or the round trip is
+      // lossy again the moment someone adds a field and forgets this file.
+      for (final field in kExerciseCsvFieldAliases.keys) {
+        expect(
+          row.containsKey(field),
+          isTrue,
+          reason: 'exportCsv dropped "$field", which the importer accepts — a '
+              're-import in update mode would blank it on every exported row',
+        );
+      }
+    });
   });
 
   group('a category this build does not know is never rewritten in silence', () {
@@ -612,6 +688,192 @@ void main() {
         findsNothing,
         reason: 'an unknown category must not be displayed as Chest',
       );
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // GLOBAL AUTHORING — the commercial form.
+  //
+  // These assert on the model handed to `ExerciseCatalogService.upsert`, which
+  // is the ACTUAL write path (it serialises with `toCallablePayload()` and
+  // calls `upsertGlobalExercise`). A pure-helper test would not have caught the
+  // historic defect, because the helper was never the thing that dropped the
+  // fields — the FORM was.
+  // ══════════════════════════════════════════════════════════════════════
+  group('Global authoring form', () {
+    late _FakeService svc;
+
+    /// A row with EVERY authored field populated, so "was it preserved?" is a
+    /// question with a real answer for each one.
+    GlobalExerciseModel fullyPopulated() => GlobalExerciseModel(
+      id: 'gx1',
+      name: 'Barbell Bench Press',
+      category: 'Chest',
+      aliases: const ['Bench Press', 'Flat Press'],
+      equipment: 'Barbell',
+      primaryMuscles: const ['Pectoralis Major', 'Anterior Deltoid'],
+      secondaryMuscles: const ['Triceps Brachii'],
+      difficulty: 'intermediate',
+      mechanics: 'compound',
+      force: 'push',
+      instructions: 'Set the bench flat. Plant both feet. Press to lockout.',
+      tips: const ['Keep the wrists neutral', 'Drive through mid-foot'],
+      videoUrl: 'https://cdn.example.com/bench.mp4',
+      thumbnailUrl: 'https://cdn.example.com/bench.jpg',
+      videoProvider: 'cdn',
+      videoDurationSec: 42,
+      isActive: true,
+    );
+
+    setUp(() {
+      Get.testMode = true;
+      svc = _FakeService();
+      Get.put<GlobalExerciseController>(
+        GlobalExerciseController(service: svc),
+      );
+    });
+    tearDown(Get.reset);
+
+    /// The form is a long scroll; `ensureVisible` before typing keeps these
+    /// tests independent of how many fields sit above the target.
+    Future<void> typeInto(
+      WidgetTester tester,
+      int index,
+      String text,
+    ) async {
+      final field = find.byType(TextFormField).at(index);
+      await tester.ensureVisible(field);
+      await tester.pumpAndSettle();
+      await tester.enterText(field, text);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> tapSave(WidgetTester tester) async {
+      final save = find.widgetWithText(FilledButton, 'Save changes');
+      final target = save.evaluate().isNotEmpty
+          ? save
+          : find.widgetWithText(FilledButton, 'Create exercise');
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+      // A successful save raises a Get snackbar, whose dismissal timer outlives
+      // the widget tree and trips the binding's pending-timer invariant. Drain
+      // it so the assertion that follows is about the payload, not the toast.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+      'a NAME-ONLY edit preserves every other authored field '
+      'through the real upsert path',
+      (tester) async {
+        tester.view.physicalSize = const Size(1400, 2400);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final stored = fullyPopulated();
+        await tester.pumpWidget(
+          _host(
+            ExerciseFormDialog(
+              controller: Get.find<GlobalExerciseController>(),
+              existing: stored,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Field 0 is the name (it is the first TextFormField and autofocuses).
+        await typeInto(tester, 0, 'Barbell Bench Press RENAMED');
+        await tapSave(tester);
+
+        final sent = svc.lastUpsert;
+        expect(sent, isNotNull, reason: 'the form must reach the write path');
+
+        // The one intended change.
+        expect(sent!.name, 'Barbell Bench Press RENAMED');
+
+        // EVERYTHING ELSE, field by field. A single combined matcher would say
+        // "not equal" without saying which field was destroyed.
+        expect(sent.category, stored.category);
+        expect(sent.aliases, stored.aliases);
+        expect(sent.equipment, stored.equipment);
+        expect(sent.primaryMuscles, stored.primaryMuscles);
+        expect(sent.secondaryMuscles, stored.secondaryMuscles);
+        expect(sent.difficulty, stored.difficulty);
+        expect(sent.mechanics, stored.mechanics);
+        expect(sent.force, stored.force);
+        expect(sent.instructions, stored.instructions);
+        expect(sent.tips, stored.tips);
+        expect(sent.videoUrl, stored.videoUrl);
+        expect(sent.thumbnailUrl, stored.thumbnailUrl);
+        expect(sent.videoDurationSec, stored.videoDurationSec);
+        expect(sent.id, stored.id, reason: 'an edit must not become a create');
+      },
+    );
+
+    testWidgets('every new control actually reaches the write path', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1400, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _host(
+          ExerciseFormDialog(
+            controller: Get.find<GlobalExerciseController>(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Order mirrors the build(): name · aliases · equipment ·
+      // primaryMuscles · secondaryMuscles · instructions · tips · videoUrl ·
+      // thumbnailUrl · durationSec.
+      await typeInto(tester, 0, 'ZZ Authoring Probe');
+      await typeInto(tester, 2, 'Dumbbell');
+      await typeInto(tester, 3, 'Pectoralis Major, Anterior Deltoid');
+      await typeInto(tester, 4, 'Triceps Brachii');
+      await typeInto(tester, 5, 'Lie back. Press up.');
+      await typeInto(tester, 6, 'Wrists neutral\nElbows tucked');
+      await typeInto(tester, 8, 'https://cdn.example.com/t.jpg');
+      await typeInto(tester, 9, '30');
+
+      await tapSave(tester);
+
+      final sent = svc.lastUpsert;
+      expect(sent, isNotNull);
+      expect(sent!.equipment, 'Dumbbell');
+      expect(sent.primaryMuscles, ['Pectoralis Major', 'Anterior Deltoid']);
+      expect(sent.secondaryMuscles, ['Triceps Brachii']);
+      expect(sent.instructions, 'Lie back. Press up.');
+      // Newline-split, NOT comma-split — a cue routinely contains a comma.
+      expect(sent.tips, ['Wrists neutral', 'Elbows tucked']);
+      expect(sent.thumbnailUrl, 'https://cdn.example.com/t.jpg');
+      expect(sent.videoDurationSec, 30);
+      expect(sent.id, isEmpty, reason: 'no existing row means CREATE');
+    });
+
+    testWidgets('a cue containing a comma survives as ONE cue', (tester) async {
+      tester.view.physicalSize = const Size(1400, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _host(
+          ExerciseFormDialog(
+            controller: Get.find<GlobalExerciseController>(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await typeInto(tester, 0, 'ZZ Comma Cue');
+      await typeInto(tester, 6, 'Brace, then press');
+      await tapSave(tester);
+
+      expect(svc.lastUpsert!.tips, ['Brace, then press']);
     });
   });
 }

@@ -26,11 +26,13 @@ import '../widgets/exercise/exercise_overview_panel.dart';
 /// everyone including this console — so every change carries a server-written
 /// audit entry.
 ///
-/// ── FOUNDATION ONLY ─────────────────────────────────────────────────────
-/// Nothing consumes this catalog yet. TrainerHQ, AlphaSerena, the workout
-/// builder, programs and assignment are untouched, and there are deliberately
-/// no import buttons on the organization side. That connection is separate,
-/// later work.
+/// ── THIS CATALOG IS LIVE ────────────────────────────────────────────────
+/// TrainerHQ's workout builder searches these rows and a saved workout stores
+/// the catalog id; AlphaSerena hydrates a member's exercise from it. Nothing is
+/// copied into a gym's own `exercises` library — a workout REFERENCES this row.
+/// So an edit made here is visible to every member already training on it, and
+/// an archive withdraws the row from new selection without breaking the
+/// workouts that already point at it.
 class GlobalExerciseScreen extends StatefulWidget {
   const GlobalExerciseScreen({super.key});
 
@@ -114,7 +116,11 @@ class _GlobalExerciseScreenState extends State<GlobalExerciseScreen> {
   /// Every panel below scrolls internally, and the catalog list needs a real
   /// viewport to drive its infinite pagination; an outer scroll view would
   /// break both and throw on the first `Expanded`.
-  Widget _shell(BuildContext context, {required Widget body, Widget? trailing}) {
+  Widget _shell(
+    BuildContext context, {
+    required Widget body,
+    Widget? trailing,
+  }) {
     final p = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,11 +210,13 @@ class _GlobalExerciseScreenState extends State<GlobalExerciseScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'The master catalog. Organizations will be able to IMPORT from '
-              'it — copying an exercise into their own library — and are never '
-              'forced to. Nothing here touches a gym\'s own exercises, its '
-              'workouts, its programs or any assignment, and nothing consumes '
-              'this catalog yet.',
+              'The master catalog. Coaches SEARCH it from the workout builder '
+              'and their workouts POINT AT these rows — nothing is ever copied '
+              'into a gym\'s own library, and nothing here edits a gym\'s own '
+              'exercises. Because workouts reference these rows, an edit here '
+              'reaches every member already training on them; archiving '
+              'withdraws a row from new selection while existing workouts keep '
+              'working.',
               style: AppText.body(size: 12.5).copyWith(color: p.textSecondary),
             ),
           ),
@@ -222,65 +230,77 @@ class _GlobalExerciseScreenState extends State<GlobalExerciseScreen> {
 
     Widget tab(String label, IconData icon, _Tab value, {int? badge}) {
       final active = _tab == value;
+      void select() => setState(() => _tab = value);
       return Padding(
         padding: const EdgeInsets.only(right: 10),
+        // An InkWell, NOT a Semantics-wrapped GestureDetector.
+        //
+        // This was `Semantics(button: true, label: …)` around
+        // `ExcludeSemantics(GestureDetector(onTap: …))`. ExcludeSemantics
+        // strips the detector's tap action out of the tree and the outer
+        // Semantics never re-declared one, so each tab was published as a
+        // button carrying no action and no focusability — verified in the
+        // running console as a node with neither `flt-tappable` nor
+        // `tabindex`. Assistive tech could announce the tab and not press it,
+        // and a keyboard could not reach it at all. Everything on this screen
+        // except the Overview — the list, search, every filter, all four
+        // sorts, import and export — sits behind these three tabs.
+        //
+        // InkWell owns the whole contract: it is focusable (so it gets a
+        // tabindex), it activates on Enter/Space as well as tap, and it
+        // publishes its own button semantics whose label merges the child
+        // Text — which means the tab's count badge is announced too, where
+        // the hand-written `label:` silently dropped it.
         child: Semantics(
-          button: true,
           selected: active,
-          label: label,
-          child: ExcludeSemantics(
-            child: GestureDetector(
-              onTap: () => setState(() => _tab = value),
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: active ? p.accent : p.surface,
-                  borderRadius: AppRadii.smR,
-                  border: Border.all(color: active ? p.accent : p.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      icon,
-                      size: 16,
-                      color: active ? Colors.white : p.textMuted,
-                    ),
+          child: InkWell(
+            onTap: select,
+            borderRadius: AppRadii.smR,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: active ? p.accent : p.surface,
+                borderRadius: AppRadii.smR,
+                border: Border.all(color: active ? p.accent : p.border),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: active ? Colors.white : p.textMuted,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: AppText.label(
+                      size: 13,
+                    ).copyWith(color: active ? Colors.white : p.textSecondary),
+                  ),
+                  if (badge != null && badge > 0) ...[
                     const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: AppText.label(size: 13).copyWith(
-                        color: active ? Colors.white : p.textSecondary,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: active
+                            ? Colors.white.withValues(alpha: 0.25)
+                            : p.accent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$badge',
+                        style: AppText.body(size: 10.5).copyWith(
+                          color: active ? Colors.white : p.accent,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    if (badge != null && badge > 0) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: active
-                              ? Colors.white.withValues(alpha: 0.25)
-                              : p.accent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '$badge',
-                          style: AppText.body(size: 10.5).copyWith(
-                            color: active ? Colors.white : p.accent,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
-                ),
+                ],
               ),
             ),
           ),

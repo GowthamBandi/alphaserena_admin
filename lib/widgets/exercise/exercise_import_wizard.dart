@@ -440,8 +440,8 @@ class _ExerciseImportWizardState extends State<ExerciseImportWizard> {
               ),
               subtitle: Text(
                 _importActive
-                    ? 'New rows are immediately available. Nothing consumes the '
-                          'catalog yet, so this is safe.'
+                    ? 'New rows are offered to every coach\'s exercise picker '
+                          'immediately, on every organization.'
                     : 'New rows land inactive and must be activated before they '
                           'are offered.',
                 style: AppText.body(size: 12).copyWith(color: p.textMuted),
