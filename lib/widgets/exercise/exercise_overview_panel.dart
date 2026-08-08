@@ -226,7 +226,14 @@ class ExerciseOverviewPanel extends StatelessWidget {
                   ),
                   ExerciseCategoryPill(r.category),
                   const SizedBox(width: 8),
-                  ExerciseActivePill(r.isActive),
+                  // The dashboard's "recently created" list is served by
+                  // `getExerciseLibraryAnalytics`, whose wire shape carries
+                  // `isActive` and not `isArchived` — so this row can only ever
+                  // say Active or Inactive. Passing the flag explicitly rather
+                  // than relying on the default records that the omission is
+                  // known: an archived row shows here as Inactive, and the list
+                  // panel beside it is where its real state is readable.
+                  ExerciseActivePill(r.isActive, isArchived: false),
                   const SizedBox(width: 12),
                   SizedBox(
                     width: 84,
