@@ -357,7 +357,7 @@ class _ExerciseListPanelState extends State<ExerciseListPanel> {
                 side: BorderSide(color: p.error.withValues(alpha: 0.5)),
               ),
               icon: const Icon(Icons.delete_outline, size: 16),
-              label: const Text('Delete'),
+              label: const Text('Archive'),
             ),
           ],
         ),
@@ -526,7 +526,10 @@ class _ExerciseListPanelState extends State<ExerciseListPanel> {
                             e.category,
                             unknown: e.hasUnknownCategory,
                           ),
-                          ExerciseActivePill(e.isActive),
+                          ExerciseActivePill(
+                            e.isActive,
+                            isArchived: e.isArchived,
+                          ),
                           ExerciseVideoPill(e.hasVideo),
                           if (e.aliases.isNotEmpty)
                             Text(
@@ -574,16 +577,26 @@ class _ExerciseListPanelState extends State<ExerciseListPanel> {
       },
       itemBuilder: (_) => [
         const PopupMenuItem(value: 'edit', child: Text('Edit')),
-        if (e.isActive)
+        // THREE STATES, THREE MENUS — and the middle one used to be missing.
+        // An ARCHIVED row is not "Inactive": coming back is an UN-archive, and
+        // the same `setGlobalExerciseActive(true)` performs it. Labelling that
+        // "Activate" on a withdrawn row understated what it does; offering
+        // "Archive" on it as well was a control that could only ever report
+        // "nothing changed".
+        if (e.isArchived)
+          const PopupMenuItem(value: 'activate', child: Text('Restore'))
+        else if (e.isActive)
           const PopupMenuItem(value: 'deactivate', child: Text('Deactivate'))
         else
           const PopupMenuItem(value: 'activate', child: Text('Activate')),
         const PopupMenuItem(value: 'video', child: Text('Upload video')),
-        const PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'delete',
-          child: Text('Delete', style: TextStyle(color: p.error)),
-        ),
+        if (!e.isArchived) ...[
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: 'delete',
+            child: Text('Archive', style: TextStyle(color: p.error)),
+          ),
+        ],
       ],
       child: const Padding(
         padding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
@@ -636,16 +649,23 @@ class _ExerciseListPanelState extends State<ExerciseListPanel> {
     );
   }
 
+  // ARCHIVE, NOT DELETE. This console used to offer a permanent delete, and
+  // saying so was accurate while organizations only ever COPIED a catalog row
+  // into their own library. TrainerHQ now POINTS AT catalog rows the way the
+  // food platform does, so a real delete would tear an exercise out of assigned
+  // workouts and out of members' training. The callable archives instead, and
+  // this copy has to say what actually happens — a dialog promising permanence
+  // over an operation that hides the row is worse than no dialog at all.
   Future<void> _confirmDelete(GlobalExerciseModel e) async {
     final confirmed = await _confirm(
-      title: 'Delete "${e.name}"?',
+      title: 'Archive "${e.name}"?',
       body:
-          'This permanently removes the exercise from the master catalog. It '
-          'cannot be undone from this console.\n\n'
-          'Nothing in TrainerHQ or AlphaSerena references the catalog, so no '
-          'workout, program or assignment is affected. If you only want to '
-          'stop offering it, Deactivate keeps the row and its history.',
-      confirmLabel: 'Delete permanently',
+          'This withdraws the exercise from the catalog. It stops being offered '
+          'to organizations and disappears from the exercise picker.\n\n'
+          'Nothing already built breaks: a workout that uses it keeps working, '
+          'and members part-way through one keep its video and instructions. '
+          'The row is kept, so this is recoverable.',
+      confirmLabel: 'Archive',
     );
     if (confirmed) await c.delete(e);
   }
@@ -653,14 +673,15 @@ class _ExerciseListPanelState extends State<ExerciseListPanel> {
   Future<void> _confirmBulkDelete() async {
     final count = c.selected.length;
     final confirmed = await _confirm(
-      title: 'Delete $count exercise${count == 1 ? '' : 's'}?',
+      title: 'Archive $count exercise${count == 1 ? '' : 's'}?',
       body:
-          'This permanently removes ${count == 1 ? 'it' : 'them'} from the '
-          'master catalog. It cannot be undone from this console.\n\n'
+          'This withdraws ${count == 1 ? 'it' : 'them'} from the catalog — no '
+          'longer offered to organizations, and gone from the exercise picker. '
+          'Workouts already using ${count == 1 ? 'it' : 'them'} keep working.\n\n'
           'Only the rows you can currently see are selected — the selection is '
           'cleared whenever the list reloads, so this can never reach an '
           'exercise you have not looked at.',
-      confirmLabel: 'Delete $count permanently',
+      confirmLabel: 'Archive $count',
     );
     if (confirmed) await c.bulkDelete();
   }

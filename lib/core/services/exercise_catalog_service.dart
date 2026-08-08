@@ -69,10 +69,11 @@ class ExercisePage {
 /// READS go straight to Firestore (the founder holds a platform-wide read
 /// grant). Every WRITE goes through a Cloud Function, without exception: the
 /// security rules deny client writes to `exerciseCatalog` to EVERYONE,
-/// including a super admin. That is deliberate — the catalog is the source
-/// every organization will import from, so a compromised console session must
-/// not be able to poison it, and every mutation must leave an `audit_logs`
-/// entry only the server can write.
+/// including a super admin. That is deliberate — every organization on the
+/// platform READS THROUGH this catalog (TrainerHQ's picker merges it with the
+/// gym's own library and a workout item points at whichever row was chosen), so
+/// a compromised console session must not be able to poison it, and every
+/// mutation must leave an `audit_logs` entry only the server can write.
 ///
 /// A deliberate structural twin of `FoodPlatformService`.
 class ExerciseCatalogService {
@@ -200,12 +201,20 @@ class ExerciseCatalogService {
     });
   }
 
-  /// Permanently deletes one exercise.
+  /// ARCHIVES one exercise. Nothing is ever removed from Firestore.
   ///
-  /// Safe here in a way it is not in the food library: nothing in the platform
-  /// references a catalog id, and organizations will import by COPYING rows
-  /// rather than pointing at them. The server captures the full document in its
-  /// audit entry, so a mistaken delete is recoverable by hand.
+  /// ⚠️ THE NAME IS HISTORICAL AND THE BEHAVIOUR IS NOT. `deleteGlobalExercise`
+  /// really did hard-delete while organizations IMPORTED from the catalog by
+  /// copying a row into their own library, leaving nothing anywhere that
+  /// referenced a catalog id. TrainerHQ now POINTS AT catalog rows — the
+  /// exercise picker merges both tiers and a workout item stores whichever id
+  /// was chosen — so a delete would tear a live exercise out of assigned
+  /// workouts and out of members' training, silently: the member app degrades a
+  /// missing exercise to its name and prescription rather than erroring.
+  ///
+  /// The callable therefore sets `isArchived: true, isActive: false`. The row
+  /// leaves every picker and keeps resolving forever. The callable's NAME is
+  /// kept so a deployed console build cannot 404 on a lifecycle action.
   Future<void> delete(String id) async {
     await _fns.httpsCallable('deleteGlobalExercise').call({'id': id});
   }
@@ -230,7 +239,10 @@ class ExerciseCatalogService {
     );
   }
 
-  /// Permanently deletes many exercises. See [delete].
+  /// ARCHIVES many exercises. Nothing is removed. See [delete] for why.
+  ///
+  /// The `deleted` field of the result names what was ARCHIVED — the wire key
+  /// is kept for the same compatibility reason the callable's name is.
   Future<({List<String> deleted, List<String> missing})> bulkDelete(
     List<String> ids,
   ) async {

@@ -28,10 +28,29 @@ class GlobalExerciseModel {
   /// says "No video uploaded" rather than pretending otherwise.
   final String videoUrl;
 
-  /// Whether the exercise would be offered to an organization to import.
+  /// Whether the exercise is currently offered to organizations.
   /// The NON-destructive control — a deactivated exercise keeps its id, its
   /// place in the catalog and its history.
   final bool isActive;
+
+  /// WITHDRAWN. The state the Archive action leaves behind.
+  ///
+  /// Distinct from `!isActive`, and the console was blind to the difference
+  /// until now — which mattered in two concrete ways:
+  ///
+  ///   • Archiving writes BOTH flags, so an archived row rendered as a plain
+  ///     "Inactive" one. A founder could not tell a movement they had retired
+  ///     for the season from one they had withdrawn, and the only wording that
+  ///     ever said "archived" was the confirmation dialog they had already
+  ///     dismissed.
+  ///   • Coming back is `Activate`, which the server treats as an un-archive.
+  ///     A control whose effect is invisible reads as a control that failed.
+  ///
+  /// TrainerHQ reads this flag FIRST (`_parseStatus`), so it is also the field
+  /// that decides whether any gym can see the exercise at all.
+  ///
+  /// Absent means live: every row written before archiving existed is active.
+  final bool isArchived;
 
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -87,6 +106,7 @@ class GlobalExerciseModel {
     this.category = '',
     this.videoUrl = '',
     this.isActive = true,
+    this.isArchived = false,
     this.createdAt,
     this.updatedAt,
     this.createdBy = '',
@@ -149,6 +169,7 @@ class GlobalExerciseModel {
       // Absent means live: a document written before the field existed must
       // never disappear from the console's default view.
       isActive: data['isActive'] != false,
+      isArchived: data['isArchived'] == true,
       createdAt: at(data['createdAt']),
       updatedAt: at(data['updatedAt']),
       createdBy: s(data['createdBy']),
@@ -210,6 +231,7 @@ class GlobalExerciseModel {
     String? category,
     String? videoUrl,
     bool? isActive,
+    bool? isArchived,
     List<String>? aliases,
     String? equipment,
     String? difficulty,
@@ -220,6 +242,7 @@ class GlobalExerciseModel {
     category: category ?? this.category,
     videoUrl: videoUrl ?? this.videoUrl,
     isActive: isActive ?? this.isActive,
+    isArchived: isArchived ?? this.isArchived,
     createdAt: createdAt,
     updatedAt: updatedAt,
     createdBy: createdBy,

@@ -77,6 +77,58 @@ void main() {
         'Plyometric', 'Rehabilitation',
       ]);
     });
+
+    test('and it matches the BACKEND SOURCE, which is the authority', () {
+      // The list above is a pin against accidental edits HERE. It cannot catch
+      // the drift that actually matters: the server changing its vocabulary
+      // while all three mirrored copies (this console, TrainerHQ, and the list
+      // above) stay stale together.
+      //
+      // The server REJECTS a row whose category it does not know, so a category
+      // this console offers but the backend has dropped is a create that fails
+      // validation with a message naming twenty values — none of which is the
+      // one the founder just picked from this console's own dropdown.
+      const candidates = [
+        '../trainershq-backend/functions/src/lib/exercise_catalog.ts',
+        'trainershq-backend/functions/src/lib/exercise_catalog.ts',
+        '../../trainershq-backend/functions/src/lib/exercise_catalog.ts',
+      ];
+      String? source;
+      for (final p in candidates) {
+        final f = File(p);
+        if (f.existsSync()) {
+          source = f.readAsStringSync();
+          break;
+        }
+      }
+      if (source == null) {
+        markTestSkipped(
+          'trainershq-backend not found beside this repo — looked in '
+          '${candidates.join(", ")} from ${Directory.current.path}',
+        );
+        return;
+      }
+
+      final block = RegExp(
+        r'export const EXERCISE_CATEGORIES = \[(.*?)\]',
+        dotAll: true,
+      ).firstMatch(source);
+      expect(
+        block,
+        isNotNull,
+        reason: 'EXERCISE_CATEGORIES not found in the backend source — if it '
+            'moved, update this test rather than deleting it',
+      );
+      final backend = RegExp(r'"([^"]+)"')
+          .allMatches(block!.group(1)!)
+          .map((m) => m.group(1)!)
+          .toList();
+
+      expect(backend, isNotEmpty);
+      // Order too: the console renders these as a dropdown and TrainerHQ as
+      // filter chips, both in list order.
+      expect(kExerciseCategories, backend);
+    });
   });
 
   group('GlobalExerciseModel reads the catalog schema', () {

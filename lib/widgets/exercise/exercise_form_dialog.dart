@@ -368,9 +368,24 @@ class _ExerciseFormDialogState extends State<ExerciseFormDialog> {
             'Active',
             style: AppText.label(size: 13.5).copyWith(color: p.textPrimary),
           ),
+          // Organizations USE catalog rows in place; they do not import copies.
+          // The old wording ("offered to organizations to import") described the
+          // abandoned copy-on-import design and would send a founder looking
+          // for an import screen that no longer exists.
+          //
+          // The archived case is called out separately because saving with the
+          // switch ON genuinely RESTORES the exercise — `upsertGlobalExercise`
+          // un-archives when the result is active — and a founder who cannot
+          // see that is being asked to guess.
           subtitle: Text(
-            _isActive
-                ? 'Offered to organizations to import.'
+            (widget.existing?.isArchived ?? false)
+                ? (_isActive
+                      ? 'Saving will RESTORE this archived exercise — it '
+                            'returns to every coach\'s exercise picker.'
+                      : 'Archived. Existing workouts keep working; it is not '
+                            'offered for new ones.')
+                : _isActive
+                ? 'Offered to every organization in the exercise picker.'
                 : 'Kept in the catalog, but not offered. Nothing is deleted.',
             style: AppText.body(size: 12).copyWith(color: p.textMuted),
           ),
@@ -471,17 +486,49 @@ class _ExerciseFormDialogState extends State<ExerciseFormDialog> {
         .where((e) => e.length >= 2)
         .toList();
 
+    // ⚠️ EVERY FIELD THIS FORM DOES NOT EDIT MUST STILL BE SENT.
+    //
+    // `upsertGlobalExercise` builds its document from the WHOLE validated
+    // payload and writes it with `ref.update({...doc})`. A field the payload
+    // omits is not "unchanged" — `validateExercise` defaults it (''/[]/0) and
+    // the update writes that default over the stored value.
+    //
+    // So this dialog, which edits six fields, used to construct a fresh model
+    // and silently destroy the other nine: instructions, primaryMuscles,
+    // secondaryMuscles, difficulty, mechanics, force, tips, thumbnailUrl,
+    // videoProvider and videoDurationSec. Those are exactly the fields
+    // AlphaSerena hydrates onto a member's workout — so a super admin fixing a
+    // typo in an exercise NAME wiped the demo thumbnail and the coaching cues
+    // for every member already training on it, platform-wide, with no warning
+    // and nothing in the UI to show it had happened.
+    //
+    // Same defect, same remedy as `updateEmploymentRecord` in TrainerHQ:
+    // round-trip what you do not own. Removing a CONTROL is not the same act as
+    // deleting a CONCEPT. (A create has no previous row, so the defaults are
+    // correct there — which is why this only ever corrupted edits.)
+    final prev = widget.existing;
     final draft = GlobalExerciseModel(
       // An empty id means CREATE. Carrying the existing one means edit.
-      id: widget.existing?.id ?? '',
+      id: prev?.id ?? '',
       name: _name.text.trim(),
       category: _category,
       videoUrl: _videoUrl.text.trim(),
       aliases: aliases,
       equipment: _equipment.text.trim(),
       isActive: _isActive,
-      source: widget.existing?.source ?? 'manual',
-      sourceRef: widget.existing?.sourceRef ?? '',
+      source: prev?.source ?? 'manual',
+      sourceRef: prev?.sourceRef ?? '',
+      // ── Carried through untouched; no control on this form owns them. ──
+      primaryMuscles: prev?.primaryMuscles ?? const [],
+      secondaryMuscles: prev?.secondaryMuscles ?? const [],
+      difficulty: prev?.difficulty ?? '',
+      mechanics: prev?.mechanics ?? '',
+      force: prev?.force ?? '',
+      instructions: prev?.instructions ?? '',
+      tips: prev?.tips ?? const [],
+      thumbnailUrl: prev?.thumbnailUrl ?? '',
+      videoProvider: prev?.videoProvider ?? '',
+      videoDurationSec: prev?.videoDurationSec ?? 0,
     );
 
     final saved = await c.save(draft, isActive: _isActive);

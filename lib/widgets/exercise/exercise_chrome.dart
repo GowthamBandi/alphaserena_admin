@@ -20,11 +20,30 @@ export '../../core/widgets/console/console_chrome.dart';
 /// exist.
 class ExerciseActivePill extends StatelessWidget {
   final bool isActive;
-  const ExerciseActivePill(this.isActive, {super.key});
+
+  /// Whether the row has been WITHDRAWN, not merely retired.
+  ///
+  /// Archiving writes `isArchived: true` AND `isActive: false`, so before this
+  /// existed an archived exercise was indistinguishable from a deactivated one:
+  /// both rendered "Inactive". Two different decisions, one label — and the
+  /// archived one is the only state that also hides the row from every gym's
+  /// picker, so it is the one worth naming.
+  final bool isArchived;
+
+  const ExerciseActivePill(this.isActive, {this.isArchived = false, super.key});
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    // Archived wins the label. It is the stronger statement, and it is the flag
+    // TrainerHQ actually reads first.
+    if (isArchived) {
+      return ConsolePill(
+        label: 'Archived',
+        color: p.error,
+        icon: Icons.inventory_2_outlined,
+      );
+    }
     return isActive
         ? ConsolePill(
             label: 'Active',

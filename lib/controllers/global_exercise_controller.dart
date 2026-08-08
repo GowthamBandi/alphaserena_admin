@@ -320,8 +320,9 @@ class GlobalExerciseController extends GetxController {
       await _service.delete(exercise.id);
       selected.remove(exercise.id);
       await _afterWrite(
-        title: 'Deleted',
-        message: '"${exercise.name}" was removed from the catalog.',
+        title: 'Archived',
+        message: '"${exercise.name}" was withdrawn from the catalog. '
+            'Workouts already using it keep working.',
       );
       return true;
     } catch (e) {
@@ -384,9 +385,9 @@ class GlobalExerciseController extends GetxController {
       await refreshList();
       unawaited(loadAnalytics());
       _toast(
-        title: 'Deleted',
+        title: 'Archived',
         message: '${res.deleted.length} exercise'
-            '${res.deleted.length == 1 ? '' : 's'} removed from the catalog.',
+            '${res.deleted.length == 1 ? '' : 's'} withdrawn from the catalog.',
       );
       return res.deleted.length;
     } catch (e) {
