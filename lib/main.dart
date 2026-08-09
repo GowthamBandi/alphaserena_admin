@@ -9,11 +9,13 @@ import 'package:alphaserena_admin_portel/controllers/coupon_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/dashboard_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/operations_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/platform_staff_controller.dart';
+import 'package:alphaserena_admin_portel/controllers/settlement_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/subscription_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/support_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/trainer_controller.dart';
 import 'package:alphaserena_admin_portel/core/controllers/session_controller.dart';
 import 'package:alphaserena_admin_portel/core/theme/app_theme.dart';
+import 'package:alphaserena_admin_portel/dev/emulator_guard.dart';
 
 import 'package:alphaserena_admin_portel/screens/admin_root_screen.dart';
 import 'package:alphaserena_admin_portel/screens/auth/admin_login_screen.dart';
@@ -23,6 +25,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
@@ -53,8 +56,8 @@ const FirebaseOptions _firebaseOptions = FirebaseOptions(
 /// flutter run -d chrome --dart-define=USE_FIREBASE_EMULATOR=true
 /// ```
 ///
-/// This exists so the console's WRITE paths — every one of which goes through a
-/// Cloud Function — can be exercised end to end without pointing a test run at
+/// This exists so the console's WRITE paths (every one of which goes through a
+/// Cloud Function) can be exercised end to end without pointing a test run at
 /// the project that serves live organizations. With the flag absent the value
 /// is the empty string, so production boot is byte-identical to before.
 const String _useEmulator = String.fromEnvironment('USE_FIREBASE_EMULATOR');
@@ -78,7 +81,20 @@ Future<void> _start() async {
       FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
       FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
       FirebaseFunctions.instance.useFunctionsEmulator(_emulatorHost, 5001);
-      debugPrint('EMULATOR MODE — not talking to production');
+      // Settlement proof uploads (settlement_proofs/…) must land in the same
+      // sandbox as everything else — a proof written to PRODUCTION Storage
+      // from an emulator run would be a data leak, not a test.
+      await FirebaseStorage.instance.useStorageEmulator(_emulatorHost, 9199);
+      debugPrint('⚠️  EMULATOR MODE — not talking to production');
+
+      // ── PROVE IT, DO NOT ASSUME IT ──────────────────────────────────────
+      // The calls above express an INTENTION, and a session once came up on
+      // PRODUCTION with this exact flag set. The proof is therefore enforced
+      // at sign-in — see `proveEmulatorSession` in MasterAdminBootstrap, which
+      // blocks the console before a single controller is registered. There is
+      // no pre-login gate because proving binding without a session would
+      // require a public-read rule in production, and a login screen cannot
+      // move money. See lib/dev/emulator_guard.dart for the full reasoning.
     }
     runApp(const AlphaSerenaAdminApp());
   } catch (e) {
@@ -210,6 +226,10 @@ class MasterAdminBootstrap extends StatefulWidget {
 class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
   final RxBool isReady = false.obs;
 
+  /// Set when the post-login emulator proof FAILS. The console is replaced by
+  /// the blocking screen rather than rendered — see `_initializeApp`.
+  final Rxn<EmulatorProof> sessionProofFailure = Rxn<EmulatorProof>();
+
   @override
   void initState() {
     super.initState();
@@ -221,6 +241,22 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
     if (user == null) return;
 
     if (kDebugMode) debugPrint("🚀 MASTER ADMIN BOOT → ${user.uid}");
+
+    // ── POST-LOGIN EMULATOR PROOF ─────────────────────────────────────────
+    // The pre-login check proved Firestore's endpoint; this proves the
+    // SESSION — that the signed-in identity and the Storage bucket belong to
+    // the emulator too. It runs before a single controller is registered, so
+    // no stream and no money action can exist on an unproven session. This is
+    // the check that would have caught a production account reaching a
+    // console the operator believed was sandboxed.
+    if (_useEmulator == 'true' && kDebugMode) {
+      final proof = await proveEmulatorSession(host: _emulatorHost);
+      logEmulatorProof(proof);
+      if (!proof.allProven) {
+        sessionProofFailure.value = proof;
+        return;
+      }
+    }
 
     try {
       _safePut(AdminRootController());
@@ -235,6 +271,10 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
       // Operations Center derives from Admin/Support/Communication — register last.
       _safePut(OperationsController());
       _safePut(PlatformStaffController());
+      // SETTLEMENTS — Tier-2 money the platform holds on organizations'
+      // behalf. Registered here because the page factory uses Get.find:
+      // a missing registration crashes the section on open.
+      _safePut(SettlementController());
 
       if (kDebugMode) debugPrint("✅ ALL CONTROLLERS INITIALIZED");
       isReady.value = true;
@@ -263,6 +303,7 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
 
   static void _teardownConsoleControllers() {
     // Derived controllers first, AdminRootController last.
+    _safeDelete<SettlementController>();
     _safeDelete<OperationsController>();
     _safeDelete<PlatformStaffController>();
     _safeDelete<AuditController>();
@@ -286,6 +327,11 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
+      // Fails CLOSED: an unproven session gets the blocking screen, never the
+      // console. Checked before `isReady` so there is no frame in which a
+      // money surface exists on an unverified environment.
+      final failed = sessionProofFailure.value;
+      if (failed != null) return EmulatorProofFailedApp(proof: failed);
       if (!isReady.value) return const _BootLoader();
       return AdminRootScreen();
     });

@@ -654,4 +654,96 @@ Full spec: `/Users/gowthambandi/flutters/trainersHQ/DESIGN_SYSTEM.md`.
   failures / producer-consumer breaks that are fixable in-console. Remaining = deploy +
   frozen-app CF decisions + product opportunities.
 
+
+## Phase H — SETTLEMENT SYSTEM (Tier-2 money movement) ✅ (9 Aug 2026)
+  The complete financial architecture for SYSTEM B — what a member pays their
+  gym, collected by TrainersArena and owed onward. Spans TWO repos; full
+  design + rationale in `trainershq-backend/SETTLEMENT_SYSTEM_ARCHITECTURE.md`
+  (read it before touching anything below). Backend `tsc` clean, 1312 unit
+  tests + 279 rules tests passing; console `flutter analyze` = 0, web build OK.
+  ⚠️ PATH CORRECTION: the sibling repos are at `/Users/bandigowtham/flutter_works/`
+     (NOT `/Users/gowthambandi/flutters/` as PART 2 still says), and the Cloud
+     Functions live in a SEPARATE repo, `trainershq-backend/`, not inside
+     trainersHQ. PART 2/3 are stale on both points.
+  ── WHAT WAS WRONG ──
+  `settlements.ts` was 56 lines: a NON-TRANSACTIONAL read-then-write that
+  flipped `memberPayments.settlementStatus` to 'settled'. No ledger, no fees,
+  no lifecycle, no retry, and NO MONEY MOVED (the docstring said the founder
+  transferred it manually first). Worse: the backend had ZERO HTTP endpoints,
+  so there was no Razorpay webhook — the platform structurally could not learn
+  a real gateway fee, a dashboard-issued refund, or A CHARGEBACK. Auto-settling
+  24h after capture with no way to know a payment was disputed is not a missing
+  feature; it is paying out money you are about to lose.
+  ── BACKEND (trainershq-backend) ──
+  ✅ `lib/settlement_core.ts` — pure decision core: 10-state lifecycle +
+     exhaustive transition table, fee math in BASIS POINTS, auto-settle
+     eligibility (named reasons, never boolean), retry/backoff + permanent-vs-
+     transient failure classification, payout-destination validation + MASKING.
+  ✅ `lib/ledger.ts` — immutable DOUBLE-ENTRY ledger (`ledger_txns` +
+     `ledger_entries`). Every txn must balance or it is REJECTED at write time.
+     Append-only: corrections are compensating entries, never edits.
+  ✅ `lib/payout_adapter.ts` — the payout SEAM. `ManualPayoutAdapter` (live) +
+     `RazorpayXPayoutAdapter` (written, gated behind `payoutRail:'razorpayx'`).
+     Switching rails needs NO data migration.
+  ✅ `lib/settlement_store.ts` — the SINGLE writer of settlement state.
+     `applyTransition` re-reads status INSIDE a Firestore transaction and posts
+     the ledger entry atomically with the status change.
+  ✅ `settlements.ts` REWRITTEN — approve/hold/release/cancel/retry/
+     recordPayoutResult/postSettlementAdjustment/setSettlementConfig/
+     getSettlementSummary. `settleMemberPayment` kept as a back-compat shim
+     over the new engine (a stale console tab must not 404 on a money action).
+  ✅ `webhooks.ts` — THE REPO'S FIRST `onRequest`. Constant-time HMAC over the
+     RAW body, create-claim dedup on the event id BEFORE any handler runs,
+     deliberate status codes (401 never retried, 503/500 retried, 200 for
+     permanently-unprocessable). Handles captured/failed/refund/dispute/payout.
+  ✅ `settlement_scheduler.ts` — `autoSettlementEngine` (15 min, capped at 50
+     payouts/run), `finalizeSettlementFees` (hourly — a lost webhook must not
+     strand a gym's money), `retryFailedSettlements`, `watchStuckSettlements`.
+  ✅ `memberships.ts` — `verifyAndActivateMembership` now calls
+     `ensureSettlementForPayment` (best-effort; the member is already paid).
+  ✅ rules + 16 composite indexes. New collections: `settlements`(+`timeline`),
+     `ledger_txns`, `ledger_entries`, `webhook_events`, `platform_config`.
+  ── CONSOLE (this app) — nav index 14, "Settlements" ──
+  ✅ `models/settlement_model.dart` (INTEGER PAISE throughout — the legacy
+     rupee-double `memberPayments.amount` is never a source of truth),
+     `core/services/settlement_service.dart` (CF calls ONLY — zero client
+     writes), `controllers/settlement_controller.dart`,
+     `screens/settlement_screen.dart` (float strip, 6 saved views, search/org
+     filter, queue, and a detail dialog with the full fee breakdown, parties,
+     masked destination, references, state, timeline, LEDGER LEGS + balance
+     proof, gateway events, and the Approve/Hold/Release/Retry/Refund/Cancel
+     action bar driven by the state machine).
+  ── THE INVARIANTS (do not weaken these) ──
+  1. SYSTEM A (`admin_payments_history`, our subscription REVENUE) and SYSTEM B
+     (`settlements`, a LIABILITY) never mix — separate collections, separate
+     ledger treatment, separate console sections. Three structural barriers:
+     `buildSettlementDraft` requires a clientId; the webhook classifies on
+     `pendingOrders.type`; System A posts no ledger txn at all.
+  2. The settlement doc id IS the razorpay payment id. This is what makes
+     creation idempotent across its THREE racing producers. Never change it.
+  3. Money is INTEGER PAISE (`*Minor`); rates are BASIS POINTS. Rupees only at
+     the display edge (`formatMinor`), never round-tripped.
+  4. Fee terms + `autoSettleAtMs` are SNAPSHOTS on each settlement. A config
+     change must never restate a historical payout or re-time a live one.
+  5. `settling` may ONLY resolve to settled/failed. `settled` is NEVER
+     rewritten — a post-settlement reversal books an `org_receivable` recovery.
+  6. Client writes to settlements/ledger/config are `false` for EVERYONE,
+     including the founder. Adjustments go through the balancing callable.
+  ── ⚠️ DEPLOY-GATED (Release Ops — the code is complete) ──
+     (1) `firebase deploy --only firestore:rules,firestore:indexes` from
+         trainershq-backend, or the console shows its classified
+         "rules not deployed" error state.
+     (2) `firebase functions:secrets:set RAZORPAY_WEBHOOK_SECRET`.
+     (3) Deploy the 14 new functions — FIRST DEPLOY MUST BE A CLEAN CREATE
+         (the invoker-403 gotcha), exact command in the architecture doc §12.
+     (4) Register `razorpayWebhook`'s URL in the Razorpay dashboard with the
+         event list in §8. Until then: no real fees, no refund detection, and
+         NO CHARGEBACK DETECTION.
+     (5) Verify one real membership payment end-to-end.
+  ── KNOWN LIMITATIONS (stated in §13, not hidden) ──
+     Payouts are MANUAL (founder transfers, records the UTR) — the engine,
+     ledger, lifecycle and clock are real; only the transfer is human.
+     Recoveries are recorded, not auto-collected. `accountBalanceMinor` caps at
+     5000 entries and reports truncation.
+
 # END — update PART 12 as each item completes; never delete done items, mark them ✅.

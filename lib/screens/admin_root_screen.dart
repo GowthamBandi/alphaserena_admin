@@ -116,6 +116,7 @@ class _Sidebar extends StatelessWidget {
       _MenuItem("Platform Staff", Icons.shield_outlined),
       _MenuItem("Food Database", Icons.restaurant_menu_outlined),
       _MenuItem("Exercise Library", Icons.sports_gymnastics_outlined),
+      _MenuItem("Settlements", Icons.account_balance_outlined),
     ];
 
     final p = context.palette;

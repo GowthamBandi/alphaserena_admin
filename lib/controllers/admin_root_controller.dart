@@ -11,6 +11,7 @@ import 'package:alphaserena_admin_portel/screens/global_food_screen.dart';
 import 'package:alphaserena_admin_portel/screens/operations_screen.dart';
 import 'package:alphaserena_admin_portel/screens/payments_screen.dart';
 import 'package:alphaserena_admin_portel/screens/platform_staff_screen.dart';
+import 'package:alphaserena_admin_portel/screens/settlement_screen.dart';
 import 'package:alphaserena_admin_portel/screens/subscriptions_screen.dart';
 import 'package:alphaserena_admin_portel/screens/support_screen.dart';
 import 'package:alphaserena_admin_portel/screens/trainers_screen.dart';
@@ -40,7 +41,7 @@ class AdminRootController extends GetxController {
   final RxInt selectedIndex = 0.obs;
 
   /// Prevent invalid index crashes
-  final int maxIndex = 13;
+  final int maxIndex = 14;
 
   // ===========================================================================
   // PAGE CACHE (LAZY LOADED)
@@ -191,6 +192,14 @@ class AdminRootController extends GetxController {
       // Operations Center's jump targets rely on them).
       case 13:
         return const GlobalExerciseScreen();
+      // SETTLEMENTS — Tier-2 member money the platform holds on organizations'
+      // behalf. Deliberately NOT merged into Payments (index 5): that screen is
+      // System A, TrainersArena's OWN subscription revenue. The two must never
+      // share a surface, because a founder reading a combined total would be
+      // reading their own income and somebody else's money as one number.
+      // Appended at 14 to keep every existing index stable.
+      case 14:
+        return const SettlementScreen();
       default:
         return const SizedBox();
     }

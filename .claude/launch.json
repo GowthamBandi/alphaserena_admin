@@ -2,9 +2,33 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "admin-web-emulator",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-port",
+        "5601",
+        "--web-hostname",
+        "127.0.0.1",
+        "--dart-define=USE_FIREBASE_EMULATOR=true",
+        "--dart-define=FIREBASE_EMULATOR_HOST=localhost"
+      ],
+      "port": 5601
+    },
+    {
       "name": "admin-web",
       "runtimeExecutable": "flutter",
-      "runtimeArgs": ["run", "-d", "web-server", "--web-port", "5599", "--web-hostname", "127.0.0.1"],
+      "runtimeArgs": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-port",
+        "5599",
+        "--web-hostname",
+        "127.0.0.1"
+      ],
       "port": 5599
     }
   ]
