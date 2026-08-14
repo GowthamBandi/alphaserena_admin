@@ -9,6 +9,16 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # Generated / vendored trees that are not project source. Xcode's SwiftPM
+  # checks the Firebase plugin packages out into build/ios|macos/SourcePackages,
+  # including their own test/ folders (which import dev-only deps like mockito),
+  # so analyzing them reports hundreds of errors that are not ours.
+  exclude:
+    - build/**
+    - node_modules/**
+    - graphify-out/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

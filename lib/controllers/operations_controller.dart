@@ -24,6 +24,7 @@ import 'package:get/get.dart';
 import 'admin_controller.dart';
 import 'communication_controller.dart';
 import 'support_controller.dart';
+import '../models/ops_incident_model.dart';
 import '../models/platform_announcement_model.dart';
 
 enum OpsSeverity { critical, warning, info }
@@ -76,14 +77,27 @@ class OperationsController extends GetxController {
   /// Open money-integrity incidents (charged-not-activated / refund drift).
   final RxInt paymentAlertsOpen = 0.obs;
 
+  /// The open paymentAlerts docs themselves — needed since B-11A gave this
+  /// queue its RESOLVE writer (B11-09): a count alone cannot be triaged.
+  final RxList<Map<String, dynamic>> paymentAlerts =
+      <Map<String, dynamic>>[].obs;
+
   /// Organizations currently over one or more plan limits (doc per org).
   final RxInt quotaAlertOrgs = 0.obs;
+
+  /// B-11A operator incident queue (`ops_incidents`), unresolved rows only,
+  /// P0-first. Its stream carries its OWN error flag — a denied incident
+  /// stream must not blank the two working feeds (or vice versa).
+  final RxList<OpsIncidentModel> opsIncidents = <OpsIncidentModel>[].obs;
+  final RxBool incidentsLoaded = false.obs;
+  final RxBool incidentsError = false.obs;
 
   final RxBool telemetryLoaded = false.obs;
   final RxBool telemetryError = false.obs;
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _paymentAlertsSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _quotaAlertsSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _opsIncidentsSub;
 
   @override
   void onInit() {
@@ -95,6 +109,7 @@ class OperationsController extends GetxController {
   void onClose() {
     _paymentAlertsSub?.cancel();
     _quotaAlertsSub?.cancel();
+    _opsIncidentsSub?.cancel();
     super.onClose();
   }
 
@@ -106,11 +121,41 @@ class OperationsController extends GetxController {
         .snapshots()
         .listen((s) {
       paymentAlertsOpen.value = s.size;
+      paymentAlerts.assignAll(
+        s.docs.map((d) => {'id': d.id, ...d.data()}),
+      );
       telemetryError.value = false;
       telemetryLoaded.value = true;
     }, onError: (_) {
       telemetryError.value = true;
       telemetryLoaded.value = true;
+    });
+
+    // Equality-only query (no orderBy) so it needs no composite index; the
+    // queue is dedup-bounded by construction, and severity ordering is a
+    // client-side concern.
+    _opsIncidentsSub?.cancel();
+    _opsIncidentsSub = _db
+        .collection('ops_incidents')
+        .where('status', whereIn: ['open', 'acknowledged'])
+        .snapshots()
+        .listen((s) {
+      final rows = s.docs
+          .map((d) => OpsIncidentModel.fromMap(d.data(), d.id))
+          .toList()
+        ..sort((a, b) {
+          final sev = a.severity.compareTo(b.severity); // P0 < P1 < P2
+          if (sev != 0) return sev;
+          final at = a.lastSeenAt, bt = b.lastSeenAt;
+          if (at == null || bt == null) return 0;
+          return bt.compareTo(at);
+        });
+      opsIncidents.assignAll(rows);
+      incidentsError.value = false;
+      incidentsLoaded.value = true;
+    }, onError: (_) {
+      incidentsError.value = true;
+      incidentsLoaded.value = true;
     });
 
     _quotaAlertsSub?.cancel();
@@ -130,6 +175,8 @@ class OperationsController extends GetxController {
   void retryTelemetry() {
     telemetryError.value = false;
     telemetryLoaded.value = false;
+    incidentsError.value = false;
+    incidentsLoaded.value = false;
     _listenTelemetry();
   }
 
@@ -177,6 +224,40 @@ class OperationsController extends GetxController {
         actionLabel: 'Review',
         navIndex: _navAdmins,
         count: quotaOrgs,
+      ));
+    }
+
+    // ── Operator incidents (B-11A queue; triaged in its own section) ─────
+    final incidents = opsIncidents.length;
+    if (incidents > 0) {
+      final p0 = opsIncidents.where((i) => i.isP0).length;
+      out.add(OpsAlert(
+        severity: p0 > 0 ? OpsSeverity.critical : OpsSeverity.warning,
+        icon: Icons.crisis_alert_outlined,
+        title:
+            '$incidents operator incident${incidents == 1 ? '' : 's'} awaiting triage',
+        detail: p0 > 0
+            ? '$p0 P0 incident${p0 == 1 ? '' : 's'} — the backend flagged '
+                'something needing a human. Triage below.'
+            : 'The backend flagged conditions needing review. Triage below.',
+        actionLabel: 'Triage below',
+        navIndex: _navPayments,
+        count: incidents,
+        onTap: () {}, // the triage section lives on this same screen
+      ));
+    }
+
+    if (incidentsError.value) {
+      out.add(OpsAlert(
+        severity: OpsSeverity.warning,
+        icon: Icons.cloud_off_outlined,
+        title: 'Operator incident feed unavailable',
+        detail:
+            'The ops_incidents stream failed to load — incidents may be '
+            'hidden. Tap to retry.',
+        actionLabel: 'Retry',
+        navIndex: _navPayments,
+        onTap: retryTelemetry,
       ));
     }
 
@@ -384,6 +465,7 @@ class OperationsController extends GetxController {
     return (a == null || a.isLoading.value) ||
         (s == null || s.feedbackLoading.value || s.reviewsLoading.value) ||
         (c == null || c.isLoading.value) ||
-        !telemetryLoaded.value;
+        !telemetryLoaded.value ||
+        !incidentsLoaded.value;
   }
 }

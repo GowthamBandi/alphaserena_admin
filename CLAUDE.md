@@ -746,4 +746,56 @@ Full spec: `/Users/gowthambandi/flutters/trainersHQ/DESIGN_SYSTEM.md`.
      Recoveries are recorded, not auto-collected. `accountBalanceMinor` caps at
      5000 entries and reports truncation.
 
+## Phase I — SUPER ADMIN PRODUCTION AUDIT 🟡 (12 Aug 2026)
+  Full authority/tenancy/audit certification of the Super Admin surface across all
+  four repos. Report: `SUPER_ADMIN_FINAL_AUDIT.md` (read it before touching the
+  moderation or audit paths). Analyze 0 · console 305/1-known · backend 1478/1478 ·
+  rules 284/284 + 109 matrix tests.
+  ⚠️ THIS FILE WAS FOUND STALE IN FOUR PLACES — corrected here, and PART 2/3 above
+     are still wrong on the first two:
+     • Repos live at `/Users/bandigowtham/flutter_works/`, NOT `/Users/gowthambandi/flutters/`.
+     • Cloud Functions live in a SEPARATE repo `trainershq-backend/`, not in trainersHQ.
+     • The console has FIFTEEN nav sections (maxIndex = 14), not 7.
+     • Phase E defect (c) is WRONG: `setAdminStatus` DOES accept `warning`
+       (`admins.ts:150` enum = active|approved|pending|warning|blocked). No defect.
+  ✅ SA-01 FIXED (console, HIGH — governance truth). The Audit Log streamed the
+     newest 300 entries and searched ONLY that window, then rendered "No audit
+     entries" when a search missed. With 67 `writeAudit` call sites in the backend,
+     a founder asking "who blocked ACME three weeks ago" was told it never happened.
+     A compliance surface may run out of rows; it may NEVER answer a question it
+     cannot see. Added `atCap`, a 3-valued `emptyReason`
+     (noEntriesAtAll | noMatchAnywhere | noMatchInLoadedWindow) and `loadMore()`;
+     the screen now offers "Load 300 older entries" and the header reads "300+".
+     Fail-first: 11 tests, 3 FAIL on the shipped semantics.
+     ⚠️ Never let a filtered empty state claim absence over a capped window —
+     `SettlementSummary.outstandingTruncated` is the house pattern for this.
+  ✅ SA-02 FIXED (backend, HIGH — audit integrity). `setAdminStatus` ran
+     `propagateOrgActive` BEFORE `writeAudit` and OUTSIDE any try/catch. A cascade
+     failure (it commits unbounded chunked batches) left the org moderated in
+     production, the action UNAUDITED, the console reporting FAILURE, and the org's
+     trainers stale — with no signal to anyone. The order is now a testable
+     contract in `functions/src/lib/admin_status_effects.ts`: audit FIRST, every
+     leg guarded, never throws, each failure raising a typed operator incident
+     (+3 rows in `INCIDENT_TYPES`). Fail-first: 7 tests, 6 FAIL on the old order.
+     ⚠️ Do NOT reintroduce an unguarded leg before the audit write.
+  ⬜ OPEN (founder decision — details in §12 of the report):
+     • SA-05 `clients` streams UNBOUNDED (every member of every org, live, incl.
+       phone/height/weight). A naive `.limit()` would recreate SA-01 on that screen —
+       needs server-side search, so it was deliberately NOT "fixed".
+     • SA-03 `food_request_service.dart` calls `resolveFoodRequest`, a callable that
+       DOES NOT EXIST in the backend. Dead code today (zero importers) — prune or build.
+     • SA-04 client/trainer controller write methods still exist, still unreachable
+       (zero callers), still rules-denied. Revert-magnet; prune.
+     • SA-06 `storage.rules:68` errors on tokens without a `role` claim (benign in
+       positive position, silently DENIES if ever negated — see firestore.rules:208).
+       Left alone: that file has uncommitted founder work.
+  ⬜ NOT TESTED (recorded as gaps, NOT assumed green): device/viewport matrix,
+     accessibility, UI offline/retry, performance benchmarks, bulk per-target
+     partial-failure reporting, pagination at 1000+ records, live 3-org seeded E2E.
+  🔬 EMULATOR NOTE (cost me a false defect — do not repeat): rules suites that use
+     `firestore.get()` from storage.rules MUST run under
+     `firebase emulators:exec --only firestore,storage` so the hub links them.
+     Run standalone with env vars, every cross-service read fails and the suite
+     "passes" by denying everything — a false PASS that hides real breakage.
+
 # END — update PART 12 as each item completes; never delete done items, mark them ✅.

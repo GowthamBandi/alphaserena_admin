@@ -5,6 +5,7 @@ import 'package:alphaserena_admin_portel/core/theme/app_shadows.dart';
 import 'package:alphaserena_admin_portel/screens/admin_root_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'legal/legal_screen.dart';
 
 /// Top navigation bar (constant across pages).
 class TopNavBar extends StatelessWidget {
@@ -22,6 +23,16 @@ class TopNavBar extends StatelessWidget {
             onTap: () {
               Navigator.pop(context);
               Get.snackbar("Profile", "Open profile screen (not implemented)");
+            },
+          ),
+        ),
+        PopupMenuItem(
+          child: ListTile(
+            leading: const Icon(Icons.gavel_outlined),
+            title: const Text("Legal & About"),
+            onTap: () {
+              Navigator.pop(context);
+              AdminLegalScreen.open();
             },
           ),
         ),

@@ -27,7 +27,12 @@ class AuditLogScreen extends StatelessWidget {
     return PageShell(
       title: 'Audit Log',
       icon: Icons.receipt_long_outlined,
-      trailing: Obx(() => Text('${ctrl.logs.length} recent',
+      // "300 recent" read as a total. The "+" is the whole point: it says the
+      // number is a window, not a count of everything that ever happened.
+      trailing: Obx(() => Text(
+          ctrl.atCap
+              ? '${ctrl.logs.length}+ (newest first)'
+              : '${ctrl.logs.length} total',
           style: AppText.body(size: 13).copyWith(color: p.textMuted))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,13 +78,14 @@ class AuditLogScreen extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2.4)));
             }
             final list = ctrl.filtered;
-            if (list.isEmpty) return _empty(context);
+            if (list.isEmpty) return _empty(context, ctrl);
             return Column(
               children: [
                 for (final l in list) ...[
                   _row(context, l),
                   const SizedBox(height: 8),
                 ],
+                if (ctrl.atCap) _loadMore(context, ctrl),
               ],
             );
           }),
@@ -294,23 +300,99 @@ class AuditLogScreen extends StatelessWidget {
     );
   }
 
-  Widget _empty(BuildContext context) {
+  /// Lets the operator widen the window. Shown whenever the window is full,
+  /// because from inside a full window there is no way to tell whether the
+  /// trail ended or merely ran out of rows.
+  Widget _loadMore(BuildContext context, AuditController ctrl) {
     final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 4),
+      child: Column(
+        children: [
+          Text(
+            'Showing the newest ${ctrl.logs.length} entries. '
+            'Older entries are not searched until they are loaded.',
+            textAlign: TextAlign.center,
+            style: AppText.body(size: 12).copyWith(color: p.textMuted),
+          ),
+          const SizedBox(height: 10),
+          Obx(() => OutlinedButton.icon(
+                onPressed: ctrl.isLoadingMore.value ? null : ctrl.loadMore,
+                icon: ctrl.isLoadingMore.value
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.history, size: 18),
+                label: Text(ctrl.isLoadingMore.value
+                    ? 'Loading…'
+                    : 'Load ${AuditController.pageSize} older entries'),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _empty(BuildContext context, AuditController ctrl) {
+    final p = context.palette;
+
+    // The three empty states are NOT the same statement. Saying "No audit
+    // entries" when the search simply did not reach far enough tells the
+    // founder an action never happened — in the surface whose whole job is
+    // answering that question. See AuditController.emptyReason (SA-01).
+    final reason = ctrl.emptyReason;
+    final truncated = reason == AuditEmptyReason.noMatchInLoadedWindow;
+    final (title, body) = switch (reason) {
+      AuditEmptyReason.noEntriesAtAll => (
+          'No audit entries',
+          'Privileged actions (approvals, role changes, activations) appear here.',
+        ),
+      AuditEmptyReason.noMatchAnywhere => (
+          'No matching entries',
+          'No audit entry matches this search. The full trail is loaded, so '
+              'there is no such entry.',
+        ),
+      AuditEmptyReason.noMatchInLoadedWindow => (
+          'No match in the newest ${ctrl.logs.length} entries',
+          'Older entries have not been loaded yet, so this is not proof the '
+              'action never happened. Load older entries and search again.',
+        ),
+    };
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 60),
       alignment: Alignment.center,
       child: Column(
         children: [
-          Icon(Icons.receipt_long_outlined,
-              size: 40, color: p.textMuted.withValues(alpha: 0.5)),
+          Icon(
+            truncated ? Icons.manage_search : Icons.receipt_long_outlined,
+            size: 40,
+            color: truncated
+                ? p.accent.withValues(alpha: 0.8)
+                : p.textMuted.withValues(alpha: 0.5),
+          ),
           const SizedBox(height: 12),
-          Text('No audit entries',
+          Text(title,
+              textAlign: TextAlign.center,
               style: AppText.label(size: 14).copyWith(color: p.textSecondary)),
           const SizedBox(height: 4),
-          Text('Privileged actions (approvals, role changes, activations) appear here.',
-              textAlign: TextAlign.center,
-              style: AppText.body(size: 13).copyWith(color: p.textMuted)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(body,
+                textAlign: TextAlign.center,
+                style: AppText.body(size: 13).copyWith(color: p.textMuted)),
+          ),
+          if (truncated) ...[
+            const SizedBox(height: 16),
+            Obx(() => OutlinedButton.icon(
+                  onPressed: ctrl.isLoadingMore.value ? null : ctrl.loadMore,
+                  icon: const Icon(Icons.history, size: 18),
+                  label: Text(ctrl.isLoadingMore.value
+                      ? 'Loading…'
+                      : 'Load ${AuditController.pageSize} older entries'),
+                )),
+          ],
         ],
       ),
     );
