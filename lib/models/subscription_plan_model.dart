@@ -240,8 +240,40 @@ class SubscriptionPlanModel {
   // ── Derived (never stored) ───────────────────────────────────────────────
 
   /// Billing period, derived from the stored term (12+ months = yearly).
+  ///
+  /// ⚠️ TWO-VALUED, WHILE THE DOMAIN HAS THREE. A 2–11 month legacy document
+  /// is neither monthly nor yearly — see [isCustomTerm]. This getter answers
+  /// `monthly` for those, which is fine for the editor's own toggle and NOT
+  /// fine on the wire; [toMap] withholds the field for a custom term rather
+  /// than publishing that collapse.
   BillingPeriod get billingPeriod =>
       durationMonths >= 12 ? BillingPeriod.yearly : BillingPeriod.monthly;
+
+  /// A legacy odd-term document: 2–11 months, neither monthly nor yearly.
+  ///
+  /// ── THE CONTRACT THIS NAMES (P1-C) ──────────────────────────────────────
+  /// It is not invented here. TrainerHQ's `rank_catalog.dart` already models
+  /// exactly this third case — *"A legacy odd-term doc (3/6 months) forms its
+  /// own offer and ignores the billing toggle, showing its true duration
+  /// instead"* — and classifies documents with
+  ///
+  ///     isMonthlyDoc(p) => p.billingPeriod.isEmpty ? p.months == 1
+  ///                                                : p.billingPeriod == 'monthly'
+  ///
+  /// so a written `billingPeriod` OVERRIDES `months`. The server agrees:
+  /// `pricing.ts:planDocTerm` returns `"custom"` for 2–11 months and
+  /// `resolvePlanTerm(plan, "monthly")` returns null — such a plan is
+  /// genuinely NOT SOLD monthly.
+  ///
+  /// The band is "not exactly 1 and not exactly 12", NOT "2–11". A 24-month
+  /// document is a custom term too, and for the same reason:
+  /// `resolvePlanTerm`'s yearly branch returns `months: 12` UNCONDITIONALLY
+  /// once `yearlyPrice > 0`, so publishing a yearly price on a 24-month plan
+  /// sells one year for the two-year price. The server states the rule in its
+  /// own comment — *"A legacy yearly document sells its own term at its own
+  /// price, keeping its true length (24-month plans exist and must not flatten
+  /// to 12)"* — and withholding the field is what lets it keep that promise.
+  bool get isCustomTerm => durationMonths != 1 && durationMonths != 12;
 
   /// Commercial lifecycle state (see [PlanStatus] for the stored contract).
   PlanStatus get status => archived
@@ -307,7 +339,18 @@ class SubscriptionPlanModel {
 
     // Preserve the exact stored term (defaults to 1). A legacy 3/6-month plan
     // keeps its term instead of being collapsed to 1/12.
-    final rawMonths = _toInt(map['durationMonths'] ?? map['months']);
+    // `duration` is the LAST resort, and it is load-bearing: the backend's
+    // `docMonths` and TrainerHQ's own model both parse a leading integer out
+    // of it ("3 Months" → 3). Without the same fallback a document carrying
+    // only `duration` decoded here as ONE month — a monthly plan priced at the
+    // three-month price, with the custom-term guard below never firing.
+    // Deliberately strict, mirroring the backend: a clean leading integer
+    // only, never a prose duration.
+    var rawMonths = _toInt(map['durationMonths'] ?? map['months']);
+    if (rawMonths <= 0) {
+      final m = RegExp(r'^\s*(\d+)').firstMatch((map['duration'] ?? '').toString());
+      if (m != null) rawMonths = int.tryParse(m.group(1)!) ?? 0;
+    }
     final months = rawMonths > 0 ? rawMonths : 1;
     final period = months >= 12 ? BillingPeriod.yearly : BillingPeriod.monthly;
 
@@ -419,9 +462,28 @@ class SubscriptionPlanModel {
       'badge': badge,
       'sortOrder': sortOrder,
       'featured': featured,
-      'billingPeriod': billingPeriod.wire,
-      'monthlyPrice': monthlyPrice,
-      'yearlyPrice': yearlyPrice,
+      // ── THE THREE FIELDS A CUSTOM TERM MUST NOT PUBLISH (P1-C) ──────────
+      //
+      // 🔴 Opening a legacy 3-month plan and pressing Save — changing nothing —
+      // used to write `billingPeriod: 'monthly'` (from the two-valued getter
+      // above) and `monthlyPrice: <the three-month price>` (which [fromMap]
+      // migrates from the single legacy `price`). Either alone reclassifies
+      // the document; together they turned "3 months for ₹2700, not sold
+      // monthly" into "1 month for ₹2700" — a 3× overcharge on the monthly
+      // toggle, produced by an action that looks like a no-op.
+      //
+      // WITHHOLDING them is what preserves the document, and it is a real
+      // withholding: this is a total `set()`, so a key omitted here is a key
+      // that does not exist on the stored document — which is precisely the
+      // state a legacy plan is already in, and the state both consumers read
+      // as "custom".
+      //
+      // No price is invented. ₹2700 ÷ 3 = ₹900 is a commercial decision nobody
+      // has made; a founder who wants a monthly plan taps Monthly, which sets
+      // the term to 1 and takes this document out of the custom band entirely.
+      if (!isCustomTerm) 'billingPeriod': billingPeriod.wire,
+      if (!isCustomTerm) 'monthlyPrice': monthlyPrice,
+      if (!isCustomTerm) 'yearlyPrice': yearlyPrice,
       'capabilities': {for (final s in PlanCapabilities.slugs) s: capabilities[s] == true},
       // The slug array the backend projects onto admins/{uid}.features at
       // activation (planFeatureProjection) for TrainerHQ's hasFeature() gate.

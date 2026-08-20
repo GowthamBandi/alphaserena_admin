@@ -29,7 +29,9 @@ import '../widgets/app_snackbar.dart';
 enum AnnouncementIntent { draft, ready, schedule, sendNow }
 
 class CommunicationController extends GetxController {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Resolved LAZILY so a test can construct the controller, skip onInit, and
+  // drive its derived state without an initialized Firebase app.
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   final RxList<PlatformAnnouncementModel> announcements =
       <PlatformAnnouncementModel>[].obs;
@@ -213,6 +215,26 @@ class CommunicationController extends GetxController {
       // this (timezone-aware, DST-correct) — the console never computes it,
       // so a client clock can never move a campaign.
       'schedule': schedule.toMap(),
+      // ── AND THE PREVIOUS ANSWER IS RETIRED WITH IT ────────────────────────
+      //
+      // 🔴 `scheduledAtMs` is the absolute instant `campaignScheduler` acts on,
+      // resolved from the rule above. This save is the one write that can
+      // REDECLARE that rule, so any instant derived from the OLD rule is now
+      // wrong and must not be acted on. Clearing it makes the scheduler
+      // re-resolve on its next pass (within a minute).
+      //
+      // Two concrete failures this closes, both of which only became reachable
+      // once scheduled campaigns actually started firing:
+      //   • edit a scheduled campaign's time from 09:00 to 18:00 → it
+      //     broadcast at 09:00, the instant nobody had asked for any more;
+      //   • cancel a scheduled campaign and later re-schedule it → the stale
+      //     past instant made it due immediately, or past the lateness window
+      //     and silently completed without ever sending.
+      //
+      // Writing null rather than deleting: this is a `set(..., merge: true)`
+      // on update and an `add()` on create, and `toMs(null)` is 0 — which the
+      // scheduler already reads as "not yet resolved".
+      'scheduledAtMs': null,
       'status': status.id,
       'queuedAt': intent == AnnouncementIntent.sendNow
           ? FieldValue.serverTimestamp()

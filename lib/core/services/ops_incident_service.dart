@@ -16,7 +16,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OpsIncidentService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Resolved LAZILY so the Operations screen — which holds one of these as a
+  // field — can be constructed in a widget test without an initialized
+  // Firebase app. Matches the controllers that already do this.
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ── ops_incidents ─────────────────────────────────────────────────────
 

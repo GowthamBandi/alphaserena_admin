@@ -372,63 +372,111 @@ class _SubscriptionPlanDialogState extends State<SubscriptionPlanDialog> {
             style: AppText.body(size: 12).copyWith(color: p.textMuted),
           );
         }),
-        const SizedBox(height: 14),
-        // The dual-price contract, stated plainly. BOTH prices below are live:
-        // the buyer picks a term in the app and the server charges the matching
-        // one from this single plan. Previously only the default term's price
-        // was ever charged and the other field was inert data — which is why
-        // the Monthly/Yearly control never appeared to buyers at all.
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: p.accent.withValues(alpha: 0.07),
-            borderRadius: AppRadii.smR,
+        // ── WHICH PRICE FIELDS ARE REAL DEPENDS ON THE TERM ─────────────────
+        //
+        // 🔴 A custom-term plan (anything that is not exactly 1 or 12 months)
+        // has NO monthly or yearly SKU — `SubscriptionPlanModel.toMap()`
+        // withholds `monthlyPrice`, `yearlyPrice` and `billingPeriod` for one,
+        // because publishing them sells a 3-month plan as one month at the
+        // three-month price (P1-C).
+        //
+        // Showing the dual-price editor anyway invited the founder to type a
+        // yearly price, validated it, painted a green "Yearly saves ₹8,400
+        // (25%)" hint over it, saved, and reported "Plan updated" — while the
+        // value was discarded on the way to Firestore. A control that cannot
+        // do what it appears to do is removed rather than re-stubbed; the one
+        // price that IS stored stays editable, under its true name.
+        Obx(() {
+          final term = ctrl.termMonths.value;
+          if (term == 1 || term == 12) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+          const SizedBox(height: 14),
+          // The dual-price contract, stated plainly. BOTH prices below are live:
+          // the buyer picks a term in the app and the server charges the matching
+          // one from this single plan. Previously only the default term's price
+          // was ever charged and the other field was inert data — which is why
+          // the Monthly/Yearly control never appeared to buyers at all.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: p.accent.withValues(alpha: 0.07),
+              borderRadius: AppRadii.smR,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.swap_horiz, size: 16, color: p.accent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Buyers choose their term in the app and are charged the "
+                    "matching price below. Leave a price blank to not offer "
+                    "that term at all.",
+                    style:
+                        AppText.body(size: 12).copyWith(color: p.textSecondary),
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Row(
+          const SizedBox(height: 14),
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.swap_horiz, size: 16, color: p.accent),
-              const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  "Buyers choose their term in the app and are charged the "
-                  "matching price below. Leave a price blank to not offer "
-                  "that term at all.",
-                  style:
-                      AppText.body(size: 12).copyWith(color: p.textSecondary),
+                child: AppTextField(
+                  controller: ctrl.monthlyPriceCtrl,
+                  label: "Monthly price (₹)",
+                  icon: Icons.currency_rupee,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: _moneyInput,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AppTextField(
+                  controller: ctrl.yearlyPriceCtrl,
+                  label: "Yearly price (₹)",
+                  icon: Icons.currency_rupee,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: _moneyInput,
                 ),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: AppTextField(
-                controller: ctrl.monthlyPriceCtrl,
-                label: "Monthly price (₹)",
+          const SizedBox(height: 12),
+          // Computed yearly savings — recomputes as either price changes.
+          _SavingsHint(ctrl: ctrl),
+              ],
+            );
+          }
+          // The legacy price lives in whichever slot `fromMap` migrated it to,
+          // which is the same slot `toMap`'s `price` reads back.
+          final ctl = term >= 12 ? ctrl.yearlyPriceCtrl : ctrl.monthlyPriceCtrl;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 14),
+              AppTextField(
+                controller: ctl,
+                label: "Price for the full $term-month term (₹)",
                 icon: Icons.currency_rupee,
                 keyboardType: TextInputType.number,
                 inputFormatters: _moneyInput,
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: AppTextField(
-                controller: ctrl.yearlyPriceCtrl,
-                label: "Yearly price (₹)",
-                icon: Icons.currency_rupee,
-                keyboardType: TextInputType.number,
-                inputFormatters: _moneyInput,
+              const SizedBox(height: 8),
+              Text(
+                "This plan is sold as one $term-month term. It has no monthly "
+                "or yearly price, and the billing toggle does not apply to it "
+                "— buyers see its true duration. To sell it monthly or yearly "
+                "instead, choose a term above first.",
+                style: AppText.body(size: 12).copyWith(color: p.textMuted),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Computed yearly savings — recomputes as either price changes.
-        _SavingsHint(ctrl: ctrl),
+            ],
+          );
+        }),
       ],
     );
   }

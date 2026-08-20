@@ -134,14 +134,14 @@ class DashboardScreenResponsive extends StatelessWidget {
             accent: _cPending,
             value: () => ctrl.orgsTotal.value.toDouble(),
             fmt: _count,
-            loaded: () => ctrl.orgsLoaded.value),
+            loaded: () => ctrl.orgsReady),
         _stat(context,
             label: "Active subscriptions",
             icon: Icons.verified_outlined,
             accent: _cActive,
             value: () => ctrl.orgsSubscribed.value.toDouble(),
             fmt: _count,
-            loaded: () => ctrl.orgsLoaded.value),
+            loaded: () => ctrl.orgsReady),
         _stat(context,
             label: "Trainers",
             icon: Icons.fitness_center_outlined,
@@ -162,14 +162,14 @@ class DashboardScreenResponsive extends StatelessWidget {
             accent: _cWarning,
             value: () => ctrl.revenueTotal.value,
             fmt: _money,
-            loaded: () => ctrl.revenueLoaded.value),
+            loaded: () => ctrl.revenueReady),
         _stat(context,
             label: "This month",
             icon: Icons.trending_up,
             accent: context.palette.accent,
             value: () => ctrl.revenueThisMonth.value,
             fmt: _money,
-            loaded: () => ctrl.revenueLoaded.value,
+            loaded: () => ctrl.revenueReady,
             trend: () => ctrl.revenueGrowthPct.value),
       ],
     );
@@ -514,6 +514,11 @@ class DashboardScreenResponsive extends StatelessWidget {
         if (ctrl.orgsError.value) {
           return _errorState(context, ctrl.retryOrgs);
         }
+        // An empty list before the first snapshot is not "All clear" — it is
+        // "not counted yet". Same rule the KPI grid states above.
+        if (!ctrl.orgsLoaded.value) {
+          return _loadingState(context);
+        }
         final list = ctrl.pendingApprovals;
         if (list.isEmpty) {
           return _empty(context, Icons.inbox_outlined, "All clear",
@@ -586,6 +591,18 @@ class DashboardScreenResponsive extends StatelessWidget {
       context,
       title: "Expiring soon",
       child: Obx(() {
+        // 🔴 "Nothing due" is a claim about the organizations stream. This card
+        // read `expiringSoon` with no error and no loading guard, while every
+        // sibling card on this screen has both — so a denied `admins` read
+        // rendered "No subscriptions expiring this week" beside "Pending
+        // approvals: could not load", and the founder skipped renewal outreach
+        // for every organization expiring in the next seven days.
+        if (ctrl.orgsError.value) {
+          return _errorState(context, ctrl.retryOrgs);
+        }
+        if (!ctrl.orgsLoaded.value) {
+          return _loadingState(context);
+        }
         final list = ctrl.expiringSoon;
         if (list.isEmpty) {
           return _empty(context, Icons.event_available_outlined, "Nothing due",
@@ -777,6 +794,16 @@ class DashboardScreenResponsive extends StatelessWidget {
 
   /// A failed stream renders as an explicit error with retry — never as a
   /// misleading empty state.
+  /// Shown while a source's FIRST read is still in flight, so an empty list
+  /// cannot be reported as "All clear" or "Nothing due" before anything has
+  /// been counted.
+  Widget _loadingState(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 28),
+      child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
+    );
+  }
+
   Widget _errorState(BuildContext context, VoidCallback onRetry) {
     final p = context.palette;
     return Container(

@@ -22,7 +22,9 @@ import '../models/org_review_model.dart';
 import '../widgets/app_snackbar.dart';
 
 class SupportController extends GetxController {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Resolved LAZILY so a test can construct the controller, skip onInit, and
+  // drive its derived state without an initialized Firebase app.
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // 0 = Org feedback (actionable) · 1 = Member reviews (read-only)
   final RxInt tab = 0.obs;

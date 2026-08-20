@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import '../controllers/client_controller.dart';
 import '../core/theme/serena/serena_tokens.g.dart';
 import '../core/widgets/serena/serena_ui.dart';
+import '../core/widgets/console/console_chrome.dart';
 
 class ClientsScreen extends StatelessWidget {
   ClientsScreen({super.key});
@@ -25,6 +26,10 @@ class ClientsScreen extends StatelessWidget {
       ),
 
       body: Obx(() {
+        final err = ctrl.loadError.value;
+        if (err != null) {
+          return ConsoleErrorState(error: err, onRetry: ctrl.retryLoad);
+        }
         if (ctrl.isLoading.value) {
           return const Center(child: CircularProgressIndicator());
         }

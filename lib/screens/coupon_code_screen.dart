@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../controllers/coupon_controller.dart';
 import '../../models/coupon_model.dart';
+import '../core/widgets/console/console_chrome.dart';
 
 class CouponCodeScreen extends StatelessWidget {
   CouponCodeScreen({super.key});
@@ -69,6 +70,10 @@ class CouponCodeScreen extends StatelessWidget {
   // ---------------------------------------------------------------------------
   Widget _couponTable() {
     return Obx(() {
+      final err = ctrl.loadError.value;
+      if (err != null) {
+        return ConsoleErrorState(error: err, onRetry: ctrl.retryLoad);
+      }
       if (ctrl.isLoading.value) {
         return const Center(child: CircularProgressIndicator());
       }

@@ -9,9 +9,11 @@ import 'package:intl/intl.dart';
 
 import '../controllers/admin_controller.dart';
 import '../core/constants/firestore_collections.dart';
+import '../core/utils/console_errors.dart';
 import '../models/admin_model.dart';
 import '../models/audit_log_model.dart';
 import '../widgets/page_shell.dart';
+import '../core/widgets/console/console_chrome.dart';
 
 const _cActive = Color(0xFF1A7F5A);
 const _cPending = Color(0xFF3B6FD4);
@@ -44,37 +46,73 @@ class AdminsScreen extends StatelessWidget {
     return PageShell(
       title: "Organizations",
       icon: Icons.business_outlined,
-      trailing: Obx(() => Text(
-            "${ctrl.admins.length} total",
-            style: AppText.body(size: 13)
-                .copyWith(color: context.palette.textMuted),
-          )),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _toolbar(context),
-          const SizedBox(height: 16),
-          Obx(() {
-            if (ctrl.isLoading.value && ctrl.admins.isEmpty) {
-              return const SizedBox(
-                height: 240,
-                child:
-                    Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
-              );
-            }
-            final list = ctrl.filtered;
-            if (list.isEmpty) return _empty(context);
-            return Column(
-              children: [
-                for (final a in list) ...[
-                  _row(context, a),
-                  const SizedBox(height: 10),
-                ],
-              ],
-            );
-          }),
-        ],
+      // "0 total" during a failed load is the same lie as an empty list.
+      trailing: Obx(
+        () => Text(
+          ctrl.loadError.value != null ? "—" : "${ctrl.admins.length} total",
+          style: AppText.body(
+            size: 13,
+          ).copyWith(color: context.palette.textMuted),
+        ),
       ),
+      child: Obx(() {
+        // The classified failure comes BEFORE everything else, toolbar
+        // included: an undeployed rule and an empty platform must never look
+        // alike, and a filter chip reading "Pending 0" over a failed load is
+        // that same claim of absence in miniature.
+        final err = ctrl.loadError.value;
+        if (err != null) {
+          return ConsoleErrorState(error: err, onRetry: ctrl.retryLoad);
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _toolbar(context),
+            // MODERATION IS A ROUND TRIP, so say so. Without this the console
+            // looked inert between the tap and the stream update, which is
+            // what invited the second tap that wrote a second audit row.
+            Obx(
+              () => ctrl.isProcessing.value
+                  ? const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 10),
+                          Text('Applying the moderation change…'),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            const SizedBox(height: 16),
+            Obx(() {
+              if (ctrl.isLoading.value && ctrl.admins.isEmpty) {
+                return const SizedBox(
+                  height: 240,
+                  child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2.4),
+                  ),
+                );
+              }
+              final list = ctrl.filtered;
+              if (list.isEmpty) return _empty(context);
+              return Column(
+                children: [
+                  for (final a in list) ...[
+                    _row(context, a),
+                    const SizedBox(height: 10),
+                  ],
+                ],
+              );
+            }),
+          ],
+        );
+      }),
     );
   }
 
@@ -101,21 +139,34 @@ class AdminsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        Obx(() => Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _chip(context, "All", "all", ctrl.admins.length),
-                _chip(context, "Active", "active",
-                    ctrl.countByStatus("active")),
-                _chip(context, "Pending", "pending",
-                    ctrl.countByStatus("pending")),
-                _chip(context, "Warning", "warning",
-                    ctrl.countByStatus("warning")),
-                _chip(context, "Blocked", "blocked",
-                    ctrl.countByStatus("blocked")),
-              ],
-            )),
+        Obx(
+          () => Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _chip(context, "All", "all", ctrl.admins.length),
+              _chip(context, "Active", "active", ctrl.countByStatus("active")),
+              _chip(
+                context,
+                "Pending",
+                "pending",
+                ctrl.countByStatus("pending"),
+              ),
+              _chip(
+                context,
+                "Warning",
+                "warning",
+                ctrl.countByStatus("warning"),
+              ),
+              _chip(
+                context,
+                "Blocked",
+                "blocked",
+                ctrl.countByStatus("blocked"),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -137,20 +188,25 @@ class AdminsScreen extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label,
-                style: AppText.label(size: 13)
-                    .copyWith(color: selected ? accent : p.textSecondary)),
+            Text(
+              label,
+              style: AppText.label(
+                size: 13,
+              ).copyWith(color: selected ? accent : p.textSecondary),
+            ),
             const SizedBox(width: 6),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
               decoration: BoxDecoration(
-                color:
-                    selected ? accent.withValues(alpha: 0.18) : p.surfaceAlt,
+                color: selected ? accent.withValues(alpha: 0.18) : p.surfaceAlt,
                 borderRadius: BorderRadius.circular(999),
               ),
-              child: Text("$count",
-                  style: AppText.label(size: 11)
-                      .copyWith(color: selected ? accent : p.textMuted)),
+              child: Text(
+                "$count",
+                style: AppText.label(
+                  size: 11,
+                ).copyWith(color: selected ? accent : p.textMuted),
+              ),
             ),
           ],
         ),
@@ -187,22 +243,28 @@ class AdminsScreen extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppText.label(size: 14)
-                                  .copyWith(color: p.textPrimary)),
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.label(
+                              size: 14,
+                            ).copyWith(color: p.textPrimary),
+                          ),
                         ),
                         const SizedBox(width: 8),
                         _statusChip(a.status),
                       ],
                     ),
                     const SizedBox(height: 3),
-                    Text(a.email,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppText.body(size: 12)
-                            .copyWith(color: p.textMuted)),
+                    Text(
+                      a.email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.body(
+                        size: 12,
+                      ).copyWith(color: p.textMuted),
+                    ),
                     const SizedBox(height: 5),
                     _subscriptionLine(context, a),
                   ],
@@ -223,25 +285,31 @@ class AdminsScreen extends StatelessWidget {
       final exp = a.planExpiry != null
           ? " · expires ${DateFormat('d MMM yyyy').format(a.planExpiry!)}"
           : "";
-      return Row(children: [
-        const Icon(Icons.verified, size: 13, color: _cActive),
-        const SizedBox(width: 5),
-        Flexible(
-          child: Text(
-            "${a.planName ?? 'Subscribed'}$exp",
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppText.body(size: 12).copyWith(color: p.textSecondary),
+      return Row(
+        children: [
+          const Icon(Icons.verified, size: 13, color: _cActive),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              "${a.planName ?? 'Subscribed'}$exp",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.body(size: 12).copyWith(color: p.textSecondary),
+            ),
           ),
-        ),
-      ]);
+        ],
+      );
     }
-    return Row(children: [
-      Icon(Icons.cancel_outlined, size: 13, color: p.textMuted),
-      const SizedBox(width: 5),
-      Text("No active subscription",
-          style: AppText.body(size: 12).copyWith(color: p.textMuted)),
-    ]);
+    return Row(
+      children: [
+        Icon(Icons.cancel_outlined, size: 13, color: p.textMuted),
+        const SizedBox(width: 5),
+        Text(
+          "No active subscription",
+          style: AppText.body(size: 12).copyWith(color: p.textMuted),
+        ),
+      ],
+    );
   }
 
   Widget _actionsMenu(BuildContext context, AdminModel a) {
@@ -250,6 +318,9 @@ class AdminsScreen extends StatelessWidget {
     return PopupMenuButton<String>(
       icon: Icon(Icons.more_vert, color: p.textMuted),
       position: PopupMenuPosition.under,
+      // Closed while a moderation call is in flight. `AdminController` already
+      // refuses the re-entry; this stops the founder attempting it.
+      enabled: !ctrl.isProcessing.value,
       onSelected: (v) => _onAction(context, a, v),
       itemBuilder: (_) => [
         const PopupMenuItem(value: 'view', child: Text('View details')),
@@ -283,7 +354,11 @@ class AdminsScreen extends StatelessWidget {
         _reasonDialog(
           context,
           title: 'Issue a warning',
-          hint: 'Reason shown to the organization',
+          subtitle:
+              'INTERNAL ONLY. A warning changes nothing for the organization — '
+              'they keep full access and are not notified. This reason is '
+              'visible to you here and in the audit log, and nowhere else.',
+          hint: 'Why is this warning being issued?',
           confirmLabel: 'Send warning',
           confirmColor: _cWarning,
           onConfirm: (r) => ctrl.warn(a.docId, r),
@@ -293,7 +368,9 @@ class AdminsScreen extends StatelessWidget {
         _reasonDialog(
           context,
           title: 'Block organization',
-          hint: 'Reason for blocking',
+          subtitle:
+              'Blocking disables the owner\'s sign-in and stops the organization writing anything. They are notified that they are blocked — but not why, so record the reason here for your own trail.',
+          hint: 'Why is this organization being blocked?',
           confirmLabel: 'Block',
           confirmColor: _cBlocked,
           onConfirm: (r) => ctrl.block(a.docId, r),
@@ -328,13 +405,19 @@ class AdminsScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(name,
-                              style: AppText.title(size: 20)
-                                  .copyWith(color: p.textPrimary)),
+                          Text(
+                            name,
+                            style: AppText.title(
+                              size: 20,
+                            ).copyWith(color: p.textPrimary),
+                          ),
                           const SizedBox(height: 2),
-                          Text("Owner: ${a.name}",
-                              style: AppText.body(size: 13)
-                                  .copyWith(color: p.textMuted)),
+                          Text(
+                            "Owner: ${a.name}",
+                            style: AppText.body(
+                              size: 13,
+                            ).copyWith(color: p.textMuted),
+                          ),
                         ],
                       ),
                     ),
@@ -343,11 +426,19 @@ class AdminsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 _detail(context, Icons.email_outlined, "Email", a.email),
-                _detail(context, Icons.phone_outlined, "Phone",
-                    a.phone.isEmpty ? "—" : a.phone),
+                _detail(
+                  context,
+                  Icons.phone_outlined,
+                  "Phone",
+                  a.phone.isEmpty ? "—" : a.phone,
+                ),
                 if ((a.address ?? '').isNotEmpty)
-                  _detail(context, Icons.location_on_outlined, "Address",
-                      a.address!),
+                  _detail(
+                    context,
+                    Icons.location_on_outlined,
+                    "Address",
+                    a.address!,
+                  ),
                 _detail(
                   context,
                   Icons.workspace_premium_outlined,
@@ -356,37 +447,68 @@ class AdminsScreen extends StatelessWidget {
                       ? "${a.planName ?? 'Active'}${a.planExpiry != null ? ' · expires ${DateFormat('d MMM yyyy').format(a.planExpiry!)}' : ''}"
                       : "No active subscription",
                 ),
-                _detail(context, Icons.groups_outlined, "Plan limits",
-                    "${l.maxTrainers} trainers · ${l.maxClients} clients"),
-                _detail(context, Icons.calendar_today_outlined, "Joined",
-                    DateFormat('d MMM yyyy').format(a.createdAt)),
+                _detail(
+                  context,
+                  Icons.groups_outlined,
+                  "Plan limits",
+                  "${l.maxTrainers} trainers · ${l.maxClients} clients",
+                ),
+                _detail(
+                  context,
+                  Icons.calendar_today_outlined,
+                  "Joined",
+                  DateFormat('d MMM yyyy').format(a.createdAt),
+                ),
                 if (a.lastLogin != null)
-                  _detail(context, Icons.login_outlined, "Last login",
-                      DateFormat('d MMM yyyy, h:mm a').format(a.lastLogin!)),
-                _detail(context, Icons.verified_user_outlined, "Verified",
-                    a.isVerified ? "Yes" : "No"),
+                  _detail(
+                    context,
+                    Icons.login_outlined,
+                    "Last login",
+                    DateFormat('d MMM yyyy, h:mm a').format(a.lastLogin!),
+                  ),
+                _detail(
+                  context,
+                  Icons.verified_user_outlined,
+                  "Verified",
+                  a.isVerified ? "Yes" : "No",
+                ),
                 if ((a.gstNumber ?? '').isNotEmpty)
-                  _detail(context, Icons.receipt_long_outlined, "GST",
-                      a.gstNumber!),
+                  _detail(
+                    context,
+                    Icons.receipt_long_outlined,
+                    "GST",
+                    a.gstNumber!,
+                  ),
                 if ((a.panNumber ?? '').isNotEmpty)
                   _detail(context, Icons.badge_outlined, "PAN", a.panNumber!),
                 // ── Moderation trail (traceability: who moderated, when, why) ──
                 if ((a.approvedBy ?? '').isNotEmpty)
-                  _detail(context, Icons.how_to_reg_outlined, "Approved by",
-                      a.approvedBy!),
+                  _detail(
+                    context,
+                    Icons.how_to_reg_outlined,
+                    "Approved by",
+                    a.approvedBy!,
+                  ),
                 if ((a.statusReason ?? '').isNotEmpty)
-                  _detail(context, Icons.gpp_maybe_outlined, "Status note",
-                      a.statusReason!),
+                  _detail(
+                    context,
+                    Icons.gpp_maybe_outlined,
+                    "Status note",
+                    a.statusReason!,
+                  ),
                 if (a.statusUpdatedAt != null)
                   _detail(
-                      context,
-                      Icons.update_outlined,
-                      "Status updated",
-                      "${DateFormat('d MMM yyyy, h:mm a').format(a.statusUpdatedAt!)}"
-                          "${(a.statusUpdatedBy ?? '').isNotEmpty ? ' · by ${_short(a.statusUpdatedBy!)}' : ''}"),
+                    context,
+                    Icons.update_outlined,
+                    "Status updated",
+                    "${DateFormat('d MMM yyyy, h:mm a').format(a.statusUpdatedAt!)}"
+                        "${(a.statusUpdatedBy ?? '').isNotEmpty ? ' · by ${_short(a.statusUpdatedBy!)}' : ''}",
+                  ),
                 const SizedBox(height: 18),
-                Text("ACTIVITY (AUDIT TRAIL)",
-                    style: AppText.label(size: 11).copyWith(color: p.textMuted)),
+                Text(
+                  "ACTIVITY (AUDIT TRAIL)",
+                  style: AppText.label(size: 11).copyWith(color: p.textMuted),
+                ),
                 const SizedBox(height: 8),
                 _auditTrail(context, a),
                 const SizedBox(height: 22),
@@ -400,7 +522,11 @@ class AdminsScreen extends StatelessWidget {
   }
 
   Widget _detail(
-      BuildContext context, IconData icon, String label, String value) {
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
     final p = context.palette;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
@@ -411,12 +537,16 @@ class AdminsScreen extends StatelessWidget {
           const SizedBox(width: 12),
           SizedBox(
             width: 96,
-            child: Text(label,
-                style: AppText.body(size: 13).copyWith(color: p.textMuted)),
+            child: Text(
+              label,
+              style: AppText.body(size: 13).copyWith(color: p.textMuted),
+            ),
           ),
           Expanded(
-            child: SelectableText(value,
-                style: AppText.body(size: 13).copyWith(color: p.textPrimary)),
+            child: SelectableText(
+              value,
+              style: AppText.body(size: 13).copyWith(color: p.textPrimary),
+            ),
           ),
         ],
       ),
@@ -429,19 +559,41 @@ class AdminsScreen extends StatelessWidget {
   Widget _auditTrail(BuildContext context, AdminModel a) {
     final p = context.palette;
     final orgId = a.uid.isNotEmpty ? a.uid : a.docId;
-    return FutureBuilder<List<AuditLogModel>>(
+    return FutureBuilder<({List<AuditLogModel> logs, ConsoleError? error})>(
       future: _loadOrgAudit(orgId),
       builder: (_, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 10),
             child: SizedBox(
-                height: 18,
-                width: 18,
-                child: CircularProgressIndicator(strokeWidth: 2)),
+              height: 18,
+              width: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           );
         }
-        final logs = snap.data ?? const <AuditLogModel>[];
+        // An UNREAD record is not an EMPTY one. Kept to one line rather than a
+        // full ConsoleErrorState: this is a section inside a detail dialog, and
+        // the classified reason is what the operator actually needs.
+        final err = snap.data?.error;
+        if (err != null) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.error_outline, size: 14, color: p.error),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'The audit trail could not be loaded, so this organization '
+                  'may have recorded actions that are not shown. '
+                  '${err.message}',
+                  style: AppText.body(size: 12).copyWith(color: p.error),
+                ),
+              ),
+            ],
+          );
+        }
+        final logs = snap.data?.logs ?? const <AuditLogModel>[];
         if (logs.isEmpty) {
           return Text(
             "No recorded platform actions for this organization yet.",
@@ -463,8 +615,9 @@ class AdminsScreen extends StatelessWidget {
                       child: Text(
                         "${l.actionLabel} · by ${l.displayActor}"
                         "${l.createdAt != null ? ' · ${DateFormat('d MMM, h:mm a').format(l.createdAt!)}' : ''}",
-                        style: AppText.body(size: 12)
-                            .copyWith(color: p.textSecondary),
+                        style: AppText.body(
+                          size: 12,
+                        ).copyWith(color: p.textSecondary),
                       ),
                     ),
                   ],
@@ -476,8 +629,23 @@ class AdminsScreen extends StatelessWidget {
     );
   }
 
-  Future<List<AuditLogModel>> _loadOrgAudit(String orgId) async {
-    if (orgId.isEmpty) return const <AuditLogModel>[];
+  /// The org's audit trail, WITH whether the read succeeded.
+  ///
+  /// 🔴 The failure used to be swallowed into an empty list, and the dialog
+  /// rendered "No recorded platform actions for this organization yet." — a
+  /// statement about the compliance record made on the strength of a read that
+  /// did not happen. A denied rule, a missing index and a genuinely
+  /// unmoderated organization were the same sentence, on the one surface whose
+  /// whole purpose is answering "who did this, and when".
+  ///
+  /// Still never throws: not crashing the dialog was the right half of the
+  /// original decision. What changes is that `failed` now travels with the
+  /// (empty) list, so the caller can say "could not be loaded" instead of
+  /// "there is nothing".
+  Future<({List<AuditLogModel> logs, ConsoleError? error})> _loadOrgAudit(
+    String orgId,
+  ) async {
+    if (orgId.isEmpty) return (logs: const <AuditLogModel>[], error: null);
     try {
       final snap = await FirebaseFirestore.instance
           .collection(FsCollections.auditLogs)
@@ -485,12 +653,20 @@ class AdminsScreen extends StatelessWidget {
           .limit(25)
           .get();
       final list = snap.docs.map(AuditLogModel.fromSnapshot).toList()
-        ..sort((x, y) =>
-            (y.createdAt ?? DateTime(0)).compareTo(x.createdAt ?? DateTime(0)));
-      return list;
-    } catch (_) {
-      // e.g. rule/index not yet deployed — never crash the dialog.
-      return const <AuditLogModel>[];
+        ..sort(
+          (x, y) => (y.createdAt ?? DateTime(0)).compareTo(
+            x.createdAt ?? DateTime(0),
+          ),
+        );
+      return (logs: list, error: null);
+    } catch (e) {
+      // e.g. rule/index not yet deployed — never crash the dialog, but never
+      // report the record as empty either.
+      debugPrint('audit_logs read failed for $orgId: $e');
+      return (
+        logs: const <AuditLogModel>[],
+        error: describeStreamError(e, subject: "this organization's audit trail"),
+      );
     }
   }
 
@@ -502,19 +678,21 @@ class AdminsScreen extends StatelessWidget {
     final buttons = <Widget>[];
 
     void add(String label, Color color, VoidCallback onTap) {
-      buttons.add(OutlinedButton(
-        onPressed: () {
-          Get.back();
-          onTap();
-        },
-        style: OutlinedButton.styleFrom(
-          foregroundColor: color,
-          side: BorderSide(color: color),
-          shape: const RoundedRectangleBorder(borderRadius: AppRadii.mdR),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      buttons.add(
+        OutlinedButton(
+          onPressed: () {
+            Get.back();
+            onTap();
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: color,
+            side: BorderSide(color: color),
+            shape: const RoundedRectangleBorder(borderRadius: AppRadii.mdR),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+          child: Text(label),
         ),
-        child: Text(label),
-      ));
+      );
     }
 
     if (s == 'pending') add("Approve", _cActive, () => ctrl.approve(a.docId));
@@ -523,22 +701,32 @@ class AdminsScreen extends StatelessWidget {
     }
     if (s == 'active' || s == 'pending') {
       add("Warn", _cWarning, () {
-        _reasonDialog(context,
-            title: 'Issue a warning',
-            hint: 'Reason shown to the organization',
-            confirmLabel: 'Send warning',
-            confirmColor: _cWarning,
-            onConfirm: (r) => ctrl.warn(a.docId, r));
+        _reasonDialog(
+          context,
+          title: 'Issue a warning',
+          subtitle:
+              'INTERNAL ONLY. A warning changes nothing for the organization — '
+              'they keep full access and are not notified. This reason is '
+              'visible to you here and in the audit log, and nowhere else.',
+          hint: 'Why is this warning being issued?',
+          confirmLabel: 'Send warning',
+          confirmColor: _cWarning,
+          onConfirm: (r) => ctrl.warn(a.docId, r),
+        );
       });
     }
     if (s != 'blocked') {
       add("Block", _cBlocked, () {
-        _reasonDialog(context,
-            title: 'Block organization',
-            hint: 'Reason for blocking',
-            confirmLabel: 'Block',
-            confirmColor: _cBlocked,
-            onConfirm: (r) => ctrl.block(a.docId, r));
+        _reasonDialog(
+          context,
+          title: 'Block organization',
+          subtitle:
+              'Blocking disables the owner\'s sign-in and stops the organization writing anything. They are notified that they are blocked — but not why, so record the reason here for your own trail.',
+          hint: 'Why is this organization being blocked?',
+          confirmLabel: 'Block',
+          confirmColor: _cBlocked,
+          onConfirm: (r) => ctrl.block(a.docId, r),
+        );
       });
     }
 
@@ -546,9 +734,38 @@ class AdminsScreen extends StatelessWidget {
   }
 
   // ── REASON DIALOG ───────────────────────────────────────────────────
+  /// The reason prompt behind Warn and Block.
+  ///
+  /// [subtitle] states what the action ACTUALLY does. It exists because this
+  /// dialog used to promise "Reason shown to the organization" — and nothing
+  /// anywhere shows it.
+  ///
+  /// `warning` IS AN INTERNAL LABEL, and that is the product's intent rather
+  /// than an unfinished feature. The evidence, traced end to end:
+  ///
+  ///   • TrainerHQ's own `AccountStatus` vocabulary (core/models/enums.dart)
+  ///     lists pending / approved / active / blocked / inactive / removed.
+  ///     `warning` is not in it, so the organization app has no such state.
+  ///   • `orgCanOperate()` in firestore.rules gates on pending and blocked
+  ///     only — a warned org keeps full access, by rule.
+  ///   • `orgStatusEvent()` returns null for warning, so no notification is
+  ///     ever produced.
+  ///   • `grep statusReason` across TrainerHQ and the member app: no hits.
+  ///
+  /// So the copy says "internal only" rather than inventing a delivery path.
+  /// The one place the code disagreed — `setAdminStatus` emitted the
+  /// "Organization approved" automation trigger for every non-blocked status,
+  /// warning included — was closed in `lib/admin_status_effects.ts`
+  /// (`automationTriggerFor`), because this promise is only true if nothing
+  /// downstream contacts the organization.
+  ///
+  /// The reason is REQUIRED. A moderation record with no stated reason is
+  /// indistinguishable from a mistake three weeks later — the same argument the
+  /// settlement engine already makes for a payout hold.
   void _reasonDialog(
     BuildContext context, {
     required String title,
+    required String subtitle,
     required String hint,
     required String confirmLabel,
     required Color confirmColor,
@@ -557,6 +774,7 @@ class AdminsScreen extends StatelessWidget {
     final p = context.palette;
     final reasonCtrl = TextEditingController();
     Get.dialog(
+      barrierDismissible: false,
       Dialog(
         backgroundColor: p.surface,
         shape: const RoundedRectangleBorder(borderRadius: AppRadii.lgR),
@@ -568,51 +786,78 @@ class AdminsScreen extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style:
-                        AppText.title(size: 19).copyWith(color: p.textPrimary)),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: reasonCtrl,
-                  maxLines: 3,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    hintText: hint,
-                    filled: true,
-                    fillColor: p.inputFill,
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: AppRadii.smR,
-                      borderSide: BorderSide(color: p.border),
-                    ),
-                  ),
+                Text(
+                  title,
+                  style: AppText.title(size: 19).copyWith(color: p.textPrimary),
                 ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Get.back(),
-                      child:
-                          Text("Cancel", style: TextStyle(color: p.textMuted)),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () {
-                        final r = reasonCtrl.text.trim();
-                        Get.back();
-                        onConfirm(r);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: confirmColor,
-                        foregroundColor: Colors.white,
-                        shape: const RoundedRectangleBorder(
-                            borderRadius: AppRadii.mdR),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 12),
-                      ),
-                      child: Text(confirmLabel),
-                    ),
-                  ],
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  style: AppText.body(
+                    size: 12.5,
+                  ).copyWith(color: p.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                StatefulBuilder(
+                  builder: (context, setState) {
+                    final reason = reasonCtrl.text.trim();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: reasonCtrl,
+                          maxLines: 3,
+                          autofocus: true,
+                          onChanged: (_) => setState(() {}),
+                          decoration: InputDecoration(
+                            hintText: hint,
+                            filled: true,
+                            fillColor: p.inputFill,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: AppRadii.smR,
+                              borderSide: BorderSide(color: p.border),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => Get.back(),
+                              child: Text(
+                                "Cancel",
+                                style: TextStyle(color: p.textMuted),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              // Disabled until a reason exists — see the note
+                              // on this method.
+                              onPressed: reason.isEmpty
+                                  ? null
+                                  : () {
+                                      Get.back();
+                                      onConfirm(reason);
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: confirmColor,
+                                foregroundColor: Colors.white,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: AppRadii.mdR,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 12,
+                                ),
+                              ),
+                              child: Text(confirmLabel),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -638,9 +883,10 @@ class AdminsScreen extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 6),
           Text(label, style: AppText.label(size: 11).copyWith(color: c)),
         ],
@@ -659,8 +905,10 @@ class AdminsScreen extends StatelessWidget {
         color: p.accent.withValues(alpha: 0.12),
         shape: BoxShape.circle,
       ),
-      child: Text(letter,
-          style: AppText.label(size: size * 0.4).copyWith(color: p.accent)),
+      child: Text(
+        letter,
+        style: AppText.label(size: size * 0.4).copyWith(color: p.accent),
+      ),
     );
   }
 
@@ -672,14 +920,21 @@ class AdminsScreen extends StatelessWidget {
       alignment: Alignment.center,
       child: Column(
         children: [
-          Icon(Icons.business_outlined,
-              size: 40, color: p.textMuted.withValues(alpha: 0.5)),
+          Icon(
+            Icons.business_outlined,
+            size: 40,
+            color: p.textMuted.withValues(alpha: 0.5),
+          ),
           const SizedBox(height: 12),
-          Text("No organizations found",
-              style: AppText.label(size: 14).copyWith(color: p.textSecondary)),
+          Text(
+            "No organizations found",
+            style: AppText.label(size: 14).copyWith(color: p.textSecondary),
+          ),
           const SizedBox(height: 4),
-          Text("Gyms that sign up (or match your filter) appear here.",
-              style: AppText.body(size: 13).copyWith(color: p.textMuted)),
+          Text(
+            "Gyms that sign up (or match your filter) appear here.",
+            style: AppText.body(size: 13).copyWith(color: p.textMuted),
+          ),
         ],
       ),
     );

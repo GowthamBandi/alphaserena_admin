@@ -2,17 +2,26 @@
 
 import 'dart:async';
 import 'package:alphaserena_admin_portel/models/clints_model.dart';
+import 'package:alphaserena_admin_portel/core/utils/list_ordering.dart';
+import 'package:alphaserena_admin_portel/core/utils/console_errors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 class ClientController extends GetxController {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Resolved LAZILY. Constructing the controller must not require an
+  // initialized Firebase app, so a widget test can subclass it, skip onInit,
+  // and drive the screen's states without a network. Matches
+  // SubscriptionController, which already did this for the plan editor.
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ============================================================
   // 🔥 CORE STATE
   // ============================================================
   final RxList<ClientModel> clients = <ClientModel>[].obs;
+  /// Set when the stream itself failed. Rendered as a classified error state —
+  /// an empty list must never be shown for a load that did not happen.
+  final Rxn<ConsoleError> loadError = Rxn<ConsoleError>();
 
   final RxBool isLoading = false.obs;
   final RxBool isProcessing = false.obs;
@@ -91,26 +100,37 @@ class ClientController extends GetxController {
   // ============================================================
   // 🔥 REAL-TIME LISTENER
   // ============================================================
+  void retryLoad() => _listenClients();
+
   void _listenClients() {
     isLoading.value = true;
+    loadError.value = null;
+    _sub?.cancel();
 
+    // NO orderBy: `orderBy("createdAt")` would exclude every member document
+    // that has no `createdAt`, while the Dashboard's headcount — a count()
+    // aggregate — includes them. Sorted in Dart instead; see
+    // core/utils/list_ordering.dart.
     _sub = _db
         .collection("clients")
-        .orderBy("createdAt", descending: true)
         .snapshots()
         .listen(
           (snap) {
-            clients.value = snap.docs
-                .map((e) => ClientModel.fromMap(e.data()))
-                .toList();
+            clients.value = newestFirst(
+              snap.docs.map((e) => ClientModel.fromMap(e.data())),
+              (c) => c.createdAt,
+            );
 
             _syncCaches();
 
+            loadError.value = null;
             isLoading.value = false;
           },
-          onError: (e) {
+          onError: (Object e) {
             isLoading.value = false;
-            Get.snackbar("Error", "Failed to load clients");
+            loadError.value =
+                describeStreamError(e, subject: 'the Members list');
+            debugPrint('clients stream error: $e');
           },
         );
   }

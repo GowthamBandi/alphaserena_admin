@@ -44,7 +44,9 @@ class TopOrg {
 }
 
 class DashboardController extends GetxController {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Resolved LAZILY so the screen can be constructed in a widget test without
+  // an initialized Firebase app. Matches the controllers that already do this.
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ── Organization KPIs ───────────────────────────────────────────────
   final RxInt orgsTotal = 0.obs;
@@ -78,6 +80,20 @@ class DashboardController extends GetxController {
   final RxBool countsLoaded = false.obs;
   final RxBool orgsError = false.obs;
   final RxBool revenueError = false.obs;
+
+  // ── "MEASURED" IS NOT "FINISHED TRYING" ──────────────────────────────────
+  //
+  // 🔴 Both `onError` handlers set `xLoaded = true` alongside `xError = true`,
+  // because "loaded" was written to mean "the first attempt has settled". The
+  // KPI grid reads `loaded` to decide between the real number and a dash, and
+  // its own comment states the rule it was built for: "Until the source has
+  // loaded, a real 0 and 'not yet known' are indistinguishable — show a dash
+  // instead of a misleading 0." A failed stream satisfies `loaded`, so the
+  // grid printed ₹0 total revenue and 0 organizations as measured facts.
+  //
+  // These two getters are what a KPI may render from: the read SUCCEEDED.
+  bool get orgsReady => orgsLoaded.value && !orgsError.value;
+  bool get revenueReady => revenueLoaded.value && !revenueError.value;
   bool get isLoading => !orgsLoaded.value;
 
   final Map<String, String> _orgNameById = {};

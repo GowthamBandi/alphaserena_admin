@@ -8,12 +8,18 @@ import 'package:get/get.dart';
 import '../core/services/refund_service.dart';
 import '../core/services/revenue_engine.dart';
 import '../models/subscription_model.dart';
+import '../core/utils/list_ordering.dart';
+import '../core/utils/console_errors.dart';
 
 class PaymentsController extends GetxController {
   // ============================================================
   // CORE
   // ============================================================
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Resolved LAZILY. Constructing the controller must not require an
+  // initialized Firebase app, so a widget test can subclass it, skip onInit,
+  // and drive the screen's states without a network. Matches
+  // SubscriptionController, which already did this for the plan editor.
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   StreamSubscription? _sub;
 
@@ -23,6 +29,14 @@ class PaymentsController extends GetxController {
   final RxBool isLoading = true.obs;
 
   final RxList<SubscriptionModel> subscriptions = <SubscriptionModel>[].obs;
+
+  /// Set when the revenue stream itself failed.
+  ///
+  /// This screen's four KPI cards are SUMS over [subscriptions]. Without this
+  /// flag a failed load rendered "₹0" as though the platform had earned
+  /// nothing — a fabricated financial figure, not a missing one. The screen
+  /// must show the classified failure instead.
+  final Rxn<ConsoleError> loadError = Rxn<ConsoleError>();
 
   // ============================================================
   // FILTER STATE
@@ -75,31 +89,44 @@ class PaymentsController extends GetxController {
   // ============================================================
   // REAL-TIME DATA STREAM
   // ============================================================
+  void retryLoad() => _initStream();
+
   void _initStream() {
     isLoading.value = true;
+    loadError.value = null;
 
     _sub?.cancel();
 
+    // NO orderBy. `orderBy("createdAt")` excludes every payment document that
+    // has no `createdAt`, and this screen's four revenue KPIs are sums over
+    // exactly this list — so a dropped document is money the founder is never
+    // shown. The Dashboard streams the same collection unordered, which is how
+    // the two screens came to report different platform revenue (reproduced in
+    // the emulator: 14,998 vs 4,999). Sorted in Dart instead; see
+    // core/utils/list_ordering.dart.
     _sub = _db
         .collection("admin_payments_history")
-        .orderBy("createdAt", descending: true)
         .snapshots()
         .listen(
           (snapshot) {
-            final list = snapshot.docs.map((doc) {
-              final data = doc.data();
-              return SubscriptionModel.fromMap(doc.id, data);
-            }).toList();
+            final list = newestFirst(
+              snapshot.docs.map(
+                  (doc) => SubscriptionModel.fromMap(doc.id, doc.data())),
+              (s) => s.createdAt,
+            );
 
             subscriptions.assignAll(list);
 
             _computeAllAnalytics();
 
+            loadError.value = null;
             isLoading.value = false;
           },
-          onError: (e) {
+          onError: (Object e) {
             isLoading.value = false;
-            Get.snackbar("Error", "Payments load failed");
+            loadError.value =
+                describeStreamError(e, subject: 'the payment ledger');
+            debugPrint('admin_payments_history stream error: $e');
           },
         );
   }

@@ -59,10 +59,28 @@ class OperationsScreen extends StatelessWidget {
       trailing: Obx(() {
         // Touch the source lists so the badge stays live.
         final total = ctrl.totalCount;
+        // 🔴 "All clear" IS A CLAIM ABOUT DATA THAT HAS BEEN READ.
+        //
+        // The body below already distinguishes LOADING from EMPTY, and
+        // `anyLoading`'s docstring says it exists for exactly that reason.
+        // This badge did not: with no alerts yet it rendered a green "All
+        // clear" while the body was still showing its spinner — the two halves
+        // of one screen contradicting each other, and a founder reads this
+        // half at a glance. A count that is zero because nothing has been
+        // counted is not health.
+        //
+        // Only the all-clear branch is gated: once an alert exists (including
+        // the SA-11 blind-spot cards) the count is real and worth showing even
+        // while a slower feed is still arriving.
+        final unproven = total == 0 && ctrl.anyLoading;
         return Text(
-          total == 0 ? 'All clear' : '$total need${total == 1 ? 's' : ''} attention',
+          unproven
+              ? 'Checking…'
+              : total == 0
+                  ? 'All clear'
+                  : '$total need${total == 1 ? 's' : ''} attention',
           style: AppText.body(size: 13).copyWith(
-            color: total == 0 ? _cClear : p.textMuted,
+            color: !unproven && total == 0 ? _cClear : p.textMuted,
           ),
         );
       }),

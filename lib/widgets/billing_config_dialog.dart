@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 
 import '../controllers/billing_config_controller.dart';
 import '../core/theme/app_colors.dart';
+import '../core/widgets/console/console_chrome.dart';
 import '../core/theme/app_radii.dart';
 import '../core/theme/app_text.dart';
 import '../models/billing_config_model.dart';
@@ -44,6 +45,33 @@ class BillingConfigDialog extends StatelessWidget {
             return const SizedBox(
               height: 240,
               child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
+            );
+          }
+          // 🔴 A FAILED READ IS NOT AN UNTAXED PLATFORM.
+          //
+          // Rendering the editor here would show the master switch OFF with no
+          // rules — indistinguishable from a platform that has never charged
+          // tax — over a document this dialog never read. Its Save button
+          // republishes `taxes` and `authoredTaxes` as whole arrays, so one
+          // click would wipe the live table. The error state replaces the
+          // whole body, which is what removes the destructive control rather
+          // than merely discouraging it.
+          final err = ctrl.loadError.value;
+          if (err != null) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _header(context),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  child: ConsoleErrorState(
+                    error: err,
+                    onRetry: ctrl.retryLoad,
+                  ),
+                ),
+              ],
             );
           }
           final cfg = ctrl.draft;
@@ -157,18 +185,33 @@ class BillingConfigDialog extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 🔴 READ-ONLY, and the copy beside it now says why.
+        //
+        // This was an editable field whose helper text read "the order is
+        // created in it". It is not. `subscriptions.ts:createRazorpayOrder`
+        // hardcodes `currency: "INR"`, and `pricing.ts:priceQuote` takes an
+        // optional `currency` that NO caller ever passes, so every quote
+        // defaults to INR too. The stored value reached nothing except this
+        // dialog's own preview symbol — which is worse than a dead control,
+        // because the preview appeared to respond to it.
+        //
+        // Disabled rather than deleted: `setCommerceConfig` validates a
+        // 3-letter code, the document keeps the field, and supporting a second
+        // currency is a backend change (Razorpay account settings, the order
+        // call, the quote) that a text box cannot stand in for. Same rule as
+        // SA-08 — a control that cannot do what it appears to do is removed
+        // rather than re-stubbed.
         SizedBox(
           width: 140,
           child: TextFormField(
+            key: const Key('billing-currency'),
             initialValue: ctrl.currency.value,
-            textCapitalization: TextCapitalization.characters,
-            maxLength: 3,
+            enabled: false,
             decoration: const InputDecoration(
               labelText: 'Currency',
               counterText: '',
               isDense: true,
             ),
-            onChanged: (v) => ctrl.currency.value = v.toUpperCase(),
           ),
         ),
         const SizedBox(width: 12),
@@ -176,8 +219,9 @@ class BillingConfigDialog extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.only(top: 14),
             child: Text(
-              'Razorpay must support this currency on your account before you '
-              'change it — the order is created in it.',
+              'Every order is created in INR. Selling in another currency needs '
+              'backend work (the Razorpay order call and the price quote both '
+              'hardcode INR), so this is shown rather than offered.',
               style: AppText.body(size: 11.5).copyWith(color: p.textMuted),
             ),
           ),

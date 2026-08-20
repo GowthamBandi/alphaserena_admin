@@ -282,6 +282,14 @@ class _AutomationScreenState extends State<AutomationScreen> {
     return StreamBuilder<List<AutomationRun>>(
       stream: _svc.watchRuns(),
       builder: (context, snap) {
+        // 🔴 `hasError` must be tested BEFORE `!hasData`. On a stream error
+        // `hasData` never becomes true, so without this branch the panel spun
+        // an infinite loader instead of saying it could not read
+        // `automation_runs`. Same shape as the rules stream above.
+        if (snap.hasError) {
+          return _message(context, Icons.error_outline,
+              'Could not load automation activity', _cWarn);
+        }
         if (!snap.hasData) {
           return const SizedBox(
               height: 80,

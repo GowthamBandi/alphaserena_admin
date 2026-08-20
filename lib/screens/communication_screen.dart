@@ -86,7 +86,8 @@ class CommunicationScreen extends StatelessWidget {
     return PageShell(
       title: 'Communication',
       icon: Icons.campaign_outlined,
-      trailing: Obx(() => Text('${ctrl.announcements.length} total',
+      trailing: Obx(() => Text(
+          ctrl.hasError.value ? '—' : '${ctrl.announcements.length} total',
           style: AppText.body(size: 13).copyWith(color: p.textMuted))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

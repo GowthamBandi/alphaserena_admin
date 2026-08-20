@@ -1,17 +1,37 @@
 // lib/models/billing_config_model.dart
 //
-// PLATFORM BILLING CONFIGURATION — `platform_billing/config`.
+// PLATFORM BILLING CONFIGURATION — `platform_config/commerce`.
 //
 // The founder authors taxes here; the BACKEND is what applies them. TrainerHQ
 // never reads this doc: every amount it displays comes from a server-computed
 // PriceQuote (previewCoupon / createRazorpayOrder), so what a buyer is quoted
 // and what Razorpay charges are the same number by construction.
 //
-// The wire contract is mirrored exactly by `functions/src/lib/pricing.ts`
-// (`parseBillingConfig`). Both sides fail SAFE: a malformed rule, a zero
-// percent or a blank name is dropped rather than half-applied, and a disabled
-// config levies nothing — which reproduces the platform's pre-tax charges
-// exactly. Tax can therefore never appear on an invoice by accident.
+// ⚠️ THIS DOCUMENT HAS TWO TAX ARRAYS AND THEY ARE NOT INTERCHANGEABLE.
+//
+//   `authoredTaxes` — what the founder typed, retired rules included. THIS is
+//                     what the editor round-trips, so switching a tax off does
+//                     not lose its configuration.
+//   `taxes`         — the EFFECTIVE table the billing engine prices from,
+//                     derived server-side by `setCommerceConfig` and already
+//                     filtered by the master switch and the per-rule kill
+//                     switches. `subscriptions.ts:loadTaxRules` reads this one.
+//
+// Reading `taxes` back into the editor would silently delete every disabled
+// rule on the next save, so [fromMap] reads `authoredTaxes` and falls back to
+// `taxes` only for a document written before the two were separated.
+//
+// The console NEVER writes this document directly: `platform_config` is
+// `allow write: if false` and stays that way. The write goes through the
+// `setCommerceConfig` callable, which re-runs this model's validation
+// server-side, derives the effective table, and audits the change. The copy
+// here is the fast local check, not the gate.
+//
+// The wire contract is mirrored by `functions/src/lib/commerce_config.ts`.
+// Both sides fail SAFE: a malformed rule, a zero percent or a blank name is
+// rejected rather than half-applied, and a disabled config levies nothing —
+// which reproduces the platform's pre-tax charges exactly. Tax can therefore
+// never appear on an invoice by accident.
 //
 // DELIBERATELY NOT HARDCODED: nothing here knows what "GST" is. A tax is a
 // name, a rate, a label and an inclusive/exclusive flag — so VAT, sales tax or
@@ -59,30 +79,29 @@ class TaxRule {
     double? percent,
     bool? inclusive,
     bool? enabled,
-  }) =>
-      TaxRule(
-        name: name ?? this.name,
-        label: label ?? this.label,
-        percent: percent ?? this.percent,
-        inclusive: inclusive ?? this.inclusive,
-        enabled: enabled ?? this.enabled,
-      );
+  }) => TaxRule(
+    name: name ?? this.name,
+    label: label ?? this.label,
+    percent: percent ?? this.percent,
+    inclusive: inclusive ?? this.inclusive,
+    enabled: enabled ?? this.enabled,
+  );
 
   factory TaxRule.fromMap(Map<String, dynamic> m) => TaxRule(
-        name: (m['name'] ?? '').toString(),
-        label: (m['label'] ?? '').toString(),
-        percent: double.tryParse('${m['percent'] ?? 0}') ?? 0,
-        inclusive: m['inclusive'] == true,
-        enabled: m['enabled'] != false,
-      );
+    name: (m['name'] ?? '').toString(),
+    label: (m['label'] ?? '').toString(),
+    percent: double.tryParse('${m['percent'] ?? 0}') ?? 0,
+    inclusive: m['inclusive'] == true,
+    enabled: m['enabled'] != false,
+  );
 
   Map<String, dynamic> toMap() => {
-        'name': name.trim(),
-        'label': label.trim(),
-        'percent': percent,
-        'inclusive': inclusive,
-        'enabled': enabled,
-      };
+    'name': name.trim(),
+    'label': label.trim(),
+    'percent': percent,
+    'inclusive': inclusive,
+    'enabled': enabled,
+  };
 
   /// Whether the BACKEND will actually levy this rule (mirrors
   /// `parseBillingConfig`: enabled, named, positive rate). The editor shows
@@ -125,35 +144,45 @@ class BillingConfigModel {
     bool? enabled,
     String? currency,
     List<TaxRule>? taxes,
-  }) =>
-      BillingConfigModel(
-        enabled: enabled ?? this.enabled,
-        currency: currency ?? this.currency,
-        taxes: taxes ?? this.taxes,
-        updatedAt: updatedAt,
-      );
+  }) => BillingConfigModel(
+    enabled: enabled ?? this.enabled,
+    currency: currency ?? this.currency,
+    taxes: taxes ?? this.taxes,
+    updatedAt: updatedAt,
+  );
 
-  factory BillingConfigModel.fromMap(Map<String, dynamic> m) =>
-      BillingConfigModel(
-        enabled: m['enabled'] == true,
-        currency: (m['currency'] ?? 'INR').toString().toUpperCase(),
-        taxes: (m['taxes'] is List)
-            ? (m['taxes'] as List)
+  /// Reads the AUTHORED table — see the note at the top of this file. Falling
+  /// back to `taxes` keeps a pre-split document editable; without the fallback
+  /// the first load after this change would show an empty editor and the first
+  /// save would wipe the live table.
+  factory BillingConfigModel.fromMap(Map<String, dynamic> m) {
+    final raw = m['authoredTaxes'] is List ? m['authoredTaxes'] : m['taxes'];
+    return BillingConfigModel(
+      enabled: m['enabled'] == true,
+      currency: (m['currency'] ?? 'INR').toString().toUpperCase(),
+      taxes: (raw is List)
+          ? raw
                 .whereType<Map>()
                 .map((e) => TaxRule.fromMap(Map<String, dynamic>.from(e)))
                 .toList()
-            : const [],
-        updatedAt: m['updatedAt'] is Timestamp
-            ? (m['updatedAt'] as Timestamp).toDate()
-            : null,
-      );
+          : const [],
+      updatedAt: m['updatedAt'] is Timestamp
+          ? (m['updatedAt'] as Timestamp).toDate()
+          : null,
+    );
+  }
 
-  Map<String, dynamic> toMap() => {
-        'enabled': enabled,
-        'currency': currency.trim().toUpperCase(),
-        'taxes': taxes.map((t) => t.toMap()).toList(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
+  /// The `setCommerceConfig` request body.
+  ///
+  /// Plain JSON only — this crosses a callable boundary, so no `FieldValue`
+  /// and no `Timestamp`. It sends what the founder AUTHORED; the effective
+  /// table and `updatedAt` are derived by the server, which is what stops a
+  /// client from publishing a levied rate the editor never displayed.
+  Map<String, dynamic> toPayload() => {
+    'enabled': enabled,
+    'currency': currency.trim().toUpperCase(),
+    'taxes': taxes.map((t) => t.toMap()).toList(),
+  };
 
   /// Save-time validation. Returns human-readable errors (empty = valid).
   /// Mirrors what the backend will accept, so the console can never publish a

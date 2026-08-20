@@ -71,7 +71,9 @@ const int _navSupport = 7;
 const int _navCommunication = 8;
 
 class OperationsController extends GetxController {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Resolved LAZILY so a test can construct the controller, skip onInit, and
+  // drive its derived state without an initialized Firebase app.
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ── Backend incident queues (own streams — nobody else reads these) ───
   /// Open money-integrity incidents (charged-not-activated / refund drift).
@@ -272,6 +274,64 @@ class OperationsController extends GetxController {
         actionLabel: 'Retry',
         navIndex: _navAdmins,
         onTap: retryTelemetry,
+      ));
+    }
+
+    // ── DERIVED-SOURCE BLIND SPOTS ───────────────────────────────────────
+    //
+    // This feed is mostly derived from three other controllers. Each of them
+    // sets `isLoading = false` and leaves its list EMPTY when its stream
+    // fails — so without these cards a denied `admins` read made this screen
+    // render a green "All clear" over a platform it could not see. Every
+    // other broken screen in this console looks broken; this one looked fine,
+    // which is why it is the most dangerous of them.
+    //
+    // Same shape as the two cards above for this controller's own streams:
+    // name the feed, say what is hidden, and never silently substitute zero.
+    if (_admins?.loadError.value != null) {
+      out.add(const OpsAlert(
+        severity: OpsSeverity.critical,
+        icon: Icons.visibility_off_outlined,
+        title: 'Organization feed unavailable',
+        detail:
+            'Pending approvals, lapsed and expiring subscriptions and orgs '
+            'under moderation are ALL derived from this stream — none of them '
+            'can be shown right now. Open Organizations for the reason.',
+        actionLabel: 'Open Organizations',
+        navIndex: _navAdmins,
+      ));
+    }
+    if (_support?.feedbackError.value == true) {
+      out.add(const OpsAlert(
+        severity: OpsSeverity.warning,
+        icon: Icons.visibility_off_outlined,
+        title: 'Support feed unavailable',
+        detail: 'Open complaints and unanswered feedback cannot be counted. '
+            'Open Support for the reason.',
+        actionLabel: 'Open Support',
+        navIndex: _navSupport,
+      ));
+    }
+    if (_support?.reviewsError.value == true) {
+      out.add(const OpsAlert(
+        severity: OpsSeverity.warning,
+        icon: Icons.visibility_off_outlined,
+        title: 'Member review feed unavailable',
+        detail: 'Critical reviews cannot be counted. Open Support for the '
+            'reason.',
+        actionLabel: 'Open Support',
+        navIndex: _navSupport,
+      ));
+    }
+    if (_comms?.hasError.value == true) {
+      out.add(const OpsAlert(
+        severity: OpsSeverity.warning,
+        icon: Icons.visibility_off_outlined,
+        title: 'Campaign feed unavailable',
+        detail: 'Failed, overdue and queued campaigns cannot be counted. '
+            'Open Communication for the reason.',
+        actionLabel: 'Open Communication',
+        navIndex: _navCommunication,
       ));
     }
 

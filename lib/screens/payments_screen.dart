@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/payments_controller.dart';
 import '../../models/subscription_model.dart';
+import '../../core/widgets/console/console_chrome.dart';
 
 class PaymentsScreen extends StatelessWidget {
   PaymentsScreen({super.key});
@@ -16,23 +17,41 @@ class PaymentsScreen extends StatelessWidget {
       backgroundColor: const Color(0xfff4f6fa),
       body: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            _header(),
-            const SizedBox(height: 20),
+        child: Obx(() {
+          // The whole body, not just the table. Every KPI below is a SUM over
+          // a list that a failed stream leaves empty, so rendering them during
+          // a failure reported "₹0 total revenue" — a number the platform
+          // never earned. On a money screen that is worse than showing nothing.
+          final err = ctrl.loadError.value;
+          if (err != null) {
+            return Column(
+              children: [
+                _header(),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: ConsoleErrorState(error: err, onRetry: ctrl.retryLoad),
+                ),
+              ],
+            );
+          }
+          return Column(
+            children: [
+              _header(),
+              const SizedBox(height: 20),
 
-            _kpiSection(),
-            const SizedBox(height: 20),
+              _kpiSection(),
+              const SizedBox(height: 20),
 
-            _middleSection(),
-            const SizedBox(height: 20),
+              _middleSection(),
+              const SizedBox(height: 20),
 
-            _filters(),
-            const SizedBox(height: 12),
+              _filters(),
+              const SizedBox(height: 12),
 
-            Expanded(child: _table()),
-          ],
-        ),
+              Expanded(child: _table()),
+            ],
+          );
+        }),
       ),
     );
   }

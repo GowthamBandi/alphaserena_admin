@@ -30,9 +30,11 @@ class AuditLogScreen extends StatelessWidget {
       // "300 recent" read as a total. The "+" is the whole point: it says the
       // number is a window, not a count of everything that ever happened.
       trailing: Obx(() => Text(
-          ctrl.atCap
-              ? '${ctrl.logs.length}+ (newest first)'
-              : '${ctrl.logs.length} total',
+          ctrl.hasError.value
+              ? '—'
+              : ctrl.atCap
+                  ? '${ctrl.logs.length}+ (newest first)'
+                  : '${ctrl.logs.length} total',
           style: AppText.body(size: 13).copyWith(color: p.textMuted))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

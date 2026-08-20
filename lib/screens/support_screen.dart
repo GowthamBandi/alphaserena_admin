@@ -65,8 +65,8 @@ class SupportScreen extends StatelessWidget {
       icon: Icons.support_agent_outlined,
       trailing: Obx(() => Text(
             ctrl.tab.value == 0
-                ? '${ctrl.openCount} open'
-                : '${ctrl.reviewCount} reviews',
+                ? (ctrl.feedbackError.value ? '—' : '${ctrl.openCount} open')
+                : (ctrl.reviewsError.value ? '—' : '${ctrl.reviewCount} reviews'),
             style: AppText.body(size: 13)
                 .copyWith(color: context.palette.textMuted),
           )),

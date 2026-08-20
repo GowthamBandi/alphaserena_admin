@@ -1,4 +1,5 @@
 import 'package:alphaserena_admin_portel/controllers/admin_root_controller.dart';
+import 'package:alphaserena_admin_portel/core/controllers/session_controller.dart';
 import 'package:alphaserena_admin_portel/core/theme/app_colors.dart';
 import 'package:alphaserena_admin_portel/core/theme/app_radii.dart';
 import 'package:alphaserena_admin_portel/core/theme/app_shadows.dart';
@@ -8,6 +9,25 @@ import 'package:get/get.dart';
 import 'legal/legal_screen.dart';
 
 /// Top navigation bar (constant across pages).
+///
+/// ── WHAT WAS REMOVED, AND WHY ───────────────────────────────────────────
+/// This bar used to carry three controls that did nothing:
+///
+///   • a "Search anything…" TextField with no controller, no `onChanged` and
+///     no `onSubmitted` — the most prominent affordance in the console, inert
+///     on every screen;
+///   • a notification bell that raised `Get.snackbar("…not implemented")`;
+///   • a Profile menu item that did the same.
+///
+/// A founder console that ships controls which announce their own absence
+/// teaches its only user that the interface cannot be trusted — and a search
+/// box that silently swallows typing is worse than no search box, because the
+/// founder concludes the platform has no matching organization.
+///
+/// They are gone rather than stubbed. What replaced the search field is the
+/// one thing this bar can state truthfully and usefully: WHICH ACCOUNT is
+/// signed in. Global search is a real feature and belongs in a change that
+/// actually builds it.
 class TopNavBar extends StatelessWidget {
   const TopNavBar({super.key});
 
@@ -16,16 +36,6 @@ class TopNavBar extends StatelessWidget {
       context: context,
       position: const RelativeRect.fromLTRB(1000, 80, 16, 0),
       items: [
-        PopupMenuItem(
-          child: ListTile(
-            leading: const Icon(Icons.person_outline),
-            title: const Text("Profile"),
-            onTap: () {
-              Navigator.pop(context);
-              Get.snackbar("Profile", "Open profile screen (not implemented)");
-            },
-          ),
-        ),
         PopupMenuItem(
           child: ListTile(
             leading: const Icon(Icons.gavel_outlined),
@@ -43,14 +53,15 @@ class TopNavBar extends StatelessWidget {
             onTap: () {
               Navigator.pop(context);
               Get.defaultDialog(
-                  title: "Logout",
-                  middleText: "Confirm logout?",
-                  textCancel: "Cancel",
-                  textConfirm: "Logout",
-                  onConfirm: () {
-                    Get.back();
-                    Get.find<AdminRootController>().logout();
-                  });
+                title: "Logout",
+                middleText: "Confirm logout?",
+                textCancel: "Cancel",
+                textConfirm: "Logout",
+                onConfirm: () {
+                  Get.back();
+                  Get.find<AdminRootController>().logout();
+                },
+              );
             },
           ),
         ),
@@ -83,29 +94,27 @@ class TopNavBar extends StatelessWidget {
               ),
             ),
           const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: "Search anything...",
-                prefixIcon: Icon(Icons.search, color: p.textMuted),
-                filled: true,
-                fillColor: p.inputFill,
-                isDense: true,
-                contentPadding: const EdgeInsets.all(12),
-                border: OutlineInputBorder(
-                  borderRadius: AppRadii.smR,
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
+          const Spacer(),
+          // The signed-in identity. Real, and worth stating: this console is
+          // god-mode over every organization on the platform, so "which
+          // account am I in" is a question the chrome should answer without
+          // being asked.
+          Flexible(
+            child: Obx(() {
+              final email = Get.find<SessionController>().user.value?.email;
+              if (email == null || email.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              return Text(
+                email,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: TextStyle(color: p.textSecondary, fontSize: 13),
+              );
+            }),
           ),
           const SizedBox(width: 12),
-          IconButton(
-            onPressed: () => Get.snackbar(
-                "Notifications", "Open notifications (not implemented)"),
-            icon: Icon(Icons.notifications_outlined, color: p.textSecondary),
-          ),
-          const SizedBox(width: 8),
           GestureDetector(
             onTap: () => _onProfileTap(context),
             child: CircleAvatar(

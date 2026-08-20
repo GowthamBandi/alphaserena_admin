@@ -34,7 +34,8 @@ class PlatformStaffScreen extends StatelessWidget {
     return PageShell(
       title: 'Platform Staff',
       icon: Icons.shield_outlined,
-      trailing: Obx(() => Text('${ctrl.total} active',
+      trailing: Obx(() => Text(
+          ctrl.hasError.value ? '—' : '${ctrl.total} active',
           style: AppText.body(size: 13).copyWith(color: p.textMuted))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

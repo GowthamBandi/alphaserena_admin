@@ -7,6 +7,7 @@ import '../controllers/trainer_controller.dart';
 import '../core/theme/serena/serena_tokens.g.dart';
 import '../core/widgets/serena/serena_ui.dart';
 import '../models/trainer_model.dart';
+import '../core/widgets/console/console_chrome.dart';
 
 class TrainersScreen extends StatelessWidget {
   TrainersScreen({super.key});
@@ -25,6 +26,10 @@ class TrainersScreen extends StatelessWidget {
           /// 🔥 SAFE EXPANDED (NO FLEX ERROR)
           Expanded(
             child: Obx(() {
+              final err = ctrl.loadError.value;
+              if (err != null) {
+                return ConsoleErrorState(error: err, onRetry: ctrl.retryLoad);
+              }
               if (ctrl.isLoading.value) {
                 return const Center(child: CircularProgressIndicator());
               }

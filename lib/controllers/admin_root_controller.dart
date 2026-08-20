@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:alphaserena_admin_portel/screens/admins_screen.dart';
 import 'package:alphaserena_admin_portel/screens/audit_log_screen.dart';
+import 'package:alphaserena_admin_portel/screens/automation_screen.dart';
+import 'package:alphaserena_admin_portel/screens/engagement_intelligence_screen.dart';
 import 'package:alphaserena_admin_portel/screens/clients_screen.dart';
 import 'package:alphaserena_admin_portel/screens/communication_screen.dart';
 import 'package:alphaserena_admin_portel/screens/coupon_code_screen.dart';
@@ -33,15 +35,20 @@ class AdminRootController extends GetxController {
   // ===========================================================================
   // CORE SERVICES
   // ===========================================================================
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Resolved LAZILY so the console shell and its screens can be constructed in
+  // a widget test without an initialized Firebase app. Matches the controllers
+  // that already do this.
+  late final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // ===========================================================================
   // NAVIGATION STATE
   // ===========================================================================
   final RxInt selectedIndex = 0.obs;
 
-  /// Prevent invalid index crashes
-  final int maxIndex = 14;
+  /// Prevent invalid index crashes. MUST equal the last sidebar entry — a
+  /// mismatch is how a finished screen ends up shipped and unreachable.
+  /// `test/nav_reachability_test.dart` pins the two together.
+  final int maxIndex = 16;
 
   // ===========================================================================
   // PAGE CACHE (LAZY LOADED)
@@ -200,6 +207,16 @@ class AdminRootController extends GetxController {
       // Appended at 14 to keep every existing index stable.
       case 14:
         return const SettlementScreen();
+      // AUTOMATION + ENGAGEMENT INTELLIGENCE — both were finished, both had
+      // their backend callables deployed live (`listAutomationTriggers`,
+      // `setAutomationEnabled`, `getEngagementIntelligence`), and neither had
+      // a case here or a sidebar entry. 1,269 lines of founder capability
+      // that nothing could open. Appended at 15/16 so every existing index —
+      // which the Operations Centre's jump targets depend on — stays put.
+      case 15:
+        return const AutomationScreen();
+      case 16:
+        return const EngagementIntelligenceScreen();
       default:
         return const SizedBox();
     }

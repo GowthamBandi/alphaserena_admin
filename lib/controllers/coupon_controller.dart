@@ -8,9 +8,14 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../core/constants/firestore_collections.dart';
 import '../models/coupon_model.dart';
+import '../core/utils/console_errors.dart';
 
 class CouponController extends GetxController {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Resolved LAZILY. Constructing the controller must not require an
+  // initialized Firebase app, so a widget test can subclass it, skip onInit,
+  // and drive the screen's states without a network. Matches
+  // SubscriptionController, which already did this for the plan editor.
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // STATES
   RxBool isLoading = false.obs;
@@ -18,6 +23,9 @@ class CouponController extends GetxController {
 
   // LIST OF COUPONS
   RxList<CouponModel> coupons = <CouponModel>[].obs;
+  /// Set when the stream itself failed. Rendered as a classified error state —
+  /// an empty list must never be shown for a load that did not happen.
+  final Rxn<ConsoleError> loadError = Rxn<ConsoleError>();
 
   // SEARCH FIELD
   RxString searchQuery = "".obs;
@@ -66,8 +74,11 @@ class CouponController extends GetxController {
   // ---------------------------------------------------------------------------
   // REAL-TIME FETCH COUPONS
   // ---------------------------------------------------------------------------
+  void retryLoad() => fetchCoupons();
+
   void fetchCoupons() {
     isLoading.value = true;
+    loadError.value = null;
     _sub?.cancel();
     _sub = _db
         .collection(collectionName)
@@ -77,10 +88,12 @@ class CouponController extends GetxController {
       coupons.value = snapshot.docs
           .map((d) => CouponModel.fromMap(d.id, d.data()))
           .toList();
+      loadError.value = null;
       isLoading.value = false;
-    }, onError: (e) {
+    }, onError: (Object e) {
       isLoading.value = false;
-      Get.snackbar("Error", "Failed to load coupons");
+      loadError.value = describeStreamError(e, subject: 'the coupon catalog');
+      debugPrint('coupon_codes stream error: $e');
     });
   }
 

@@ -12,6 +12,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/subscription_plan_model.dart';
 import '../widgets/billing_config_dialog.dart';
 import '../widgets/page_shell.dart';
+import '../core/widgets/console/console_chrome.dart';
 import '../widgets/plan_comparison_dialog.dart';
 import '../widgets/subscription_plan_dialog.dart';
 import '../widgets/trainer_preview_dialog.dart';
@@ -187,6 +188,10 @@ class SubscriptionsScreen extends StatelessWidget {
         ],
       ),
       child: Obx(() {
+        final err = ctrl.loadError.value;
+        if (err != null) {
+          return ConsoleErrorState(error: err, onRetry: ctrl.retryLoad);
+        }
         if (ctrl.isLoading.value && ctrl.plans.isEmpty) {
           return const SizedBox(
             height: 260,

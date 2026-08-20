@@ -4,10 +4,15 @@ import 'package:alphaserena_admin_portel/controllers/admin_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/admin_login_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/admin_root_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/audit_controller.dart';
+import 'package:alphaserena_admin_portel/controllers/billing_config_controller.dart';
+import 'package:alphaserena_admin_portel/controllers/client_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/communication_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/coupon_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/dashboard_controller.dart';
+import 'package:alphaserena_admin_portel/controllers/global_exercise_controller.dart';
+import 'package:alphaserena_admin_portel/controllers/global_food_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/operations_controller.dart';
+import 'package:alphaserena_admin_portel/controllers/payments_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/platform_staff_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/settlement_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/subscription_controller.dart';
@@ -303,6 +308,23 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
 
   static void _teardownConsoleControllers() {
     // Derived controllers first, AdminRootController last.
+    //
+    // 🔴 THE FIVE BELOW ARE REGISTERED BY SCREENS, NOT BY `_safePut` ABOVE —
+    // `payments_screen`, `clients_screen`, `global_food_screen`,
+    // `global_exercise_screen` and `billing_config_dialog` each call
+    // `Get.put(...)` on open. They were absent from this list, so they
+    // outlived the session that created them: `PaymentsController` and
+    // `ClientController` kept their `admin_payments_history` and `clients`
+    // listeners open past sign-out (their `onClose`, which cancels the
+    // subscription, only runs on `Get.delete`), and the next sign-in re-used
+    // the same instances with the previous session's rows still in them —
+    // which is exactly what the sentence above says this method prevents.
+    // `test/controller_teardown_test.dart` now pins the two lists together.
+    _safeDelete<BillingConfigController>();
+    _safeDelete<GlobalFoodController>();
+    _safeDelete<GlobalExerciseController>();
+    _safeDelete<PaymentsController>();
+    _safeDelete<ClientController>();
     _safeDelete<SettlementController>();
     _safeDelete<OperationsController>();
     _safeDelete<PlatformStaffController>();

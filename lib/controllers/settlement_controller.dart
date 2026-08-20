@@ -80,7 +80,9 @@ enum SettlementView {
 }
 
 class SettlementController extends GetxController {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Resolved LAZILY so the screen can be constructed in a widget test without
+  // an initialized Firebase app. Matches the controllers that already do this.
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ── STREAMS ───────────────────────────────────────────────────────────────
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _settlementsSub;
@@ -146,6 +148,34 @@ class SettlementController extends GetxController {
   final RxList<ChargedOrderAlert> exceptions = <ChargedOrderAlert>[].obs;
   final RxBool exceptionsLoading = true.obs;
 
+  /// Set when the `paymentAlerts` stream itself failed.
+  ///
+  /// 🔴 Without this the view rendered "No exceptions" — the reassuring copy
+  /// for a healthy platform — for a read that never happened. On the queue of
+  /// members who were CHARGED and never activated, an unread queue and an
+  /// empty one are not the same fact. Same shape as [error], which the
+  /// settlements queue beside it has always carried.
+  final Rxn<ConsoleError> exceptionsError = Rxn<ConsoleError>();
+
+  /// Set when the per-payment webhook-evidence stream failed.
+  ///
+  /// 🔴 Its `onError` only wrote a `debugPrint`, so an unread stream and a
+  /// payment with no webhook evidence were the same empty list — and the panel
+  /// renders a SPECIFIC DIAGNOSIS for that empty case: "the Razorpay webhook
+  /// may not be registered". A Firestore read failure therefore sent the
+  /// operator to investigate the gateway's webhook configuration. An empty
+  /// state that merely says nothing is a lie of omission; one that names a
+  /// probable cause it did not observe sends someone down the wrong road.
+  final RxBool webhookError = false.obs;
+
+  /// The webhook stream's FAILURE branch. Named so a test drives the real
+  /// handler rather than a re-description of it.
+  @visibleForTesting
+  void onWebhookStreamError(Object e) {
+    webhookError.value = true;
+    debugPrint('webhook stream error: $e');
+  }
+
   // ── PROOF UPLOAD ──────────────────────────────────────────────────────────
   /// -1 = idle; 0..1 = uploading. One task at a time — a transfer confirmation
   /// carries exactly one proof.
@@ -172,7 +202,11 @@ class SettlementController extends GetxController {
     super.onClose();
   }
 
+  void retryExceptions() => _bindExceptions();
+
   void _bindExceptions() {
+    exceptionsLoading.value = true;
+    exceptionsError.value = null;
     // Equality-only query — no composite index needed on `paymentAlerts`.
     // Status + ordering are handled client-side over a bounded window.
     _alertsSub = _db
@@ -192,10 +226,13 @@ class SettlementController extends GetxController {
                 return bt.compareTo(at);
               });
             exceptions.value = rows;
+            exceptionsError.value = null;
             exceptionsLoading.value = false;
           },
           onError: (Object e) {
             exceptionsLoading.value = false;
+            exceptionsError.value =
+                _settlementError(e, operation: 'the exception queue');
             debugPrint('paymentAlerts stream error: $e');
           },
         );
@@ -365,9 +402,23 @@ class SettlementController extends GetxController {
 
   /// Blocked or failed payouts across the whole platform, from the server's
   /// own status census rather than from whatever the current view streamed.
-  int get needsAttentionCount {
+  /// `null` when the census could not be read.
+  ///
+  /// 🔴 This used to fall back to `countWhere((x) => x.status.needsAttention)`
+  /// over the STREAMED PAGE — the very derivation the comment above records as
+  /// a shipped defect. Moving the counter server-side fixed the filtered-view
+  /// case and left the discredited math as the null branch, so one failed
+  /// `getSettlementSummary` brought the lie back for the whole session
+  /// (`refreshSummary` runs once at boot; changing view does not re-fetch).
+  /// On "Ready to pay" the fallback is structurally 0 — that view streams
+  /// `status == 'approved'`, disjoint from {under_review, failed}.
+  ///
+  /// There is no safe local answer to "is anything blocked across the
+  /// platform", so the honest return is "I do not know", which the strip
+  /// renders as '—' exactly as the two tiles beside it already do.
+  int? get needsAttentionCount {
     final by = summary.value?.byStatus;
-    if (by == null) return countWhere((x) => x.status.needsAttention);
+    if (by == null) return null;
     return (by['under_review']?.count ?? 0) + (by['failed']?.count ?? 0);
   }
 
@@ -377,6 +428,11 @@ class SettlementController extends GetxController {
   /// number, and the composite index (`status`, `autoSettleAtMs`) that the
   /// auto-settlement sweep already relies on serves it exactly.
   final RxInt overdueTotal = 0.obs;
+
+  /// Whether [overdueTotal] reflects a count that actually ran. Its aggregate
+  /// failure is swallowed below, and an `RxInt` that stays at its initial 0
+  /// is indistinguishable from a genuine "nothing is overdue".
+  final RxBool overdueAvailable = false.obs;
 
   /// Page-scoped overdue, used only to decorate rows.
   int get overdueOnPage => settlements.where((s) => s.isOverdue).length;
@@ -399,7 +455,9 @@ class SettlementController extends GetxController {
           .count()
           .get();
       overdueTotal.value = agg.count ?? 0;
+      overdueAvailable.value = true;
     } catch (e) {
+      overdueAvailable.value = false;
       debugPrint('overdue count failed: $e');
     }
     summaryLoading.value = false;
@@ -418,6 +476,7 @@ class SettlementController extends GetxController {
     _timelineSub?.cancel();
     _ledgerSub?.cancel();
     _webhookSub?.cancel();
+    webhookError.value = false;
     timeline.clear();
     ledger.clear();
     webhookEvents.clear();
@@ -508,7 +567,7 @@ class SettlementController extends GetxController {
                 .where((w) => _mentionsPayment(w, s.razorpayPaymentId))
                 .toList();
           },
-          onError: (Object e) => debugPrint('webhook stream error: $e'),
+          onError: onWebhookStreamError,
         );
   }
 

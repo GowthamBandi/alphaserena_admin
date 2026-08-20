@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:get/get.dart';
 
@@ -141,17 +142,44 @@ class GlobalFoodController extends GetxController {
 
   // ── Categories ─────────────────────────────────────────────────────
 
+  /// Set when the taxonomy stream failed. The list keeps its last good
+  /// contents, so this is the only signal that it may be incomplete.
+  final RxBool categoriesError = false.obs;
+
+  /// The category stream's SUCCESS branch. Named so a test can drive the real
+  /// handler rather than a re-description of it.
+  @visibleForTesting
+  void onCategories(List<FoodCategoryModel> list) {
+    categories.value = [
+      for (final c in list) c.withCount(categoryCounts[c.id] ?? 0),
+    ];
+    categoriesError.value = false;
+  }
+
+  /// The category stream's FAILURE branch.
+  ///
+  /// The taxonomy is a filter, not a dependency — its failure must never take
+  /// the library down with it.
+  ///
+  /// 🔴 …but this used to be `categories.clear()`, which is the opposite of
+  /// leaving the library alone. `categoryName(id)` and `categoryPath(id)` both
+  /// resolve through `categories` and return `''` for an id it does not hold,
+  /// so emptying the list silently relabelled EVERY food in the global library
+  /// as uncategorised, and the category filter rendered as though the platform
+  /// had no taxonomy at all. A failed read is not an empty taxonomy. Keep the
+  /// last good list — a stale label is a far smaller lie than a deleted one —
+  /// and record the failure so the filter can say it may be incomplete.
+  @visibleForTesting
+  void onCategoriesError(Object e) {
+    categoriesError.value = true;
+    debugPrint('foodCategories stream error: $e');
+  }
+
   void _bindCategories() {
     _categorySub?.cancel();
     _categorySub = _service.watchCategories().listen(
-      (list) {
-        categories.value = [
-          for (final c in list) c.withCount(categoryCounts[c.id] ?? 0),
-        ];
-      },
-      // The taxonomy is a filter, not a dependency — its failure must never
-      // take the library down with it.
-      onError: (Object _) => categories.clear(),
+      onCategories,
+      onError: onCategoriesError,
     );
   }
 

@@ -17,6 +17,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 
 import '../models/subscription_plan_model.dart';
+import '../core/utils/console_errors.dart';
 
 class SubscriptionController extends GetxController {
   // Resolved lazily: constructing the controller must not require an
@@ -32,6 +33,11 @@ class SubscriptionController extends GetxController {
   // =========================================================
   final RxList<SubscriptionPlanModel> plans = <SubscriptionPlanModel>[].obs;
   final RxBool isLoading = false.obs;
+
+  /// Set when the catalog stream itself failed. Without it a failed load
+  /// rendered the "No plans yet · create your first" empty state, inviting the
+  /// founder to re-author a catalog that already exists.
+  final Rxn<ConsoleError> loadError = Rxn<ConsoleError>();
   final RxBool isSaving = false.obs;
 
   /// Catalog status filter (null = all).
@@ -141,8 +147,11 @@ class SubscriptionController extends GetxController {
   // =========================================================
   // FETCH PLANS (REALTIME) — sorted by owner sort order, then price.
   // =========================================================
+  void retryLoad() => fetchPlans();
+
   void fetchPlans() {
     isLoading.value = true;
+    loadError.value = null;
     _sub?.cancel();
 
     _sub = _db.collection(_collection).snapshots().listen(
@@ -155,11 +164,14 @@ class SubscriptionController extends GetxController {
           return o != 0 ? o : a.price.compareTo(b.price);
         });
         plans.value = list;
+        loadError.value = null;
         isLoading.value = false;
       },
-      onError: (e) {
+      onError: (Object e) {
         isLoading.value = false;
-        AppSnackbar.show(title: "Error", message: "Failed to load plans");
+        loadError.value =
+            describeStreamError(e, subject: 'the plan catalog');
+        debugPrint('subscription_plans stream error: $e');
       },
     );
   }

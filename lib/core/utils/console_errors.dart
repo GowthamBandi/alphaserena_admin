@@ -194,3 +194,39 @@ ConsoleError describeConsoleError(
     message: '$what failed unexpectedly.',
   );
 }
+
+/// Classifies the failure of a plain Firestore LIST STREAM.
+///
+/// ── WHY THIS EXISTS ─────────────────────────────────────────────────────
+/// Six of the console's screens — Organizations, Trainers, Members, Coupons,
+/// Payments and Subscriptions — had no error state at all. Their streams'
+/// `onError` set `isLoading = false`, raised a snackbar that disappears in
+/// seconds, and left the list empty. The screen then rendered its "nothing here
+/// yet" state. So an undeployed rule, a missing index or an outage was
+/// indistinguishable from a genuinely empty platform, and the Payments screen
+/// went further and rendered **₹0** across four revenue cards.
+///
+/// The Audit Log already had to fix exactly this ("never let an empty state
+/// claim absence over a window it could not read"). This is that rule applied
+/// to the remaining six.
+///
+/// These screens read Firestore DIRECTLY — no Cloud Function is involved — so
+/// the only deploy that can be at fault is the ruleset, and the remedy is the
+/// same for all of them. That is why they share one helper instead of six
+/// copies that drift.
+ConsoleError describeStreamError(
+  Object error, {
+  /// What the operator is looking at, e.g. 'the Organizations list'.
+  required String subject,
+}) =>
+    describeConsoleError(
+      error,
+      operation: subject,
+      subject: subject,
+      // Scoped deliberately. A blanket `--only functions` would ship every
+      // unrelated change sitting in the backend working tree to a project
+      // serving live organizations.
+      deployRemedy:
+          'From trainershq-backend:  firebase deploy --only firestore:rules',
+      logTarget: 'firestore',
+    );

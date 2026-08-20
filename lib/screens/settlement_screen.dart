@@ -103,7 +103,10 @@ class _FloatStrip extends StatelessWidget {
       final s = c.summary.value;
       // PLATFORM-WIDE, never page-scoped — see the counters in the controller.
       // A filtered view must not be able to report "nothing blocked".
-      final overdue = c.overdueTotal.value;
+      // Both are NULLABLE on purpose: a census that could not be read has no
+      // number, and printing 0 for it is how this strip previously announced
+      // "Nothing blocked" over blocked payouts.
+      final overdue = c.overdueAvailable.value ? c.overdueTotal.value : null;
       final attention = c.needsAttentionCount;
 
       return LayoutBuilder(
@@ -148,19 +151,29 @@ class _FloatStrip extends StatelessWidget {
             ),
             _FloatTile(
               label: 'Needs attention',
-              value: '$attention',
-              sub: attention == 0
-                  ? 'Nothing blocked'
-                  : 'Blocked or failed payouts',
-              color: attention == 0 ? p.textMuted : BrandColors.error,
+              value: attention == null ? '—' : '$attention',
+              sub: attention == null
+                  ? 'Census unavailable — retry totals'
+                  : attention == 0
+                      ? 'Nothing blocked'
+                      : 'Blocked or failed payouts',
+              color: attention == null
+                  ? BrandColors.amber
+                  : attention == 0
+                      ? p.textMuted
+                      : BrandColors.error,
             ),
             _FloatTile(
               label: 'Overdue',
-              value: '$overdue',
-              sub: overdue == 0
-                  ? 'Clock on schedule'
-                  : 'Past the hold window',
-              color: overdue == 0 ? p.textMuted : BrandColors.amber,
+              value: overdue == null ? '—' : '$overdue',
+              sub: overdue == null
+                  ? 'Count unavailable — retry totals'
+                  : overdue == 0
+                      ? 'Clock on schedule'
+                      : 'Past the hold window',
+              color: overdue == null || overdue > 0
+                  ? BrandColors.amber
+                  : p.textMuted,
               hint: 'Pending settlements whose hold window has elapsed. The '
                   'engine should have released these — if they persist, '
                   'something is blocking them.',
@@ -477,6 +490,16 @@ class _ExceptionList extends StatelessWidget {
         return const Padding(
           padding: EdgeInsets.symmetric(vertical: 40),
           child: Center(child: CircularProgressIndicator()),
+        );
+      }
+      // 🔴 An UNREAD queue is not an EMPTY one. Rendering the empty state here
+      // told the operator that nobody had been charged-without-activation, on
+      // the strength of a stream that failed.
+      final err = c.exceptionsError.value;
+      if (err != null) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: ConsoleErrorState(error: err, onRetry: c.retryExceptions),
         );
       }
       final rows = c.exceptions;
@@ -1726,6 +1749,18 @@ class _WebhookCard extends StatelessWidget {
     return ConsoleCard(
       title: 'GATEWAY EVENTS',
       child: Obx(() {
+        // 🔴 A DIAGNOSIS IS NOT AN EMPTY STATE. The copy below names a probable
+        // cause ("the Razorpay webhook may not be registered"). Rendering it
+        // for a stream that FAILED sends the operator to investigate the
+        // gateway's configuration because a Firestore read was denied.
+        if (c.webhookError.value) {
+          return Text(
+            'The webhook evidence for this payment could not be read, so this '
+            'panel cannot say whether events exist. This is a console read '
+            'failure — it is NOT evidence about the Razorpay webhook.',
+            style: AppText.body(size: 11.5).copyWith(color: p.error),
+          );
+        }
         if (c.webhookEvents.isEmpty) {
           return Text(
             'No webhook events recorded for this payment. If the settlement '
