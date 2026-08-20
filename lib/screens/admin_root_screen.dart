@@ -119,6 +119,7 @@ class _Sidebar extends StatelessWidget {
       _MenuItem("Settlements", Icons.account_balance_outlined),
       _MenuItem("Automation", Icons.bolt_outlined),
       _MenuItem("Engagement", Icons.insights_outlined),
+      _MenuItem("Access Requests", Icons.mark_email_unread_outlined),
     ];
 
     final p = context.palette;

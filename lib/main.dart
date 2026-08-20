@@ -14,6 +14,7 @@ import 'package:alphaserena_admin_portel/controllers/global_food_controller.dart
 import 'package:alphaserena_admin_portel/controllers/operations_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/payments_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/platform_staff_controller.dart';
+import 'controllers/access_request_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/settlement_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/subscription_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/support_controller.dart';
@@ -280,6 +281,10 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
       // behalf. Registered here because the page factory uses Get.find:
       // a missing registration crashes the section on open.
       _safePut(SettlementController());
+      // ACCESS REQUESTS — TrainerArena SaaS onboarding. Registered here for
+      // the same reason as SettlementController: the page factory uses
+      // Get.find, so a missing registration crashes the section on open.
+      _safePut(AccessRequestController());
 
       if (kDebugMode) debugPrint("✅ ALL CONTROLLERS INITIALIZED");
       isReady.value = true;
@@ -325,6 +330,7 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
     _safeDelete<GlobalExerciseController>();
     _safeDelete<PaymentsController>();
     _safeDelete<ClientController>();
+    _safeDelete<AccessRequestController>();
     _safeDelete<SettlementController>();
     _safeDelete<OperationsController>();
     _safeDelete<PlatformStaffController>();

@@ -8,9 +8,11 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import '../controllers/admin_controller.dart';
+import '../controllers/subscription_controller.dart';
 import '../core/constants/firestore_collections.dart';
 import '../core/utils/console_errors.dart';
 import '../models/admin_model.dart';
+import '../models/subscription_plan_model.dart';
 import '../models/audit_log_model.dart';
 import '../widgets/page_shell.dart';
 import '../core/widgets/console/console_chrome.dart';
@@ -330,6 +332,16 @@ class AdminsScreen extends StatelessWidget {
           const PopupMenuItem(value: 'warn', child: Text('Issue warning')),
         if (s == 'warning' || s == 'blocked')
           const PopupMenuItem(value: 'reactivate', child: Text('Reactivate')),
+        // Renewal / plan change — the OTHER half of the SaaS commercial flow.
+        // Provisioning creates the first grant from an access request; every
+        // later off-platform payment is recorded here. Hidden while blocked:
+        // the backend refuses to grant a blocked org, so offering it would be
+        // a button whose write is always refused (reactivate first).
+        if (s != 'blocked')
+          const PopupMenuItem(
+            value: 'grant',
+            child: Text('Grant / renew subscription'),
+          ),
         if (s != 'blocked')
           const PopupMenuItem(
             value: 'block',
@@ -349,6 +361,9 @@ class AdminsScreen extends StatelessWidget {
         break;
       case 'reactivate':
         ctrl.reactivate(a.docId);
+        break;
+      case 'grant':
+        _grantDialog(context, a);
         break;
       case 'warn':
         _reasonDialog(
@@ -377,6 +392,129 @@ class AdminsScreen extends StatelessWidget {
         );
         break;
     }
+  }
+
+  // ── GRANT / RENEW DIALOG ────────────────────────────────────────────
+  //
+  // Mirrors the provisioning dialog in access_requests_screen.dart: plan
+  // picker + term + the off-platform payment evidence. The reference is the
+  // idempotency key — the backend refuses a reused one, so a double-submit
+  // cannot double-extend an expiry. The term field is a CONTROLLER (not
+  // initialValue) so switching plans visibly rewrites it — the provisioning
+  // dialog's initialValue variant left the old number on screen while the
+  // internal value changed underneath it.
+  void _grantDialog(BuildContext context, AdminModel a) {
+    final plans = Get.find<SubscriptionController>()
+        .plans
+        .where((pl) => pl.status == PlanStatus.published)
+        .toList();
+    if (plans.isEmpty) {
+      Get.snackbar('No plans', 'Publish a plan in Subscriptions first.');
+      return;
+    }
+    var planId = plans.first.docId;
+    final monthsCtl =
+        TextEditingController(text: '${plans.first.durationMonths}');
+    final refCtl = TextEditingController();
+    final amountCtl = TextEditingController();
+    final name = a.organizationName.isNotEmpty ? a.organizationName : a.name;
+
+    showDialog<void>(
+      context: context,
+      builder: (dctx) => StatefulBuilder(
+        builder: (dctx, setLocal) => AlertDialog(
+          title: Text('Grant subscription — $name'),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Records a payment the team already collected outside the '
+                  'platform and extends or changes the plan. An active '
+                  'subscription is extended from its current expiry; a lapsed '
+                  'one restarts from today.',
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: planId,
+                  decoration:
+                      const InputDecoration(labelText: 'TrainersArena plan'),
+                  items: plans
+                      .map((pl) => DropdownMenuItem(
+                            value: pl.docId,
+                            child:
+                                Text('${pl.planName} · ${pl.durationMonths} mo'),
+                          ))
+                      .toList(),
+                  onChanged: (v) => setLocal(() {
+                    planId = v ?? planId;
+                    monthsCtl.text =
+                        '${plans.firstWhere((pl) => pl.docId == planId).durationMonths}';
+                  }),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: monthsCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Term (months)',
+                    helperText:
+                        'Defaults to the plan term; override for a negotiated term',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: refCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Payment reference (Razorpay id / bank ref)',
+                    helperText:
+                        'Also the idempotency key — reused references are refused',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: amountCtl,
+                  decoration:
+                      const InputDecoration(labelText: 'Amount collected (₹)'),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final months = int.tryParse(monthsCtl.text.trim());
+                final amount = double.tryParse(amountCtl.text.trim());
+                if (refCtl.text.trim().isEmpty ||
+                    months == null ||
+                    months <= 0 ||
+                    amount == null) {
+                  Get.snackbar('Missing details',
+                      'Plan term, payment reference and amount are required.');
+                  return;
+                }
+                Navigator.of(dctx).pop();
+                ctrl.grantSubscription(
+                  adminUid: a.docId,
+                  planId: planId,
+                  months: months,
+                  reference: refCtl.text,
+                  amount: amount,
+                );
+              },
+              child: const Text('Grant'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── DETAILS DIALOG ──────────────────────────────────────────────────

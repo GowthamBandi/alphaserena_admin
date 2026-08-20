@@ -4,8 +4,10 @@
 // Moderation goes through the `setAdminStatus` Cloud Function
 // (OrgModerationService) — the server owns status transitions (enum
 // validation, audit log, trainer operate-state cascade, owner notification).
-// Creating/editing an admin profile is NOT done here — admins are created by
-// the registerAdmin Cloud Function / self sign-up.
+// Creating/editing an admin profile is NOT done here. Organizations are
+// created by `provisionOrganization` from the Access Requests section, after
+// the team has agreed terms and recorded payment — TrainerArena no longer has
+// self sign-up. See core/services/saas_onboarding_service.dart.
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../core/services/org_moderation_service.dart';
+import '../core/services/saas_onboarding_service.dart';
 import '../core/utils/list_ordering.dart';
 import '../core/utils/console_errors.dart';
 import '../models/admin_model.dart';
@@ -211,4 +214,42 @@ class AdminController extends GetxController {
     reason: reason,
     okMessage: 'Organization blocked',
   );
+
+  /// SUBSCRIPTION GRANT — renewal / plan change on a live organization.
+  ///
+  /// The other half of the SaaS commercial flow: provisioning creates the
+  /// first grant from an access request; every later payment lands HERE.
+  /// Same callable contract as provisioning's grant (grantSubscription):
+  /// the reference is the idempotency key — a reused reference is refused by
+  /// the backend, so double-submits cannot double-extend an expiry.
+  Future<void> grantSubscription({
+    required String adminUid,
+    required String planId,
+    required int months,
+    required String reference,
+    required double amount,
+  }) async {
+    if (isProcessing.value) return;
+    isProcessing.value = true;
+    try {
+      final expiry = await SaasOnboardingService.grantSubscription(
+        adminUid: adminUid,
+        planId: planId,
+        months: months,
+        reference: reference,
+        amount: amount,
+      );
+      final until = (expiry ?? '').isEmpty ? '' : ' — active until ${expiry!.split('T').first}';
+      AppSnackbar.show(
+        title: 'Subscription granted',
+        message: 'The organization\'s plan is updated$until.',
+        background: Colors.green.shade700,
+      );
+    } catch (e) {
+      debugPrint('grantSubscription failed: $e');
+      AppSnackbar.show(title: 'Error', message: _moderationError(e));
+    } finally {
+      isProcessing.value = false;
+    }
+  }
 }

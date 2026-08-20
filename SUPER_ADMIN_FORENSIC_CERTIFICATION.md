@@ -417,9 +417,75 @@ Razorpay order and activation path.
 
 ---
 
-## LIVE VERIFICATION
+## DEPLOYMENT EXECUTED — 20 August 2026, 07:50 UTC
 
-**PARTIAL — and this is what holds the verdict at 🟡.**
+**Approved scope deployed. Nothing else.**
+
+```
+firebase deploy --project trainershq-f5ded --only functions:campaignScheduler,functions:razorpayWebhook,functions:finalizeSettlementFees,functions:correctSettlementFees
+```
+
+Commits: console `9741ca4` (main) · backend `e0b6af6` (security/cycle-14).
+
+| Function | source hash before → after | secrets (unchanged) | state |
+|---|---|---|---|
+| `campaignScheduler` | `9273f505a0ac` → **`8c276674e31e`** | none | ACTIVE, rev `-00004-jil` |
+| `razorpayWebhook` | `d591fcca55bd` → **`7b1ec2ab6800`** | `RAZORPAY_WEBHOOK_SECRET@v6` | ACTIVE |
+| `finalizeSettlementFees` | `c5787db3f42a` → **`f8b632d9de76`** | `RAZORPAY_KEY_ID@v3`, `RAZORPAY_KEY_SECRET@v3` | ACTIVE |
+| `correctSettlementFees` | `c5787db3f42a` → **`f8b632d9de76`** | `RAZORPAY_KEY_ID@v3`, `RAZORPAY_KEY_SECRET@v3` | ACTIVE |
+
+**161 → 161 functions. Zero created. Zero deleted. Exactly four hashes moved.**
+
+**Excluded-function proof, by shared source hash.** `refundPayment` shared
+`c5787db3f42a` with two targets and `campaignLeaseJanitor` / `fanoutAnnouncement`
+shared `9273f505a0ac` with `campaignScheduler` — so their hashes staying put is
+positive proof the filter held rather than an absence of evidence:
+
+| Excluded | hash before → after |
+|---|---|
+| `createRazorpayOrder` | `c5bc646ea81d` → `c5bc646ea81d` (unmoved) |
+| `verifyAndActivateSubscription` | `c5bc646ea81d` → `c5bc646ea81d` (unmoved) |
+| `refundPayment` | `c5787db3f42a` → `c5787db3f42a` (unmoved) |
+| `campaignLeaseJanitor` · `fanoutAnnouncement` | `9273f505a0ac` → `9273f505a0ac` (unmoved) |
+| `setCommerceConfig` | `cb7d9fed1b17` → `cb7d9fed1b17` (unmoved) |
+| `autoSettlementEngine` · `approveSettlement` | unmoved |
+
+`activateGooglePlaySubscription`, `reconcilePlaySubscriptions`,
+`reportExternalTransactions`, `reportExternalRefund` — **still absent from all
+161.** No secret binding changed anywhere in the project.
+`firestore.rules` was **not deployed**; the file is untouched at
+`5d5c414defac9ee7…`.
+
+---
+
+## LIVE VERIFICATION — POST-DEPLOY
+
+| Check | Result |
+|---|---|
+| **A · `campaignScheduler` — new code live** | ✅ Four consecutive passes at 07:51/07:52/07:53/07:54 logging `scanned 0, resolved 0, enqueued 0, skipped 0`. The **`resolved`** counter exists only in the new code. |
+| **A · no duplicate execution** | ✅ Exactly one pass per minute, one log line each; `maxInstances: 1`; three compare-and-sets in the path. |
+| **A · production campaign state** | `scanned 0` — no campaign is currently in `scheduled`, so none is stuck and none was pending. |
+| **B · unsigned request** | ✅ **HTTP 401 `invalid signature`** |
+| **B · invalid signature** | ✅ **HTTP 401 `invalid signature`** |
+| **B · wrong method** | ✅ **HTTP 405 `Method not allowed`** |
+| **B · handler operational** | ✅ The gate executing proves the container booted and ran — the key risk, since the parked Play-Billing modules ride inside this bundle. |
+| **All four · container start** | ✅ `STARTUP TCP probe succeeded after 1 attempt` on each after `DEPLOYMENT_ROLLOUT`. No `MODULE_NOT_FOUND`, no crash. |
+| **All four · post-deploy errors** | ✅ none after 07:50 on any of the four. |
+| **C · settlement arithmetic** | ✅ 35/35 emulator scenarios against the exact source that was deployed — repeated partial refunds, path independence, over-refund clamping, duplicate-event idempotency. |
+| **C · finalization preserves refunds** | ✅ *"finalizing the gateway fee AFTER a refund must not erase the refund"* passes. |
+| **D · `correctFinalizedGatewayFees`** | ✅ ACTIVE, and all six fee-correction scenarios pass, including the exact production case `pay_TNapQCIdQEC5GC`. |
+
+**NOT DONE, deliberately and by instruction:** no real payment, no real refund,
+and no live campaign broadcast. End-to-end delivery of a scheduled announcement
+and a real two-refund sequence against production data remain unexercised — the
+scheduler's reachability is proven by its live passes, and the refund arithmetic
+by the emulator running the deployed source.
+
+---
+
+## LIVE VERIFICATION — PRE-DEPLOY BASELINE
+
+**PARTIAL — and this is what held the verdict at 🟡 before deployment.**
 
 | Check | Result |
 |---|---|

@@ -14,6 +14,7 @@ import 'package:alphaserena_admin_portel/screens/operations_screen.dart';
 import 'package:alphaserena_admin_portel/screens/payments_screen.dart';
 import 'package:alphaserena_admin_portel/screens/platform_staff_screen.dart';
 import 'package:alphaserena_admin_portel/screens/settlement_screen.dart';
+import 'package:alphaserena_admin_portel/screens/access_requests_screen.dart';
 import 'package:alphaserena_admin_portel/screens/subscriptions_screen.dart';
 import 'package:alphaserena_admin_portel/screens/support_screen.dart';
 import 'package:alphaserena_admin_portel/screens/trainers_screen.dart';
@@ -48,7 +49,7 @@ class AdminRootController extends GetxController {
   /// Prevent invalid index crashes. MUST equal the last sidebar entry — a
   /// mismatch is how a finished screen ends up shipped and unreachable.
   /// `test/nav_reachability_test.dart` pins the two together.
-  final int maxIndex = 16;
+  final int maxIndex = 17;
 
   // ===========================================================================
   // PAGE CACHE (LAZY LOADED)
@@ -217,6 +218,12 @@ class AdminRootController extends GetxController {
         return const AutomationScreen();
       case 16:
         return const EngagementIntelligenceScreen();
+      // ACCESS REQUESTS — TrainerArena's commercial intake. Appended at 17 so
+      // every existing index stays put (the Operations Centre's jump targets
+      // depend on them). This is System A (TrainersArena's own SaaS revenue),
+      // deliberately nowhere near Settlements at 14.
+      case 17:
+        return AccessRequestsScreen();
       default:
         return const SizedBox();
     }
