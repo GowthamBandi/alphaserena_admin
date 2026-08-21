@@ -38,7 +38,7 @@ class AdminRootScreen extends StatelessWidget {
       backgroundColor: p.background,
 
       // Drawer for mobile/tablet.
-      drawer: desktop ? null : const Drawer(child: SafeArea(child: _Sidebar())),
+      drawer: desktop ? null : const Drawer(child: SafeArea(child: ConsoleSidebar())),
 
       body: SafeArea(
         child: Row(
@@ -50,7 +50,7 @@ class AdminRootScreen extends StatelessWidget {
                   color: p.surface,
                   border: Border(right: BorderSide(color: p.border)),
                 ),
-                child: const _Sidebar(),
+                child: const ConsoleSidebar(),
               ),
 
             /// ================= RIGHT PANEL =================
@@ -94,8 +94,15 @@ class AdminRootScreen extends StatelessWidget {
 /// =============================================================
 /// SIDEBAR
 /// =============================================================
-class _Sidebar extends StatelessWidget {
-  const _Sidebar();
+///
+/// PUBLIC so a widget test can drive the REAL sidebar. It was private, and the
+/// first attempt at a render test reconstructed its flattening in the test
+/// file instead — which promptly failed on an overflow the production widget
+/// does not have, because the copy had drifted within minutes of being written.
+/// A navigation test that exercises a replica proves nothing about the sidebar
+/// the founder uses.
+class ConsoleSidebar extends StatelessWidget {
+  const ConsoleSidebar({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -214,6 +221,13 @@ class _SidebarTile extends StatelessWidget {
       // The purpose line is announced to a screen reader, which otherwise gets
       // a bare noun ("Settlements") with no way to tell it from Revenue.
       hint: destination.purpose,
+      // The label is supplied above, so the child `Text` must not ALSO
+      // contribute one — without this the node merges to "Settlements
+      // Settlements" and a screen reader says the name twice on every row.
+      // Safe here specifically because this Semantics is itself the button and
+      // carries the tap: excluding the subtree hides a duplicate label, not an
+      // interactive control.
+      excludeSemantics: true,
       child: Tooltip(
         message: destination.purpose,
         waitDuration: const Duration(milliseconds: 600),

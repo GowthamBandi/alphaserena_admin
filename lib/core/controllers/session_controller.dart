@@ -18,8 +18,14 @@ import '../constants/firestore_collections.dart';
 /// an account disabled mid-session is re-checked on the next token refresh
 /// instead of surviving until a full reload.
 class SessionController extends GetxService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Resolved LAZILY, matching `AdminRootController`. As eager field
+  // initialisers these ran at CONSTRUCTION, so merely registering this
+  // controller threw without an initialised Firebase app — which meant the
+  // console shell could not be pumped in a widget test at all, because the
+  // sidebar footer reads the signed-in email from here. `late final` defers
+  // both to first use, and every real use is already behind `onInit`.
+  late final FirebaseAuth _auth = FirebaseAuth.instance;
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   /// True while resolving auth + master status — show a loader, never the console.
   final RxBool isBooting = true.obs;
