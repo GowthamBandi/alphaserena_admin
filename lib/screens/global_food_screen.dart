@@ -269,14 +269,19 @@ class _GlobalFoodScreenState extends State<GlobalFoodScreen> {
       final active = _tab == value;
       return Padding(
         padding: const EdgeInsets.only(right: 10),
+        // Same fix as the Exercise Library tabs, and for the same reason:
+        // ExcludeSemantics stripped the detector's tap action out of the tree
+        // and the outer Semantics never re-declared one, so each tab was a
+        // button with no action and no focusability. InkWell restores both,
+        // and its merged label announces the badge count too — which the
+        // hand-written `label:` silently dropped.
         child: Semantics(
-          button: true,
           selected: active,
-          label: label,
-          child: ExcludeSemantics(
-            child: GestureDetector(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
               onTap: () => setState(() => _tab = value),
-              behavior: HitTestBehavior.opaque,
+              borderRadius: AppRadii.smR,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,

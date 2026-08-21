@@ -115,12 +115,33 @@ class TopNavBar extends StatelessWidget {
             }),
           ),
           const SizedBox(width: 12),
-          GestureDetector(
-            onTap: () => _onProfileTap(context),
-            child: CircleAvatar(
-              radius: 20,
-              backgroundColor: p.accent.withValues(alpha: 0.12),
-              child: Icon(Icons.person, color: p.accent),
+          // The ONLY route to Logout below 1200px, where the sidebar (and its
+          // properly-labelled logout IconButton) collapses into a drawer.
+          //
+          // It was a bare GestureDetector on a CircleAvatar: no semantics, no
+          // tooltip, and not focusable — so a keyboard-only or screen-reader
+          // operator could not sign out of a god-mode console at all. Tooltip +
+          // InkWell restore the label, the button role, keyboard focus and
+          // Enter/Space activation.
+          Tooltip(
+            message: 'Account menu — legal, about and sign out',
+            child: Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => _onProfileTap(context),
+                customBorder: const CircleBorder(),
+                child: Semantics(
+                  button: true,
+                  label: 'Account menu',
+                  child: CircleAvatar(
+                    radius: 20,
+                    backgroundColor: p.accent.withValues(alpha: 0.12),
+                    child: Icon(Icons.person, color: p.accent),
+                  ),
+                ),
+              ),
             ),
           ),
         ],

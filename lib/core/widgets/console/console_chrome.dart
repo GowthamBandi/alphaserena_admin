@@ -392,14 +392,31 @@ class ConsoleChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    // An InkWell, NOT a Semantics-wrapped GestureDetector.
+    //
+    // This was `Semantics(button: true, label: …)` around
+    // `ExcludeSemantics(GestureDetector(onTap: …))`. ExcludeSemantics strips
+    // the detector's tap ACTION out of the tree, and the outer Semantics never
+    // re-declared one — so every chip was published as a button carrying no
+    // action and no focusability. Assistive tech could announce a filter and
+    // not press it, and a keyboard could not reach it at all.
+    //
+    // This is the single highest-leverage instance of that bug: ConsoleChip is
+    // THE filter control across Subscriptions, Support, Settlements and both
+    // content consoles. The identical fix is already documented on the
+    // Exercise Library tabs; this brings the shared widget in line with it.
+    //
+    // InkWell owns the whole contract: focusable (so it gets a tabindex),
+    // activates on Enter/Space as well as tap, and publishes its own button
+    // semantics whose label merges the child Text — so the label is announced
+    // without hand-maintaining a `label:` that can drift from what is drawn.
     return Semantics(
-      button: true,
       selected: active,
-      label: label,
-      child: ExcludeSemantics(
-        child: GestureDetector(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
           onTap: onTap,
-          behavior: HitTestBehavior.opaque,
+          borderRadius: BorderRadius.circular(30),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
             decoration: BoxDecoration(
