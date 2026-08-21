@@ -224,10 +224,18 @@ class _SidebarTile extends StatelessWidget {
       // The label is supplied above, so the child `Text` must not ALSO
       // contribute one — without this the node merges to "Settlements
       // Settlements" and a screen reader says the name twice on every row.
-      // Safe here specifically because this Semantics is itself the button and
-      // carries the tap: excluding the subtree hides a duplicate label, not an
-      // interactive control.
       excludeSemantics: true,
+      // ⚠️ LOAD-BEARING, AND THE REASON THE LINE ABOVE IS SAFE.
+      //
+      // `excludeSemantics` drops the WHOLE subtree — including the InkWell's
+      // tap ACTION and its focus node. Without this line the row still
+      // ANNOUNCES as a button (button: true, above) while offering assistive
+      // technology no way to activate it: the exact "Semantics(button) with no
+      // onTap" shape this codebase has shipped four times. A pointer tap keeps
+      // working, so a widget test that taps by finder cannot see the defect —
+      // which is why `console_sidebar_test.dart` asserts SemanticsAction.tap
+      // is PRESENT, not merely that tapping works.
+      onTap: onTap,
       child: Tooltip(
         message: destination.purpose,
         waitDuration: const Duration(milliseconds: 600),

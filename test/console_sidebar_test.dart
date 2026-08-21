@@ -23,6 +23,7 @@ import 'package:alphaserena_admin_portel/core/navigation/console_destinations.da
 import 'package:alphaserena_admin_portel/core/theme/app_theme.dart';
 import 'package:alphaserena_admin_portel/screens/admin_root_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 
@@ -151,6 +152,40 @@ void main() {
         findsOneWidget,
         reason: '"${d.label}" has no matching accessible label',
       );
+    }
+    handle.dispose();
+  });
+
+  testWidgets('every destination exposes a TAP ACTION, not just a label',
+      (tester) async {
+    // 🔴 THE DEFECT THIS EXISTS FOR, which this file's own first version
+    // introduced and did not catch.
+    //
+    // The tile sets `excludeSemantics: true` to stop the child Text
+    // duplicating the label. That drops the ENTIRE subtree — including the
+    // InkWell's tap action and its focus node. The row went on ANNOUNCING as a
+    // button while offering assistive technology no way to activate it: the
+    // "Semantics(button) with no onTap" shape this codebase has shipped four
+    // times.
+    //
+    // A pointer tap still worked, so `tapping a destination selects ITS id`
+    // stayed green throughout. Only the ACTION SET reveals it, which is why
+    // this asserts on SemanticsAction.tap rather than on behaviour.
+    final handle = tester.ensureSemantics();
+    await _pumpSidebar(tester);
+
+    for (final d in kConsoleDestinations) {
+      final node = tester.getSemantics(
+        find.bySemanticsLabel(RegExp('^${RegExp.escape(d.label)}\$')),
+      );
+      expect(
+        node.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+        reason: '"${d.label}" announces as a button but exposes no tap action '
+            '— a screen-reader user cannot activate it',
+      );
+      expect(node.getSemanticsData().hasFlag(SemanticsFlag.isButton), isTrue,
+          reason: '"${d.label}" is missing the button role');
     }
     handle.dispose();
   });

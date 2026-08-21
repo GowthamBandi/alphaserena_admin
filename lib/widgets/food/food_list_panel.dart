@@ -660,8 +660,13 @@ class _FoodListPanelState extends State<FoodListPanel> {
             '${f.name}. ${f.status}. ${f.calories.round()} kcal per 100 grams. '
             '${category.isEmpty ? 'Uncategorised' : category}. '
             'Open details.',
-        child: ExcludeSemantics(
-          child: InkWell(
+        // The curated label above reads the whole row as one sentence; the
+        // merged subtree would read a name, a status pill, a number and a
+        // category as four unrelated fragments. Excluded, with the action
+        // re-declared so the row stays activatable and focusable.
+        excludeSemantics: true,
+        onTap: () => widget.onOpen(f),
+        child: InkWell(
             onTap: () => widget.onOpen(f),
             borderRadius: AppRadii.cardR,
             child: Container(
@@ -750,7 +755,6 @@ class _FoodListPanelState extends State<FoodListPanel> {
               ),
             ),
           ),
-        ),
       );
     });
   }

@@ -263,8 +263,15 @@ class FoodAnalyticsPanel extends StatelessWidget {
     return Semantics(
       button: true,
       label: '$label: $value. Open the filtered list.',
-      child: ExcludeSemantics(
-        child: InkWell(
+      // The curated label above is strictly better than what the subtree would
+      // merge to ("Verified 128" plus a stray icon), so the subtree is excluded
+      // — and the action is re-declared here, because excluding it would
+      // otherwise take the InkWell's tap and focus with it. See
+      // test/a11y_no_excluded_tappables_test.dart, which allows an exclusion
+      // ONLY when the action is restored on the same Semantics.
+      excludeSemantics: true,
+      onTap: () => onDrillDown(query),
+      child: InkWell(
           onTap: () => onDrillDown(query),
           borderRadius: AppRadii.cardR,
           child: Container(
@@ -301,7 +308,6 @@ class FoodAnalyticsPanel extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 

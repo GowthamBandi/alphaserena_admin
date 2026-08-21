@@ -220,8 +220,17 @@ class FoodCategoriesPanel extends StatelessWidget {
     return Semantics(
       button: !empty,
       label: '${cat.foodCount} foods in ${cat.name}',
-      child: ExcludeSemantics(
-        child: InkWell(
+      // Curated label wins over the merged subtree; the action is re-declared
+      // so the exclusion does not strip it. Null when empty, matching both the
+      // InkWell and `button: !empty` — an empty category is genuinely not
+      // activatable, and announcing it as one would be the same lie in reverse.
+      excludeSemantics: true,
+      onTap: empty
+          ? null
+          : () => onDrillDown(
+              FoodQuery(status: FoodStatusFilter.all, categoryId: cat.id),
+            ),
+      child: InkWell(
           onTap: empty
               ? null
               : () => onDrillDown(
@@ -236,7 +245,6 @@ class FoodCategoriesPanel extends StatelessWidget {
             color: empty ? p.textMuted : p.accent,
           ),
         ),
-      ),
     );
   }
 
