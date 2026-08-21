@@ -51,8 +51,17 @@ class TrainerController extends GetxController {
   // Producer (trainersHQ setTrainerStatus) only ever writes active/inactive, so
   // the console surfaces those two states (pending/blocked/suspended are never
   // produced and were showing as permanently-zero KPIs).
-  int get inactiveCount =>
-      trainers.where((t) => t.status != "active").length;
+  //
+  // ONE PREDICATE, used by BOTH the KPI and the filter. They used to disagree:
+  // this counted `status != "active"` while `filteredTrainers` matched
+  // `status == "inactive"` exactly, and `TrainerModel` defaults a MISSING
+  // status to 'pending' (trainer_model.dart:93). So a trainer whose document
+  // carries no status field was counted in the Inactive KPI and hidden by the
+  // Inactive filter — the operator read "Inactive 7", clicked it, and got an
+  // empty table with no explanation.
+  static bool isInactive(TrainerModel t) => t.status != "active";
+
+  int get inactiveCount => trainers.where(isInactive).length;
 
   // ============================================================
   // 🧠 FORM STATE
@@ -312,8 +321,14 @@ class TrainerController extends GetxController {
           t.name.toLowerCase().contains(q) ||
           t.email.toLowerCase().contains(q);
 
-      final matchStatus =
-          selectedStatus.value == "all" || t.status == selectedStatus.value;
+      // Inactive resolves through the SAME predicate the KPI counts with, so
+      // the chip can never again promise rows the filter refuses to show.
+      final sel = selectedStatus.value;
+      final matchStatus = sel == "all"
+          ? true
+          : sel == "inactive"
+          ? isInactive(t)
+          : t.status == sel;
 
       return matchSearch && matchStatus;
     }).toList();

@@ -283,15 +283,29 @@ class TrainersScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(t.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-            Text(
-              t.email,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-            ),
-          ],
+        // Expanded + ellipsis: this Column was an UNCONSTRAINED child of a Row,
+        // so it took its intrinsic width. A long email is unbreakable, so it
+        // overflowed the flex-3 cell and painted the yellow-and-black stripes
+        // over the row — guaranteed, not theoretical, at narrow widths.
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                t.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Text(
+                t.email,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              ),
+            ],
+          ),
         ),
       ],
     );
