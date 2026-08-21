@@ -37,7 +37,29 @@ class TrainerController extends GetxController {
   // ============================================================
   // 📊 KPI (REAL SAAS)
   // ============================================================
-  int get totalCount => trainers.length;
+  /// 🔴 T-2. A REMOVED trainer is a soft-DELETED document, not a deactivated
+  /// coach, and it must not be counted as either a seat or an "inactive" coach.
+  ///
+  /// Production proves the distinction matters: `trainers/SWEtTT07…` carries
+  /// `status: "removed"`, `isDeleted: true`, `removedAt: 2026-08-18`, and its
+  /// uid is ABSENT from `admins/kWHy….trainerIds` because `removeTrainer`
+  /// arrayRemoves it (trainers.ts:507). The organization's real seat usage is
+  /// 1. The console read "Total 2 · Active 1 · Inactive 1".
+  ///
+  /// Matched on EITHER signal, not on `isDeleted` alone: the two are written
+  /// together today, and a row carrying only one of them is a corrupt document
+  /// that must still be excluded from the seat count rather than silently
+  /// counted.
+  static bool isRemoved(TrainerModel t) => t.isDeleted || t.status == "removed";
+
+  /// SEATS — what the organization is actually consuming, and the number that
+  /// should agree with `admins/{uid}.trainerIds.length`. Deliberately not
+  /// `trainers.length`, which is a document count.
+  int get totalCount => trainers.where((t) => !isRemoved(t)).length;
+
+  /// Soft-deleted documents, surfaced as their own number rather than folded
+  /// into Inactive — otherwise "Inactive" means two different things.
+  int get removedCount => trainers.where(isRemoved).length;
 
   int get activeCount => trainers.where((t) => t.status == "active").length;
 
@@ -59,7 +81,11 @@ class TrainerController extends GetxController {
   // carries no status field was counted in the Inactive KPI and hidden by the
   // Inactive filter — the operator read "Inactive 7", clicked it, and got an
   // empty table with no explanation.
-  static bool isInactive(TrainerModel t) => t.status != "active";
+  /// A REMOVED trainer is excluded: it is deleted, not deactivated, and
+  /// `setTrainerStatus` cannot act on it, so offering it under a filter whose
+  /// implied verb is "reactivate" would be a dead end.
+  static bool isInactive(TrainerModel t) =>
+      !isRemoved(t) && t.status != "active";
 
   int get inactiveCount => trainers.where(isInactive).length;
 
@@ -325,9 +351,14 @@ class TrainerController extends GetxController {
       // the chip can never again promise rows the filter refuses to show.
       final sel = selectedStatus.value;
       final matchStatus = sel == "all"
-          ? true
+          // "All" means all SEATS. A soft-deleted document is not a coach the
+          // founder can act on, so it appears only under its own filter — the
+          // same rule the seat KPI uses, so the chip and the table agree.
+          ? !isRemoved(t)
           : sel == "inactive"
           ? isInactive(t)
+          : sel == "removed"
+          ? isRemoved(t)
           : t.status == sel;
 
       return matchSearch && matchStatus;

@@ -112,6 +112,9 @@ class TrainersScreen extends StatelessWidget {
                     DropdownMenuItem(value: "all", child: Text("All")),
                     DropdownMenuItem(value: "active", child: Text("Active")),
                     DropdownMenuItem(value: "inactive", child: Text("Inactive")),
+                    // T-2: reachable only here. "All" means all SEATS, so a
+                    // soft-deleted document is not silently mixed into it.
+                    DropdownMenuItem(value: "removed", child: Text("Removed")),
                   ],
                   onChanged: (v) => ctrl.selectedStatus.value = v!,
                 );
@@ -134,6 +137,11 @@ class TrainersScreen extends StatelessWidget {
             const Color(SerenaColor.statusActiveLight)),
         _kpi("Inactive", ctrl.inactiveCount,
             const Color(SerenaColor.statusBlockedLight)),
+        // T-2: soft-deleted documents get their own number. Folded into
+        // Inactive they made "Inactive" mean two different things, and made
+        // Total disagree with the organization's real seat usage.
+        _kpi("Removed", ctrl.removedCount,
+            const Color(SerenaColor.textMutedLight)),
       ],
     );
   }
@@ -323,6 +331,9 @@ class TrainersScreen extends StatelessWidget {
       "pending": SerenaStatus.pending,
       "blocked": SerenaStatus.blocked,
       "suspended": SerenaStatus.neutral,
+      // Previously unmapped, so a REMOVED trainer fell through to `?? neutral`
+      // and rendered identically to a suspended one.
+      "removed": SerenaStatus.neutral,
     };
     return SerenaStatusPill(
       label: status.toUpperCase(),

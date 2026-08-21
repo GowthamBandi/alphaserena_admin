@@ -19,7 +19,24 @@ class TrainerModel {
   /// and the next save here silently WIPED the coach's experience.
   final String? experience;
   final String? bio;
-  final String status; // pending | active | blocked | suspended
+  /// pending | active | blocked | suspended | **removed**
+  ///
+  /// `removed` is what `removeTrainer` writes (trainers.ts:507). It is NOT a
+  /// deactivation: `setTrainerStatus` refuses to touch a removed trainer at all
+  /// (trainers.ts:399-404), and only `restoreTrainer` can bring one back.
+  final String status;
+
+  /// Soft-delete marker written alongside `status: 'removed'`.
+  ///
+  /// Modelled explicitly because the console was structurally blind to it —
+  /// `grep -c isDeleted` over this file and the controller returned 0 and 0 —
+  /// so a DELETED coach and a DEACTIVATED coach were the same row and the same
+  /// number. They are different facts about the organization: the removed uid
+  /// is arrayRemoved from `admins/{uid}.trainerIds`, so it occupies no seat.
+  final bool isDeleted;
+
+  /// When the soft delete happened. Null unless [isDeleted].
+  final DateTime? removedAt;
   final String? assignedBy; // adminDocId or adminUid
   final List<String> clientIds;
   final bool isVerified;
@@ -41,6 +58,8 @@ class TrainerModel {
     this.experience,
     this.bio,
     required this.status,
+    this.isDeleted = false,
+    this.removedAt,
     this.assignedBy,
     this.clientIds = const [],
     this.isVerified = false,
@@ -91,6 +110,11 @@ class TrainerModel {
       experience: _experienceText(map['experience']),
       bio: map['bio'],
       status: map['status'] ?? 'pending',
+      // Defensive: production writes a real bool, but a legacy/absent field
+      // must read as NOT deleted rather than throwing or silently hiding a
+      // live coach.
+      isDeleted: map['isDeleted'] == true,
+      removedAt: map['removedAt'] == null ? null : _parseDate(map['removedAt']),
       assignedBy: map['assignedBy'],
       clientIds: List<String>.from(map['clientIds'] ?? []),
       isVerified: map['isVerified'] ?? false,
@@ -126,6 +150,8 @@ class TrainerModel {
     'experience': experience,
     'bio': bio,
     'status': status,
+    'isDeleted': isDeleted,
+    if (removedAt != null) 'removedAt': removedAt,
     'assignedBy': assignedBy,
     'clientIds': clientIds,
     'isVerified': isVerified,
@@ -149,6 +175,8 @@ class TrainerModel {
     String? experience,
     String? bio,
     String? status,
+    bool? isDeleted,
+    DateTime? removedAt,
     String? assignedBy,
     List<String>? clientIds,
     bool? isVerified,
@@ -169,6 +197,8 @@ class TrainerModel {
       experience: experience ?? this.experience,
       bio: bio ?? this.bio,
       status: status ?? this.status,
+      isDeleted: isDeleted ?? this.isDeleted,
+      removedAt: removedAt ?? this.removedAt,
       assignedBy: assignedBy ?? this.assignedBy,
       clientIds: clientIds ?? this.clientIds,
       isVerified: isVerified ?? this.isVerified,
