@@ -1,5 +1,6 @@
 // lib/main.dart
 
+import 'dart:async';
 import 'package:alphaserena_admin_portel/controllers/admin_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/admin_login_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/admin_root_controller.dart';
@@ -34,13 +35,31 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:alphaserena_admin_portel/core/utils/fatal_reporter.dart';
 
 /// =============================================================
 /// 🚀 ENTRY POINT
 /// =============================================================
+/// THE CONSOLE HAD NO GLOBAL ERROR HANDLER AT ALL.
+///
+/// No `runZonedGuarded`, no `FlutterError.onError` — so an uncaught async
+/// error in a god-mode console vanished silently. Both handlers now route
+/// through `reportFatal`, which stamps the build identity onto every report
+/// and writes through a swappable sink.
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await _start();
+  runZonedGuarded(
+    () async {
+      // Inside the zone so the binding and runApp share one zone.
+      WidgetsFlutterBinding.ensureInitialized();
+      FlutterError.onError = (FlutterErrorDetails details) {
+        FlutterError.presentError(details);
+        reportFatal('FlutterError', details.exception, details.stack);
+      };
+      await _start();
+    },
+    (Object error, StackTrace stack) =>
+        reportFatal('Uncaught zone error', error, stack),
+  );
 }
 
 const FirebaseOptions _firebaseOptions = FirebaseOptions(
