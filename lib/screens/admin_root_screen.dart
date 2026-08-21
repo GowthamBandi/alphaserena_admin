@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../controllers/admin_root_controller.dart';
+import '../core/navigation/console_destinations.dart';
 
 /// =============================================================
 /// RESPONSIVE UTIL
@@ -101,28 +102,18 @@ class _Sidebar extends StatelessWidget {
     final ctrl = Get.find<AdminRootController>();
     final desktop = Responsive.isDesktop(context);
 
-    final items = const [
-      _MenuItem("Dashboard", Icons.dashboard_outlined),
-      _MenuItem("Admins", Icons.admin_panel_settings_outlined),
-      _MenuItem("Trainers", Icons.fitness_center_outlined),
-      _MenuItem("Clients", Icons.people_outline),
-      _MenuItem("Subscriptions", Icons.subscriptions_outlined),
-      _MenuItem("Payments", Icons.payments_outlined),
-      _MenuItem("Coupon Codes", Icons.discount_outlined),
-      _MenuItem("Support", Icons.support_agent_outlined),
-      _MenuItem("Communication", Icons.campaign_outlined),
-      _MenuItem("Audit Log", Icons.receipt_long_outlined),
-      _MenuItem("Operations Center", Icons.monitor_heart_outlined),
-      _MenuItem("Platform Staff", Icons.shield_outlined),
-      _MenuItem("Food Database", Icons.restaurant_menu_outlined),
-      _MenuItem("Exercise Library", Icons.sports_gymnastics_outlined),
-      _MenuItem("Settlements", Icons.account_balance_outlined),
-      _MenuItem("Automation", Icons.bolt_outlined),
-      _MenuItem("Engagement", Icons.insights_outlined),
-      _MenuItem("Access Requests", Icons.mark_email_unread_outlined),
-    ];
-
     final p = context.palette;
+
+    // The rows to render: section headers interleaved with their destinations,
+    // flattened once so a single ListView can virtualise the whole sidebar.
+    // Built from `kConsoleSections`, which is the ONLY place order and grouping
+    // are decided — see lib/core/navigation/console_destinations.dart.
+    final rows = <_SidebarRow>[
+      for (final section in kConsoleSections) ...[
+        _SidebarRow.header(section.title),
+        for (final d in section.destinations) _SidebarRow.destination(d),
+      ],
+    ];
 
     return Column(
       children: [
@@ -136,54 +127,42 @@ class _Sidebar extends StatelessWidget {
 
             return ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 10),
-              itemCount: items.length,
+              itemCount: rows.length,
               itemBuilder: (_, i) {
-                final isSelected = i == selected;
+                final row = rows[i];
 
-                return Semantics(
-                  button: true,
-                  selected: isSelected,
-                  label: items[i].title,
-                  child: InkWell(
+                if (row.header != null) {
+                  return Padding(
+                    // Generous lead-in above a header, tight below it, so a
+                    // header reads as attached to the group it names rather
+                    // than floating between two of them.
+                    padding: EdgeInsets.only(
+                      left: 12,
+                      right: 12,
+                      top: i == 0 ? 4 : 18,
+                      bottom: 6,
+                    ),
+                    child: Text(
+                      row.header!.toUpperCase(),
+                      style: AppText.label(size: 11).copyWith(
+                        color: p.textMuted,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  );
+                }
+
+                final d = row.destination!;
+                final isSelected = d.id == selected;
+
+                return _SidebarTile(
+                  destination: d,
+                  isSelected: isSelected,
                   onTap: () {
-                    ctrl.changePage(i);
+                    ctrl.changePage(d.id);
                     if (!desktop) Navigator.of(context).maybePop();
                   },
-                  borderRadius: AppRadii.smR,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? p.accent.withValues(alpha: 0.10)
-                          : Colors.transparent,
-                      borderRadius: AppRadii.smR,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          items[i].icon,
-                          size: 20,
-                          color: isSelected ? p.accent : p.textMuted,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            items[i].title,
-                            style: AppText.label(size: 14).copyWith(
-                              color: isSelected ? p.accent : p.textSecondary,
-                              fontWeight:
-                                  isSelected ? FontWeight.w700 : FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
                 );
               },
             );
@@ -194,6 +173,85 @@ class _Sidebar extends StatelessWidget {
         Divider(height: 1, color: p.border),
         const _SidebarFooter(),
       ],
+    );
+  }
+}
+
+/// One flattened sidebar row: either a section header or a destination.
+@immutable
+class _SidebarRow {
+  const _SidebarRow.header(this.header) : destination = null;
+  const _SidebarRow.destination(this.destination) : header = null;
+
+  final String? header;
+  final ConsoleDestination? destination;
+}
+
+/// A single navigable row.
+///
+/// Extracted from the builder closure so the selected/unselected treatment is
+/// defined ONCE. It previously lived inline, which is how a sidebar ends up
+/// with two subtly different hover states.
+class _SidebarTile extends StatelessWidget {
+  const _SidebarTile({
+    required this.destination,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final ConsoleDestination destination;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: destination.label,
+      // The purpose line is announced to a screen reader, which otherwise gets
+      // a bare noun ("Settlements") with no way to tell it from Revenue.
+      hint: destination.purpose,
+      child: Tooltip(
+        message: destination.purpose,
+        waitDuration: const Duration(milliseconds: 600),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppRadii.smR,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? p.accent.withValues(alpha: 0.10)
+                  : Colors.transparent,
+              borderRadius: AppRadii.smR,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  destination.icon,
+                  size: 20,
+                  color: isSelected ? p.accent : p.textMuted,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    destination.label,
+                    style: AppText.label(size: 14).copyWith(
+                      color: isSelected ? p.accent : p.textSecondary,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -313,12 +371,8 @@ class _SidebarFooter extends StatelessWidget {
   }
 }
 
-/// =============================================================
-/// MENU MODEL
-/// =============================================================
-class _MenuItem {
-  final String title;
-  final IconData icon;
-
-  const _MenuItem(this.title, this.icon);
-}
+// The menu model used to live here as a private `_MenuItem`, which made the
+// sidebar the SOURCE of the navigation model rather than a renderer of it.
+// It now lives in lib/core/navigation/console_destinations.dart, so grouping
+// and order are decided in one reviewable place and page identity (the integer
+// other controllers jump to) is decoupled from display position.

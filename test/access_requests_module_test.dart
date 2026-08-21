@@ -77,15 +77,30 @@ void main() {
   test('the sidebar has an entry for every selectable index', () {
     // The sidebar list and maxIndex are two lists that must agree; this repo
     // has shipped a screen that existed in one and not the other.
-    final sidebar =
-        File('lib/screens/admin_root_screen.dart').readAsStringSync();
-    expect(sidebar.contains('Access Requests'), isTrue);
+    //
+    // The navigation model moved OUT of admin_root_screen.dart (where the
+    // sidebar's position WAS the page index) and into console_destinations.dart
+    // (where display order and page identity are independent). This assertion
+    // follows it rather than being relaxed: the label must still be declared,
+    // and it must still carry the id the page factory routes.
+    final destinations =
+        File('lib/core/navigation/console_destinations.dart').readAsStringSync();
+    expect(destinations.contains("label: 'Access Requests'"), isTrue,
+        reason: 'Access Requests must be a declared console destination');
+    expect(
+        RegExp(r"id:\s*17,\s*\n\s*label:\s*'Access Requests'")
+            .hasMatch(destinations),
+        isTrue,
+        reason: 'Access Requests must keep id 17 — the page factory routes it '
+            'there, and the id is identity, not sidebar position');
 
     final factory =
         codeOnly(File('lib/controllers/admin_root_controller.dart')
             .readAsStringSync());
     expect(factory.contains('AccessRequestsScreen'), isTrue,
         reason: 'the page factory must be able to build the screen');
+    expect(RegExp(r'case 17:').hasMatch(factory), isTrue,
+        reason: 'the id declared above must have a matching page case');
   });
 
   test('the controller is both registered and torn down', () {
