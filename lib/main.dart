@@ -9,6 +9,7 @@ import 'package:alphaserena_admin_portel/controllers/billing_config_controller.d
 import 'package:alphaserena_admin_portel/controllers/client_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/communication_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/coupon_controller.dart';
+import 'package:alphaserena_admin_portel/controllers/crash_reports_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/dashboard_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/global_exercise_controller.dart';
 import 'package:alphaserena_admin_portel/controllers/global_food_controller.dart';
@@ -35,6 +36,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:alphaserena_admin_portel/core/constants/firestore_collections.dart';
 import 'package:alphaserena_admin_portel/core/utils/fatal_reporter.dart';
 import 'package:alphaserena_admin_portel/core/utils/crash_reporter.dart';
 import 'package:alphaserena_admin_portel/dev/crash_test_panel.dart';
@@ -110,7 +112,7 @@ Future<void> _start() async {
     // never blocked — the writer is fire-and-forget inside CrashReporter.
     CrashReporter.install(
       (doc) => FirebaseFirestore.instance
-          .collection('console_crash_reports')
+          .collection(FsCollections.consoleCrashReports)
           .add({...doc, 'at': FieldValue.serverTimestamp()}),
       emulatorMode: _useEmulator == 'true' && kDebugMode,
     );
@@ -342,6 +344,8 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
       // the same reason as SettlementController: the page factory uses
       // Get.find, so a missing registration crashes the section on open.
       _safePut(AccessRequestController());
+      // CRASH REPORTS — same page-factory Get.find rule as the two above.
+      _safePut(CrashReportsController());
 
       if (kDebugMode) debugPrint("✅ ALL CONTROLLERS INITIALIZED");
       isReady.value = true;
@@ -387,6 +391,7 @@ class _MasterAdminBootstrapState extends State<MasterAdminBootstrap> {
     _safeDelete<GlobalExerciseController>();
     _safeDelete<PaymentsController>();
     _safeDelete<ClientController>();
+    _safeDelete<CrashReportsController>();
     _safeDelete<AccessRequestController>();
     _safeDelete<SettlementController>();
     _safeDelete<OperationsController>();

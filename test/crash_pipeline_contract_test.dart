@@ -192,7 +192,7 @@ void main() {
       expect(main, contains('FlutterError.onError'));
       expect(main, contains('reportFatal'));
       expect(main, contains('attachRemoteFatalSink(CrashReporter.handleFatal)'));
-      expect(main, contains("collection('console_crash_reports')"));
+      expect(main, contains('collection(FsCollections.consoleCrashReports)'));
     });
 
     test('no second file installs a competing global handler', () {

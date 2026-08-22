@@ -267,6 +267,12 @@ const List<ConsoleSection> kConsoleSections = <ConsoleSection>[
         icon: Icons.shield_outlined,
         purpose: 'Who holds super-admin authority (read-only by design)',
       ),
+      ConsoleDestination(
+        id: 18,
+        label: 'Crash Reports',
+        icon: Icons.bug_report_outlined,
+        purpose: 'The console\'s own crash and error records, newest first',
+      ),
     ],
   ),
 ];

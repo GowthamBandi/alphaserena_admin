@@ -110,4 +110,8 @@ class FsCollections {
   /// the Admin SDK). Client reads are denied unless a super-admin read rule is
   /// added; kept here so a future founder audit viewer uses the constant.
   static const String auditLogs = 'audit_logs';
+
+  /// The console's own crash/error records, written by CrashReporter and read
+  /// by the Crash Reports screen. Founder-only + append-only by rules.
+  static const String consoleCrashReports = 'console_crash_reports';
 }

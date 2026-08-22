@@ -1,5 +1,6 @@
 import 'dart:async';
 import '../core/utils/crash_reporter.dart';
+import '../screens/crash_reports_screen.dart';
 import 'dart:developer';
 import 'package:alphaserena_admin_portel/screens/admins_screen.dart';
 import 'package:alphaserena_admin_portel/screens/audit_log_screen.dart';
@@ -50,7 +51,7 @@ class AdminRootController extends GetxController {
   /// Prevent invalid index crashes. MUST equal the last sidebar entry — a
   /// mismatch is how a finished screen ends up shipped and unreachable.
   /// `test/nav_reachability_test.dart` pins the two together.
-  final int maxIndex = 17;
+  final int maxIndex = 18;
 
   // ===========================================================================
   // PAGE CACHE (LAZY LOADED)
@@ -235,6 +236,10 @@ class AdminRootController extends GetxController {
       // deliberately nowhere near Settlements at 14.
       case 17:
         return AccessRequestsScreen();
+      // CRASH REPORTS — the console's own error records (Governance).
+      // Appended at 18 so every existing index stays stable, as always.
+      case 18:
+        return CrashReportsScreen();
       default:
         return const SizedBox();
     }
