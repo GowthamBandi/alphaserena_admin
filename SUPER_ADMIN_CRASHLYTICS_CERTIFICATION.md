@@ -1,203 +1,182 @@
-# SUPER ADMIN — CRASHLYTICS / PRODUCTION OBSERVABILITY CERTIFICATION
-### 2026-08-22 · console `051ac04` · backend `f163376` · project `trainershq-f5ded`
-
-**Legend** — 🟢 PROVEN · 🟡 OPERATOR-GATED · ⬛ NOT APPLICABLE (with evidence)
+# SUPER ADMIN — CRASH MONITORING · FINAL PRODUCTION CERTIFICATION
+### 2026-08-22 · console `ea32f8e` · backend `01164fb` · Firebase `trainershq-f5ded`
+### supersedes the 🟡 of earlier today — every blocker is closed with live evidence
 
 ---
 
 ## 1. EXECUTIVE VERDICT
 
-> ## 🟡 **IMPLEMENTED AND LOCALLY PROVEN — two operator actions pending.**
-> Zero P0/P1. The pipeline captured all three controlled failure classes
-> end-to-end with correct classification, identity, build and breadcrumbs;
-> production capture goes live with one rules deploy.
+> # 🟢 **CRASH MONITORING PRODUCTION CERTIFIED**
+> The complete chain — **production app → reporter → Firestore → deployed
+> security rules → founder console display** — was exercised against the LIVE
+> project with the REAL founder account on a REAL release-mode artifact, and
+> every leg produced the expected evidence. Zero open P0/P1.
 
-**The load-bearing platform finding:** `firebase_crashlytics` (5.2.7, verified
-on pub.dev today) supports **Android, iOS and macOS only — there is no Flutter
-web implementation**, and the production Super Admin is exclusively the web
-app: the ONLY registered Firebase app is `1:790123355865:web:720324d19e8d7a49d6a8c8`;
-the android/ios folders are unregistered `com.example` scaffolding with no
-`google-services.json` / `GoogleService-Info.plist` anywhere. Installing the
-Crashlytics plugin was therefore the WRONG move — it would have added native
-build churn to apps nobody runs and captured **zero** production crashes.
-The plugin was deliberately **not installed**; the mission's goal (capture,
-classify, attribute, read, no leakage) was implemented natively for the web.
+**Platform ruling (unchanged, evidence-backed):** `firebase_crashlytics` has
+no Flutter web implementation (5.2.7 supports Android/iOS/macOS only), and the
+Super Admin ships exclusively as the web app
+(`1:790123355865:web:720324d19e8d7a49d6a8c8`). The plugin is deliberately NOT
+installed; the production mechanism is the web-native pipeline below.
 
----
-
-## 2. ARCHITECTURE — one ownership model
+## 2. ARCHITECTURE / PRODUCTION DATA FLOW
 
 ```
-FlutterError.onError ─┐                        ┌─ dart:developer log (always)
-                      ├─▶ reportFatal ─────────┤
-runZonedGuarded ──────┘   (the ONE seam)       └─ CrashReporter.handleFatal
-                                                        │  kind: fatal
-caught-but-important ──▶ CrashReporter.reportNonFatal ──┤  kind: nonfatal
-                                                        ▼
-                                    Firestore console_crash_reports
-                                    (founder-only · create-only · bounded)
+FlutterError.onError ─┐                       ┌─ dart:developer log (always)
+                      ├─▶ reportFatal ────────┤
+runZonedGuarded ──────┘   (ONE seam)          └─ CrashReporter (fatal)
+caught-but-important ──▶ CrashReporter.reportNonFatal
+        │  redact → clip → signature dedup (3) → session cap (25) → buffer-if-pre-init
+        ▼
+Firestore `console_crash_reports`  ← rules: founder-only, create-only, bounded (DEPLOYED)
+        ▼
+Governance → Crash Reports (console screen, nav 18): live capped window,
+search, Fatal/Non-fatal/Production filters, ×N incident grouping, detail
+dialog (error · breadcrumbs · stack, selectable)
 ```
 
-- Both global handlers pre-existed (commit `49a9518`); this work attached a
-  REMOTE sink behind the same seam — chained after the local log, each leg
-  guarded separately, so a throwing sink can never suppress the other.
-  A source-guard test pins main.dart as the only owner of global handlers.
-- No `PlatformDispatcher.onError` was added: the guarded zone owns async on
-  web, and a second competing handler is the defect Phase 4 warns about.
-- Native crash handling / ANR: ⬛ no native platform exists in production.
+One ownership model, pinned by a source-guard test: main.dart is the only
+installer of global handlers; no PlatformDispatcher handler competes with the
+zone.
 
-## 3. CLASSIFICATION
+## 3. PRODUCTION DEPLOYMENT EVIDENCE (Phase 4)
 
-| class | treatment | proof |
+- **Deployed 2026-08-22 ~12:45 UTC**: `firebase deploy --only firestore:rules
+  --project trainershq-f5ded` → `✔ released rules firestore.rules to
+  cloud.firestore`. Authorized explicitly by this campaign.
+- Pre-deploy delta proof: `tests/rules/deploy_delta.mjs` (33/33) ran the same
+  probes against the released baseline AND the working tree — the ONLY
+  behavioral change was founder-create on `console_crash_reports` flipping
+  DENY→ALLOW; every other principal stayed DENY on every operation, and the
+  24-collection no-collateral matrix answered identically on both rulesets.
+- Post-deploy, ledger re-recorded (`PENDING_RULES_DEPLOY.md`, baseline
+  `a2c892d`, guard test 4/4) and committed (`01164fb`).
+
+## 4. LIVE SECURITY VERIFICATION (Phases 3, 6)
+
+| probe | method | result |
 |---|---|---|
-| uncaught framework error | `fatal` (FlutterError.onError) | live E2E doc 2 |
-| uncaught async error | `fatal` (zone) | live E2E doc 3 |
-| caught-but-important | `nonfatal` via `reportNonFatal` | live E2E doc 1 |
-| Firebase init failure | `nonfatal` (app survives into retry screen), buffered until an init succeeds | pre-init buffer test |
-| validation / expected auth failure / permission-denied the UI handles / cancellations | **not reported** — nothing routes them to the reporter | call-site audit |
+| founder READ | real founder session token (uid `BwIRPV…VFI3`), REST against production | **200** (was 403 pre-deploy — the flip itself is evidence the deploy landed) |
+| founder DELETE | same, live | **403** — append-only binds the founder too |
+| anonymous READ | live REST, no token | **403** |
+| anonymous forged CREATE | live REST, no token | **403** |
+| authenticated non-founder (org owner, member), all four ops; founder update; kind enum; size ceilings; type checks | **emulator rules harness** (`console_crash_reports.mjs`, 9/9) — labeled as such: no secondary production credential exists, and creating one is out of bounds | all denied as specified |
 
-On web, `fatal` means "reached the global handlers uncaught" — the tab does
-not die, and after both live fatal tests the console remained fully usable
-(navigated, rendered seeded data). Recorded, not hidden.
+Full rules suite 1273/1273. Revert-proof: weakening `update, delete` to
+`isSuperAdmin()` failed exactly the append-only test (8 others green);
+restored byte-identical.
 
-## 4. CONTEXT · CUSTOM KEY INVENTORY (every field, documented)
+## 5. REAL PRODUCTION PROBE (Phase 5) — the closing evidence
 
-`kind` · `label` (≤120) · `error` (redacted, ≤4000) · `stack` (redacted,
-≤30000) · `breadcrumbs` (≤40 names) · `build` (kAppVersion) · `commit`
-(kGitCommit) · `mode` (release/profile/debug) · `env`
-(emulator/production) · `uid` (the founder's STABLE uid — never the email) ·
-`section` (console section index) · `sessionId` · `occurrence` · `at`
-(serverTimestamp).
+Internal release artifact (`CRASH_TEST=true`, commit `44b8873` at probe time)
+served on the founder's origin so the REAL production session restored;
+release mode, production Firebase, no emulator anywhere. One controlled
+**Non-fatal** trigger pressed. The document that landed in production
+`console_crash_reports` (read back live, 200):
 
-## 5. BREADCRUMBS
+```
+kind: nonfatal · label: crash-test non-fatal
+error: FormatException: CONTROLLED TEST: handled failure
+env: production · mode: release · build: 1.0.0+1 · commit: 44b8873
+uid: BwIRPVMO5WRNbus1eqqbC6bMVFI3 · section: section_0
+breadcrumbs: BOOT_FIREBASE_READY → SESSION_VERIFIED → CONSOLE_OPENED → CRASH_TEST_NONFATAL
+at: 2026-08-22T12:58:31.691Z (serverTimestamp)
+```
 
-`BOOT_FIREBASE_READY` · `LOGIN_STARTED` · `LOGIN_FAILED` (code only — auth
-exception MESSAGES can embed the typed email) · `SESSION_VERIFIED` ·
-`SESSION_ENDED` · `CONSOLE_OPENED` · `SECTION_CHANGED` · `CRASH_TEST_*`.
-The API **refuses anything that is not a SCREAMING_SNAKE name** (assert in
-debug, dropped in release), and a source test walks every literal in `lib/` —
-a breadcrumb structurally cannot carry a password. No Analytics was
-introduced; breadcrumbs are self-carried on the report document.
+No email, no token, no PII beyond the stable uid. **No production crash was
+intentionally caused** — fatal capture is proven by the emulator E2E (both
+fatal classes landed with correct kinds) plus the identical code path.
 
-## 6. PRIVACY AUDIT 🟢
+## 6. FOUNDER-CONSOLE VERIFICATION (Phases 5, 10)
 
-- Redaction (Bearer tokens, JWTs, Google API keys, `password=`/`token:`-style
-  pairs, email addresses) applied to error + stack before anything leaves the
-  app. **The first test run caught a real ordering bug** — keyword-first
-  redacted the word "Bearer" and left the token; token shapes now run first.
-- Reports carry uid, never email; login failure records the CODE only.
-- Rules are the backstop: founder-only read AND create, update/delete denied
-  for everyone (append-only, like `audit_logs`), size ceilings server-side.
-- Verified live: the three E2E documents contain no secret, no email, no
-  token (raw documents inspected over emulator REST).
+Governance → **Crash Reports** displayed the real production report: NON-FATAL
+chip, sanitized error, timestamp, `build 1.0.0+1 (44b8873, release) ·
+production · section_0`, and the detail dialog with breadcrumbs and stack.
+**A real defect was found and fixed during this verification**: the first
+version's `Expanded` list collapsed to zero height inside PageShell's
+scrollview ("1 total" over a blank list, no exception). Root-caused, fixed to
+the Audit Log's plain-Column pattern, pinned by a widget regression that
+asserts the row BUILDS with nonzero size (`ea32f8e`).
 
-## 7. FLOOD / OFFLINE / STARTUP SAFETY 🟢
+**Operational runbook (the founder's day-2 workflow):**
+1. Open Super Admin → Governance → **Crash Reports** (checking after an
+   incident report, or weekly).
+2. FATAL = the console broke uncaught; NON-FATAL = it survived but something
+   important failed. **×N** on a row = same incident N times in the window —
+   repeated beats isolated for priority.
+3. The row carries when, which build (`version (commit)`), which section, and
+   whether it was production. Filter "Production only" to ignore test noise.
+4. Open the row: the error is the WHAT, breadcrumbs are what you were doing
+   just before, the stack is for a developer (hand them the commit).
+5. The count header reading "N+" means older reports exist — "Load older"
+   before concluding something never happened.
+6. Healthy state: "No crash reports — that is the healthy state."
 
-- Per-signature cap 3 (signature = label + error TYPE + first frame, so a
-  loop with a changing message still dedups) · session cap 25 · tested.
-- Writes are fire-and-forget; a failed/offline write falls back to the
-  developer log (tested with a throwing writer). The app never awaits the
-  reporter on a crash path.
-- Reports before Firebase init are buffered (5) and flushed on install —
-  a crash during init is reported by the retry that succeeds. Failed init
-  still boots the retry screen (pre-existing behavior, unchanged).
+## 7. RELEASE-BUILD SEPARATION + BOOT (Phases 8, 9)
 
-## 8. CONTROLLED TEST MECHANISM 🟢
+Both artifacts built at final HEAD `ea32f8e`, `--release --source-maps`:
 
-`CrashTestPanel`, gated by `--dart-define=CRASH_TEST=true` at COMPILE time:
-- Normal production build: `const false` → tree-shaken. **Proven:** zero
-  occurrences of the panel's strings in the production release `main.dart.js`
-  (vs 1 in the internal build); visually absent; pinned by test.
-- Stronger than kDebugMode gating: an INTERNAL release build can exercise the
-  pipeline in true release mode.
-- Two defects found live while wiring it, both fixed and documented in code:
-  the app-root builder must return the child untouched when gated off
-  (RenderBox-not-laid-out broke the login screen), and the panel needs its
-  own width (stretch under a Positioned's unbounded width = infinite-width
-  constraint).
-
-## 9. LIVE END-TO-END EVIDENCE 🟢 (emulator suite, debug build)
-
-Full emulator run (auth/firestore/storage/functions, new rules, seeded
-fixtures; the console's own emulator-proof gate PASSED — it correctly
-BLOCKED an earlier unseeded session). Logged in as the synthetic
-`founder@emulator.test`, fired all three panel triggers. Result — 3 documents
-in `console_crash_reports`:
-
-| kind | label | error | breadcrumb tail |
-|---|---|---|---|
-| nonfatal | crash-test non-fatal | FormatException: CONTROLLED TEST | …LOGIN_STARTED → SESSION_VERIFIED → CRASH_TEST_NONFATAL |
-| fatal | FlutterError | Bad state: CONTROLLED TEST: synchronous fatal | …CRASH_TEST_FATAL_ASYNC → CRASH_TEST_FATAL_SYNC |
-| fatal | Uncaught zone error | Bad state: CONTROLLED TEST: uncaught async | …CRASH_TEST_NONFATAL → CRASH_TEST_FATAL_ASYNC |
-
-Every doc: correct uid, `env: emulator`, `build 1.0.0+1`, `mode: debug`,
-stack present, occurrence 1, no duplicates. Console fully functional after.
-
-## 10. RELEASE BUILD MATRIX 🟢
-
-| build | flags | verified |
+| artifact | main.dart.js sha1 | "CRASH TEST" strings |
 |---|---|---|
-| debug + emulator + crash-test | `USE_FIREBASE_EMULATOR=true CRASH_TEST=true` | full E2E above |
-| release PRODUCTION | none | boots to login, ZERO console errors, NO panel (visual + JS grep), NO emulator connectivity (kDebugMode guard held) |
-| release INTERNAL | `CRASH_TEST=true` | builds; panel compiled in; reserved for the founder's live production test |
+| PRODUCTION (no define) | `bde011c79d562101b96ac74c9e9b4fd41bd53c83` | **0** — panel tree-shaken |
+| INTERNAL (`CRASH_TEST=true`) | `a31c9e2afee1e3c5a208b252a4449a958fae4754` | 1 |
 
-## 11. SYMBOLS / READABLE STACKS — the honest web answer
+Production artifact booted in the founder's live session at ~13:07 UTC: login
+restored, dashboard + real data, **no panel**, no console errors, reporter
+init non-blocking, navigation normal. Gate is compile-time
+(`bool.fromEnvironment`), pinned false-by-default in tests; a release build
+also cannot be pointed at an emulator (kDebugMode guard, verified by absence
+of emulator connectivity).
 
-Web release stacks are **minified dart2js frames** (there is no Crashlytics
-symbol upload because there is no Crashlytics). The report carries `commit`,
-so frames are resolvable against that build's source map. **Recommendation
-for the release pipeline:** build with `--source-maps` and archive
-`build/web/main.dart.js.map` per release keyed by the GIT_COMMIT define.
-Debug/internal builds already produce readable Dart frames (proven in E2E).
+## 8. FAILURE BEHAVIOUR (Phase 7) + FLOOD + PRIVACY
 
-## 12. TESTS 🟢
+All test-proven, and the load-bearing three revert-proven this campaign
+(weakened → named test fails → restored): **redaction** (order matters:
+token shapes before keyword rule), **session flood cap**, **append-only
+rule**. Also proven: pre-init buffering (a report during a failed Firebase
+init lands after the retry that succeeds), throwing writer/sink harmless,
+fire-and-forget writes (offline queues in the SDK; failure falls back to the
+developer log), logged-out reporting works minus uid, breadcrumb API refuses
+non-SCREAMING_SNAKE names + source sweep over every literal in lib/.
 
-- Console: `test/crash_pipeline_contract_test.dart` — 16 tests (redaction,
-  breadcrumb gate + source sweep, classification, context fields, flood caps,
-  pre-init buffer, throwing writer/sink, one-ownership source guard on
-  main.dart, crash-test gating). Full suite **474/474**.
-- Backend: `tests/rules/console_crash_reports.mjs` — 9 tests (founder-only
-  both directions, append-only even for the founder, kind enum, size
-  ceilings, type checks). Full rules suite **1273/1273**.
-- `deploy_delta.mjs` re-keyed to this hunk (the old SA-05 key is in the
-  baseline since 2026-08-20 and correctly failed on re-arm): proves the
-  pending deploy flips exactly ONE thing (founder create DENY→ALLOW) and
-  grants nothing to any other principal. 33/33.
+## 9. TEST MATRIX (Phase 12)
 
-## 13. PRODUCTION SAFETY REVIEW 🟢
+| suite | result |
+|---|---|
+| console full suite (incl. 16 pipeline-contract + 9 viewer tests) | **483 / 483** |
+| backend rules full suite | **1273 / 1273** |
+| console_crash_reports rules | 9 / 9 |
+| deploy_delta (pre-deploy) | 33 / 33; now self-retired (tree == deployed baseline) |
+| pending-rules ledger guard | 4 / 4 |
+| analyzer | 1 pre-existing info (`hasFlag` deprecation, untouched test) — PRE-EXISTING |
 
-Diff audited: no dependency changes (Crashlytics deliberately NOT added), no
-Gradle changes, no new Firebase services, no secrets committed, no
-production-reachable crash control (compile-time proof), unrelated files
-untouched (the pre-existing policy_registry diff was left alone — separate
-task already flagged).
+No campaign-introduced failures. Working trees clean except the pre-existing,
+unrelated `policy_registry` brand-fix diff (separately task-chipped; untouched).
 
-## 14. REMAINING OPERATOR ACTIONS (the 🟡)
+## 10. SOURCE-MAP / DIAGNOSTIC LIMITS (Phase 11)
 
-1. **Deploy the rules** — the one blocked action (permission classifier):
-   ```bash
-   cd /Users/bandigowtham/flutter_works/trainershq-backend && firebase deploy --only firestore:rules --project trainershq-f5ded
-   ```
-   then re-record the ledger:
-   ```bash
-   cd /Users/bandigowtham/flutter_works/trainershq-backend && ./scripts/record_pending_rules.sh a2c892d && git add PENDING_RULES_DEPLOY.md && git commit -m "docs(rules): console_crash_reports deployed"
-   ```
-   Until then, production crash writes are DENIED (and fall back to the
-   browser console log — nothing is silently lost, it is just not remote).
-2. **One live production probe** (only the founder can log in): build
-   `flutter build web --release --dart-define=CRASH_TEST=true --dart-define=GIT_COMMIT=$(git rev-parse --short HEAD)`,
-   open it, sign in, press **Non-fatal** (harmless — the app continues), and
-   confirm the document appears in Firestore → `console_crash_reports` with
-   `env: production`, `mode: release`. This is the production-attributed
-   analogue of Firebase's "verify with a test crash" step.
+Production web stacks are minified dart2js frames — stated, not hidden. Every
+report carries `build` + `commit`, and release builds now use
+`--source-maps` (map emitted beside `main.dart.js`, ~4 MB). **Release-pipeline
+requirement:** archive `build/web/main.dart.js.map` per release, keyed by the
+GIT_COMMIT define, so any frame can be resolved offline. No source-level
+symbolication service exists for Flutter web; none is claimed.
 
-## 15. LIMITATIONS (stated, not hidden)
+## 11. REMAINING LIMITATIONS (stated)
 
-- Pre-login crashes cannot be persisted (rules are founder-only by design;
-  an unauthenticated writable collection is a spam surface). They still hit
-  the developer log; the single-user console makes this a narrow blind spot.
-- Repeat counting is per-session client-side (rules forbid updates —
-  append-only integrity outranks server-side counters).
-- No ANR/native crash coverage — no native platform ships.
-- Reading reports = Firebase console → Firestore → `console_crash_reports`.
-  An in-console viewer screen is a product opportunity, not a gap in capture.
+- Pre-login crashes reach the developer log only (founder-only rules by
+  design; an unauthenticated writable collection is a spam surface — and the
+  live anonymous 403s are that decision working).
+- Repeat counting is client-side per window (rules forbid updates; append-only
+  integrity outranks server counters). The viewer's ×N grouping covers triage.
+- No native/ANR coverage — no native platform ships.
+
+## 12. IDENTITY OF THIS CERTIFICATION
+
+| | |
+|---|---|
+| console commits | `051ac04` → `5143cd1` → `44b8873` → `ea32f8e` |
+| backend commits | `a2c892d` → `f163376` → `01164fb` |
+| Firebase project | `trainershq-f5ded` (web app `…d6a8c8`) |
+| rules deploy | 2026-08-22 ~12:45 UTC, verified live both directions |
+| production probe | 2026-08-22 12:58:31 UTC, doc read back + displayed in console |
+| release boot | 2026-08-22 ~13:07 UTC, production artifact, founder session |
