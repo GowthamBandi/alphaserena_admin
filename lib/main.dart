@@ -36,6 +36,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:alphaserena_admin_portel/core/utils/fatal_reporter.dart';
+import 'package:alphaserena_admin_portel/core/utils/crash_reporter.dart';
+import 'package:alphaserena_admin_portel/dev/crash_test_panel.dart';
 
 /// =============================================================
 /// 🚀 ENTRY POINT
@@ -99,6 +101,21 @@ Future<void> _start() async {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(options: _firebaseOptions);
     }
+    // ── CRASH PERSISTENCE ────────────────────────────────────────────────
+    // Crashlytics does not exist on Flutter web, so production capture is a
+    // Firestore write to the founder-only `console_crash_reports` collection,
+    // attached BEHIND the existing reportFatal seam (both global handlers
+    // already route through it). Installed immediately after Firebase init:
+    // anything reported earlier was buffered and flushes now. Startup is
+    // never blocked — the writer is fire-and-forget inside CrashReporter.
+    CrashReporter.install(
+      (doc) => FirebaseFirestore.instance
+          .collection('console_crash_reports')
+          .add({...doc, 'at': FieldValue.serverTimestamp()}),
+      emulatorMode: _useEmulator == 'true' && kDebugMode,
+    );
+    attachRemoteFatalSink(CrashReporter.handleFatal);
+    CrashReporter.breadcrumb('BOOT_FIREBASE_READY');
     // Deliberately AFTER initializeApp and guarded by BOTH the opt-in flag and
     // kDebugMode: a release build can never be talked into a local backend even
     // if the define is passed by mistake.
@@ -122,8 +139,13 @@ Future<void> _start() async {
       // move money. See lib/dev/emulator_guard.dart for the full reasoning.
     }
     runApp(const AlphaSerenaAdminApp());
-  } catch (e) {
+  } catch (e, s) {
     if (kDebugMode) debugPrint("🔥 FIREBASE INIT FAILED → $e");
+    // Non-fatal by classification: the console SURVIVES into the retry
+    // screen. The reporter buffers this until a later init succeeds — a
+    // report about "Firebase could not start" cannot be written through the
+    // Firebase that could not start.
+    CrashReporter.reportNonFatal('Firebase init failed', e, s);
     runApp(const _BootstrapErrorApp());
   }
 }
@@ -213,6 +235,22 @@ class AlphaSerenaAdminApp extends StatelessWidget {
 
       // 🔥 SINGLE ENTRY POINT — a reactive gate, not a bare hasData check.
       home: const RootGate(),
+
+      // Crash-test triggers: in a normal build (`kCrashTestEnabled` false —
+      // no --dart-define=CRASH_TEST=true) the child is returned UNTOUCHED, so
+      // production layout is byte-identical to before. In an internal build
+      // the panel overlays the app; the child must be `Positioned.fill` or
+      // the Navigator is laid out loose and the whole login screen fails with
+      // "RenderBox was not laid out" — found live on the first E2E run.
+      builder: (context, child) {
+        if (!kCrashTestEnabled) return child ?? const SizedBox.shrink();
+        return Stack(
+          children: [
+            if (child != null) Positioned.fill(child: child),
+            const CrashTestPanel(),
+          ],
+        );
+      },
     );
   }
 }

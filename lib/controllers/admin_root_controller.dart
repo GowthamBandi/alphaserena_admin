@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../core/utils/crash_reporter.dart';
 import 'dart:developer';
 import 'package:alphaserena_admin_portel/screens/admins_screen.dart';
 import 'package:alphaserena_admin_portel/screens/audit_log_screen.dart';
@@ -75,6 +76,11 @@ class AdminRootController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    // Crash context starts at the landing section; without this a crash on
+    // the dashboard is attributed to 'boot' forever, because `changePage`
+    // only fires on a CHANGE.
+    CrashReporter.setSection('section_${selectedIndex.value}');
+    CrashReporter.breadcrumb('CONSOLE_OPENED');
 
     log("🧠 [AdminRootController] Initialized");
 
@@ -144,6 +150,11 @@ class AdminRootController extends GetxController {
     if (selectedIndex.value == index) return;
 
     selectedIndex.value = index;
+
+    // Crash context: which console section was in view. Index, not title —
+    // titles are UI copy; the index is the stable routing fact.
+    CrashReporter.setSection('section_$index');
+    CrashReporter.breadcrumb('SECTION_CHANGED');
 
     // 🔥 lazy load page
     if (!_pageCache.containsKey(index)) {

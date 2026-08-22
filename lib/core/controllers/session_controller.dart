@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 
+import '../utils/crash_reporter.dart';
+
 import '../../widgets/app_snackbar.dart';
 import '../constants/firestore_collections.dart';
 
@@ -62,6 +64,10 @@ class SessionController extends GetxService {
       isMaster.value = false;
       isBooting.value = false;
       _verifiedUid = null;
+      // Crash context: identity gone. The reporter keeps working — a crash on
+      // the login screen still reports, just without a uid.
+      CrashReporter.setUser(null);
+      CrashReporter.breadcrumb('SESSION_ENDED');
       return;
     }
 
@@ -102,6 +108,10 @@ class SessionController extends GetxService {
     user.value = u;
     isMaster.value = true;
     isBooting.value = false;
+    // Crash context: the STABLE uid, never the email — this is the identity
+    // a production report is debugged under.
+    CrashReporter.setUser(u.uid);
+    CrashReporter.breadcrumb('SESSION_VERIFIED');
   }
 
   Future<bool> _verifyMaster(User user, {required bool forceRefresh}) async {

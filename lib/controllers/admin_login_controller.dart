@@ -5,6 +5,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 
+import '../core/utils/crash_reporter.dart';
+
 /// Handles ONLY the credential sign-in. Authorization (is this user a master
 /// admin?) and all routing live in [SessionController], which verifies
 /// `master_admins/{uid}` on every auth-state change. Keeping login "pure" means
@@ -24,6 +26,7 @@ class AdminLoginController extends GetxController {
     if (isLoading.value) return;
     try {
       isLoading.value = true;
+      CrashReporter.breadcrumb('LOGIN_STARTED');
 
       // The password is passed verbatim — trimming here would reject any
       // password that legitimately contains edge whitespace.
@@ -35,6 +38,9 @@ class AdminLoginController extends GetxController {
       // ✅ Success. SessionController now verifies master status + routes.
       // Do NOT navigate or grant access from here.
     } on FirebaseAuthException catch (e) {
+      // The CODE is a stable enum; the exception MESSAGE can embed the typed
+      // email, so only the code becomes context.
+      CrashReporter.breadcrumb('LOGIN_FAILED');
       AppSnackbar.show(title: "Login Failed", message: _messageFor(e.code));
     } catch (_) {
       AppSnackbar.show(title: "Error", message: "Something went wrong");

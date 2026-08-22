@@ -53,12 +53,29 @@ void _defaultSink(String label, Object error, StackTrace? stack) {
 
 FatalSink _sink = _defaultSink;
 
+/// Optional SECOND sink that persists reports remotely (production: the
+/// CrashReporter writing `console_crash_reports`). Chained, not swapped: the
+/// developer-log sink always runs too, so a report is visible in DevTools
+/// even when the remote write is queued, offline, or refused.
+FatalSink? _remoteSink;
+
+/// Attaches the remote persistence sink. Passing null detaches it (logout is
+/// NOT a reason to detach — a crash on the login screen after sign-out still
+/// deserves a report on the next session; callers decide).
+void attachRemoteFatalSink(FatalSink? sink) => _remoteSink = sink;
+
 /// Reports an unrecoverable error through a channel release builds keep.
 void reportFatal(String label, Object error, [StackTrace? stack]) {
   try {
     _sink(label, error, stack);
   } catch (_) {
     // The reporter must never be the thing that takes the app down.
+  }
+  try {
+    _remoteSink?.call(label, error, stack);
+  } catch (_) {
+    // Same rule for the remote leg — and each leg is guarded separately so a
+    // throwing remote sink can never suppress the local log, or vice versa.
   }
 }
 
