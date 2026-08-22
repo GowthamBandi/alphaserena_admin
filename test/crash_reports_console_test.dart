@@ -4,9 +4,18 @@
 // capped live window, and a filtered miss over a capped window must read
 // "not found yet", never "none". Adds the incident-grouping contract: a
 // repeated failure must be tellable from an isolated one at a glance.
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:alphaserena_admin_portel/controllers/crash_reports_controller.dart';
 import 'package:alphaserena_admin_portel/models/crash_report_model.dart';
+import 'package:alphaserena_admin_portel/screens/crash_reports_screen.dart';
+
+class _FakeController extends CrashReportsController {
+  @override
+  // ignore: must_call_super
+  void onInit() {}
+}
 
 CrashReportModel report({
   String id = 'r1',
@@ -110,6 +119,46 @@ void main() {
           reason: 'differing stacks must not split one incident — minified '
               'web frames vary across reloads of the same defect');
       expect(counts[c.reports[2].incidentKey], 1);
+    });
+  });
+
+  group('screen renders inside the PageShell scroll context', () {
+    testWidgets('a report ROW actually builds — not a zero-height list',
+        (t) async {
+      // THE DEFECT THIS PINS: the first version put an Expanded ListView
+      // inside PageShell's SingleChildScrollView. It collapsed to zero height
+      // with no exception, and the founder's first production open showed
+      // "1 total" over a blank list. A lazy list in a zero viewport builds
+      // NO children, so finding the row text is the regression.
+      Get.testMode = true;
+      final c = _FakeController();
+      c.reports.value = [report(error: 'StateError: THE_VISIBLE_ROW')];
+      c.isLoading.value = false;
+      Get.put<CrashReportsController>(c);
+      addTearDown(Get.reset);
+
+      await t.pumpWidget(GetMaterialApp(home: Scaffold(
+        body: CrashReportsScreen(),
+      )));
+      await t.pump();
+
+      expect(find.textContaining('THE_VISIBLE_ROW'), findsOneWidget);
+      expect(t.getSize(find.textContaining('THE_VISIBLE_ROW')).height,
+          greaterThan(0));
+      expect(find.text('FATAL'), findsOneWidget);
+    });
+
+    testWidgets('the healthy empty state says so', (t) async {
+      Get.testMode = true;
+      final c = _FakeController();
+      c.isLoading.value = false;
+      Get.put<CrashReportsController>(c);
+      addTearDown(Get.reset);
+      await t.pumpWidget(GetMaterialApp(home: Scaffold(
+        body: CrashReportsScreen(),
+      )));
+      await t.pump();
+      expect(find.text('No crash reports'), findsOneWidget);
     });
   });
 

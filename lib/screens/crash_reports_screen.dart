@@ -18,7 +18,6 @@ class CrashReportsScreen extends StatelessWidget {
   CrashReportsScreen({super.key});
 
   final CrashReportsController ctrl = Get.find<CrashReportsController>();
-  final ScrollController _scroll = ScrollController();
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +68,12 @@ class CrashReportsScreen extends StatelessWidget {
                   ),
               ])),
           const SizedBox(height: 14),
-          Expanded(child: Obx(() => _body(context))),
+          // PLAIN COLUMN, NOT A ListView: PageShell already wraps its child in
+          // a SingleChildScrollView, and an Expanded list inside that scroll
+          // context collapses to ZERO height with no exception — found live on
+          // the first production open of this screen ("1 total", blank list).
+          // The Audit Log renders its rows exactly this way for this reason.
+          Obx(() => _body(context)),
         ],
       ),
     );
@@ -124,30 +128,24 @@ class CrashReportsScreen extends StatelessWidget {
       };
     }
     final counts = ctrl.incidentCounts;
-    return Scrollbar(
-      controller: _scroll,
-      child: ListView.separated(
-        controller: _scroll,
-        itemCount: rows.length + (ctrl.atCap ? 1 : 0),
-        separatorBuilder: (_, index) => const SizedBox(height: 8),
-        itemBuilder: (context, i) {
-          if (i == rows.length) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: ctrl.isLoadingMore.value
-                    ? const CircularProgressIndicator()
-                    : OutlinedButton(
-                        onPressed: ctrl.loadMore,
-                        child: Text('Load '
-                            '${CrashReportsController.pageSize} older reports'),
-                      ),
-              ),
-            );
-          }
-          return _row(context, rows[i], counts[rows[i].incidentKey] ?? 1);
-        },
-      ),
+    return Column(
+      children: [
+        for (final r in rows) ...[
+          _row(context, r, counts[r.incidentKey] ?? 1),
+          const SizedBox(height: 8),
+        ],
+        if (ctrl.atCap)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: ctrl.isLoadingMore.value
+                ? const CircularProgressIndicator()
+                : OutlinedButton(
+                    onPressed: ctrl.loadMore,
+                    child: Text('Load '
+                        '${CrashReportsController.pageSize} older reports'),
+                  ),
+          ),
+      ],
     );
   }
 
@@ -162,7 +160,9 @@ class CrashReportsScreen extends StatelessWidget {
   }) {
     final p = context.palette;
     return Center(
-      child: ConstrainedBox(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 64),
+        child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -177,6 +177,7 @@ class CrashReportsScreen extends StatelessWidget {
                 style: AppText.body(size: 12.5).copyWith(color: p.textMuted)),
             if (action != null) ...[const SizedBox(height: 14), action],
           ],
+        ),
         ),
       ),
     );
