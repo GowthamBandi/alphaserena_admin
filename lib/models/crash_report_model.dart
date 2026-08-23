@@ -7,6 +7,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CrashReportModel {
   final String id;
+
+  /// Which product surface produced the report: 'console' (the founder
+  /// console's own `console_crash_reports`, which predates the field and
+  /// defaults here), 'trainersarena' or 'alphasarena' (the mobile apps'
+  /// `app_crash_reports`, where the rules enforce the enum).
+  final String app;
+
+  /// OS surface for mobile reports ('android' | 'iOS' | 'web'); empty for
+  /// console reports, which are always web.
+  final String platform;
   final String kind; // 'fatal' | 'nonfatal'
   final String label;
   final String error;
@@ -24,6 +34,8 @@ class CrashReportModel {
 
   const CrashReportModel({
     required this.id,
+    this.app = 'console',
+    this.platform = '',
     required this.kind,
     required this.label,
     required this.error,
@@ -43,6 +55,15 @@ class CrashReportModel {
   bool get isFatal => kind == 'fatal';
   bool get isProduction => env == 'production';
 
+  /// Founder-facing app label. Never guesses: an unknown value renders as
+  /// itself rather than being folded into a known app.
+  String get appLabel => switch (app) {
+        'console' => 'Console',
+        'trainersarena' => 'TrainerArena',
+        'alphasarena' => 'AlphaSarena',
+        _ => app,
+      };
+
   /// The identity used to say "this same failure again": the label plus the
   /// first line of the error. Deliberately NOT the stack — a minified web
   /// stack's first frame can differ across reloads of the same defect.
@@ -52,6 +73,9 @@ class CrashReportModel {
     final d = (snap.data() as Map<String, dynamic>?) ?? const {};
     return CrashReportModel(
       id: snap.id,
+      // Console reports predate the field: absent means the console itself.
+      app: d['app'] == null ? 'console' : _s(d['app']),
+      platform: _s(d['platform']),
       kind: _s(d['kind']),
       label: _s(d['label']),
       error: _s(d['error']),

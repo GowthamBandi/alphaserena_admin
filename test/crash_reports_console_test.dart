@@ -25,9 +25,13 @@ CrashReportModel report({
   String env = 'production',
   String section = 'section_0',
   String build = '1.0.0+1',
+  String app = 'console',
+  DateTime? at,
+  bool noAt = false,
 }) =>
     CrashReportModel(
       id: id,
+      app: app,
       kind: kind,
       label: label,
       error: error,
@@ -41,7 +45,7 @@ CrashReportModel report({
       section: section,
       sessionId: 's1',
       occurrence: 1,
-      at: DateTime(2026, 8, 22),
+      at: noAt ? null : (at ?? DateTime(2026, 8, 22)),
     );
 
 List<CrashReportModel> filler(int n) => List.generate(
@@ -53,7 +57,7 @@ void main() {
   group('capped-window honesty (SA-01 inheritance)', () {
     test('a miss inside a FULL window is "not found yet", never "none"', () {
       final c = CrashReportsController();
-      c.reports.value = filler(CrashReportsController.pageSize);
+      c.consoleReports.value = filler(CrashReportsController.pageSize);
       c.search.value = 'settlement crash from last month';
       expect(c.filtered, isEmpty);
       expect(c.emptyReason, CrashEmptyReason.noMatchInLoadedWindow,
@@ -63,7 +67,7 @@ void main() {
 
     test('a miss with the WHOLE collection loaded is a true "none"', () {
       final c = CrashReportsController();
-      c.reports.value = filler(3);
+      c.consoleReports.value = filler(3);
       c.search.value = 'nonexistent';
       expect(c.emptyReason, CrashEmptyReason.noMatchAnywhere);
     });
@@ -77,10 +81,13 @@ void main() {
   group('filtering', () {
     test('kind and environment filters partition correctly', () {
       final c = CrashReportsController();
-      c.reports.value = [
-        report(id: 'a', kind: 'fatal', env: 'production'),
-        report(id: 'b', kind: 'nonfatal', env: 'production'),
-        report(id: 'c', kind: 'fatal', env: 'emulator'),
+      c.consoleReports.value = [
+        report(id: 'a', kind: 'fatal', env: 'production',
+            at: DateTime(2026, 8, 22, 12, 3)),
+        report(id: 'b', kind: 'nonfatal', env: 'production',
+            at: DateTime(2026, 8, 22, 12, 2)),
+        report(id: 'c', kind: 'fatal', env: 'emulator',
+            at: DateTime(2026, 8, 22, 12, 1)),
       ];
       c.kindFilter.value = 'fatal';
       expect(c.filtered.map((r) => r.id), ['a', 'c']);
@@ -92,7 +99,7 @@ void main() {
 
     test('search covers error text, section, build and commit', () {
       final c = CrashReportsController();
-      c.reports.value = [
+      c.consoleReports.value = [
         report(id: 'a', error: 'RangeError: index out of range'),
         report(id: 'b', section: 'section_14'),
         report(id: 'c', build: '1.2.0+7'),
@@ -109,16 +116,16 @@ void main() {
   group('incident grouping — repeated vs isolated', () {
     test('same label + first error line counts as one incident', () {
       final c = CrashReportsController();
-      c.reports.value = [
+      c.consoleReports.value = [
         report(id: 'a', error: 'StateError: boom\n#0 frameA'),
         report(id: 'b', error: 'StateError: boom\n#0 frameB'),
         report(id: 'c', error: 'StateError: different'),
       ];
       final counts = c.incidentCounts;
-      expect(counts[c.reports[0].incidentKey], 2,
+      expect(counts[c.consoleReports[0].incidentKey], 2,
           reason: 'differing stacks must not split one incident — minified '
               'web frames vary across reloads of the same defect');
-      expect(counts[c.reports[2].incidentKey], 1);
+      expect(counts[c.consoleReports[2].incidentKey], 1);
     });
   });
 
@@ -132,8 +139,8 @@ void main() {
       // NO children, so finding the row text is the regression.
       Get.testMode = true;
       final c = _FakeController();
-      c.reports.value = [report(error: 'StateError: THE_VISIBLE_ROW')];
-      c.isLoading.value = false;
+      c.consoleReports.value = [report(error: 'StateError: THE_VISIBLE_ROW')];
+      c.markLoadedForTest();
       Get.put<CrashReportsController>(c);
       addTearDown(Get.reset);
 
@@ -151,7 +158,7 @@ void main() {
     testWidgets('the healthy empty state says so', (t) async {
       Get.testMode = true;
       final c = _FakeController();
-      c.isLoading.value = false;
+      c.markLoadedForTest();
       Get.put<CrashReportsController>(c);
       addTearDown(Get.reset);
       await t.pumpWidget(GetMaterialApp(home: Scaffold(
@@ -159,6 +166,63 @@ void main() {
       )));
       await t.pump();
       expect(find.text('No crash reports'), findsOneWidget);
+    });
+  });
+
+  group('the app dimension — both mobile apps merge into one view', () {
+    test('merged view is newest-first ACROSS collections and the app filter '
+        'partitions it', () {
+      final c = CrashReportsController();
+      c.consoleReports.value = [
+        report(id: 'con', app: 'console', at: DateTime(2026, 8, 22, 12, 2)),
+      ];
+      c.appReports.value = [
+        report(id: 'ta', app: 'trainersarena',
+            at: DateTime(2026, 8, 22, 12, 3)),
+        report(id: 'as', app: 'alphasarena',
+            at: DateTime(2026, 8, 22, 12, 1)),
+      ];
+      expect(c.reports.map((r) => r.id), ['ta', 'con', 'as'],
+          reason: 'the founder triages one timeline, not two collections');
+      c.appFilter.value = 'trainersarena';
+      expect(c.filtered.single.id, 'ta');
+      c.appFilter.value = 'alphasarena';
+      expect(c.filtered.single.id, 'as');
+      c.appFilter.value = 'console';
+      expect(c.filtered.single.id, 'con');
+    });
+
+    test('a report with no app field is the console (pre-field documents)',
+        () {
+      expect(report(id: 'x').app, 'console');
+      expect(report(id: 'x').appLabel, 'Console');
+      expect(report(id: 'y', app: 'trainersarena').appLabel, 'TrainerArena');
+      expect(report(id: 'z', app: 'alphasarena').appLabel, 'AlphaSarena');
+    });
+
+    test('ONE stream failing is partial, never total: the other apps\' '
+        'reports stay visible and the gap is named', () {
+      final c = CrashReportsController();
+      c.appReports.value = [report(id: 'ta', app: 'trainersarena')];
+      c.markStreamErrorForTest(console: true);
+      expect(c.hasError, isFalse,
+          reason: 'blanking the mobile reports because the console stream '
+              'failed would invert the truth');
+      expect(c.partialError, contains('Console'));
+      expect(c.reports.single.id, 'ta');
+      c.markStreamErrorForTest(console: true, apps: true);
+      expect(c.hasError, isTrue);
+      expect(c.partialError, isNull);
+    });
+
+    test('a report whose serverTimestamp has not resolved sorts LAST, '
+        'never impersonating the newest failure', () {
+      final c = CrashReportsController();
+      c.appReports.value = [
+        report(id: 'pending', noAt: true),
+        report(id: 'dated', at: DateTime(2026, 8, 22)),
+      ];
+      expect(c.reports.map((r) => r.id), ['dated', 'pending']);
     });
   });
 

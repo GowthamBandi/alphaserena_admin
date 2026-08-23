@@ -26,7 +26,7 @@ class CrashReportsScreen extends StatelessWidget {
       title: 'Crash Reports',
       icon: Icons.bug_report_outlined,
       trailing: Obx(() => Text(
-            ctrl.hasError.value
+            ctrl.hasError
                 ? '—'
                 : ctrl.atCap
                     ? '${ctrl.reports.length}+ (newest first)'
@@ -67,7 +67,48 @@ class CrashReportsScreen extends StatelessWidget {
                     onSelected: (_) => ctrl.kindFilter.value = value,
                   ),
               ])),
+          const SizedBox(height: 8),
+          // The APP dimension: which product surface reported. 'Console' is
+          // this app's own reports; the other two are the mobile apps writing
+          // into app_crash_reports.
+          Obx(() => Wrap(spacing: 8, children: [
+                for (final (value, label) in const [
+                  ('all', 'All apps'),
+                  ('trainersarena', 'TrainerArena'),
+                  ('alphasarena', 'AlphaSarena'),
+                  ('console', 'Console'),
+                ])
+                  ChoiceChip(
+                    label: Text(label),
+                    selected: ctrl.appFilter.value == value,
+                    onSelected: (_) => ctrl.appFilter.value = value,
+                  ),
+              ])),
           const SizedBox(height: 14),
+          // One source failing must not silently narrow the truth: say which
+          // half of the picture is missing while still showing the other.
+          Obx(() {
+            final warning = ctrl.partialError;
+            if (warning == null) return const SizedBox.shrink();
+            final p2 = context.palette;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(children: [
+                Icon(Icons.warning_amber_rounded,
+                    size: 16, color: p2.accent),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '$warning The reports below are incomplete.',
+                    style:
+                        AppText.body(size: 12).copyWith(color: p2.accent),
+                  ),
+                ),
+                TextButton(
+                    onPressed: ctrl.retry, child: const Text('Retry')),
+              ]),
+            );
+          }),
           // PLAIN COLUMN, NOT A ListView: PageShell already wraps its child in
           // a SingleChildScrollView, and an Expanded list inside that scroll
           // context collapses to ZERO height with no exception — found live on
@@ -80,10 +121,10 @@ class CrashReportsScreen extends StatelessWidget {
   }
 
   Widget _body(BuildContext context) {
-    if (ctrl.isLoading.value) {
+    if (ctrl.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (ctrl.hasError.value) {
+    if (ctrl.hasError) {
       return _message(
         context,
         icon: Icons.cloud_off_outlined,
@@ -104,8 +145,8 @@ class CrashReportsScreen extends StatelessWidget {
             context,
             icon: Icons.verified_outlined,
             title: 'No crash reports',
-            body: 'Nothing has been reported by this console. '
-                'That is the healthy state.',
+            body: 'Nothing has been reported by the console or either '
+                'mobile app. That is the healthy state.',
           ),
         CrashEmptyReason.noMatchAnywhere => _message(
             context,
@@ -213,7 +254,7 @@ class CrashReportsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '$when · ${r.label} · ${r.section} · '
+                      '${r.appLabel} · $when · ${r.label} · ${r.section} · '
                       'build ${r.build} (${r.commit}) · ${r.env}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -293,6 +334,8 @@ class CrashReportsScreen extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   [
+                    r.appLabel,
+                    if (r.platform.isNotEmpty) r.platform,
                     if (r.at != null)
                       DateFormat('d MMM yyyy · HH:mm:ss')
                           .format(r.at!.toLocal()),

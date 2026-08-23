@@ -114,4 +114,9 @@ class FsCollections {
   /// The console's own crash/error records, written by CrashReporter and read
   /// by the Crash Reports screen. Founder-only + append-only by rules.
   static const String consoleCrashReports = 'console_crash_reports';
+
+  /// The mobile apps' crash reports (TrainerArena + AlphaSarena), written by
+  /// their twinned CrashReporters. Founder-only read, append-only, uid-bound
+  /// create — see the backend's app_crash_reports rules block.
+  static const String appCrashReports = 'app_crash_reports';
 }
