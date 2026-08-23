@@ -1,0 +1,29 @@
+{
+  "occurrences": 3,
+  "signatureVersion": 2,
+  "normalized": "Bad state: probe verify failed for payment \"<v>\" order \"<v>\" amount <n>",
+  "sampleSection": "probe",
+  "app": "alphasarena",
+  "lastAlertReason": "new_fatal_signature",
+  "lastAlertedAt": "2026-08-23T04:11:42.375Z",
+  "sampleStack": "#0 probe (package:probe/probe.dart:1:1)",
+  "status": "open",
+  "priority": "P1",
+  "production": true,
+  "alertedAtOccurrences": 1,
+  "firstSeenAt": "2026-08-23T04:11:42.375Z",
+  "builds": {
+    "9_9_9+probe": 3
+  },
+  "affectedUsers": 2,
+  "sampleReportId": "probe-crash-c",
+  "kind": "fatal",
+  "affectedUids": [
+    "probe-user-1",
+    "probe-user-2"
+  ],
+  "errorClass": "StateError",
+  "lastSeenAt": "2026-08-23T04:11:57.040Z",
+  "sampleError": "Bad state: probe verify failed for payment \"pay_Zx7Yw2Vu5Ts8Rq\" order \"order_Zx7Yw2Vu5Ts8Rq\" amount 799",
+  "label": "PROBE_CRASH_MONITORING"
+}

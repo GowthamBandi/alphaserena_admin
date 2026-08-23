@@ -4,6 +4,9 @@
 // capped live window, and a filtered miss over a capped window must read
 // "not found yet", never "none". Adds the incident-grouping contract: a
 // repeated failure must be tellable from an isolated one at a glance.
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -57,6 +60,7 @@ List<CrashReportModel> filler(int n) => List.generate(
 
 void main() {
   _triageTests();
+  _liveContractTests();
   group('capped-window honesty (SA-01 inheritance)', () {
     test('a miss inside a FULL window is "not found yet", never "none"', () {
       final c = CrashReportsController();
@@ -552,6 +556,84 @@ class _FakeSnap implements DocumentSnapshot {
   final Map<String, dynamic> _data;
   @override
   Map<String, dynamic>? data() => _data;
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+// ── THE CROSS-BOUNDARY CONTRACT ────────────────────────────────────────────
+//
+// Two self-consistent sides are not a contract. This platform has shipped that
+// mistake before — `coaching_rollups` passed unit tests, `tsc` and review on
+// BOTH sides because each side agreed about a shape that never existed in the
+// database, and the reader silently returned empty for every member.
+//
+// `test/fixtures/live_crash_signature.json` is not hand-typed: it is a
+// `crash_signatures` document READ BACK OUT OF PRODUCTION after the deployed
+// `onCrashReportCreated` trigger built it (2026-08-23, probe run recorded in
+// CRASH_MONITORING_CERTIFICATION.md §LIVE PROOF). If the trigger's output shape
+// ever changes, this reds on the READER side, which is the side that would
+// otherwise fail silently.
+void _liveContractTests() {
+  group('the console reads what the DEPLOYED trigger actually writes', () {
+    Map<String, dynamic> live() => jsonDecode(
+            File('test/fixtures/live_crash_signature.json').readAsStringSync())
+        as Map<String, dynamic>;
+
+    test('every field the model reads is present in the live document', () {
+      final d = live();
+      for (final key in const [
+        'app', 'kind', 'label', 'errorClass', 'normalized',
+        'sampleError', 'sampleStack', 'sampleSection',
+        'occurrences', 'affectedUsers', 'builds', 'production', 'priority',
+        'firstSeenAt', 'lastSeenAt',
+      ]) {
+        expect(d.containsKey(key), isTrue,
+            reason: '`$key` is absent from the document production actually '
+                'wrote — the reader would render a default and say nothing');
+      }
+    });
+
+    test('the model produces the row a founder would read', () {
+      final m = CrashSignatureModel.fromSnapshot(_LiveSnapshot(live()));
+      expect(m.occurrences, 3);
+      expect(m.affectedUsers, 2);
+      expect(m.affectedUsersLabel, '2');
+      expect(m.isFatal, isTrue);
+      expect(m.appLabel, 'AlphaSarena');
+      expect(m.errorClass, 'StateError');
+      expect(m.priority, 'P1');
+      expect(m.production, isTrue);
+      // The build breakdown is the signal that names a bad release, and it is
+      // exactly what the dotted-key defect made permanently unreadable.
+      expect(m.builds, isNotEmpty);
+      expect(m.isSingleBuild, isTrue);
+      expect(m.buildsRanked.first.value, 3);
+      expect(m.firstSeenAt, isNotNull);
+      expect(m.lastSeenAt, isNotNull);
+    });
+
+    test('no per-member value reached the row the founder reads', () {
+      final m = CrashSignatureModel.fromSnapshot(_LiveSnapshot(live()));
+      // The NORMALISED message is what the incident row renders. The sample
+      // error deliberately still carries the real values — one real example is
+      // the point of it — but the grouping key must not.
+      for (final v in const ['Zx7Yw2Vu5Ts8Rq', 'probe-user-1', '799']) {
+        expect(m.normalized, isNot(contains(v)));
+      }
+    });
+  });
+}
+
+/// A DocumentSnapshot over a decoded production document. Firestore hands the
+/// model `Timestamp`s where this hands it ISO strings; the model's `_date`
+/// accepts both, which is exactly the tolerance being asserted.
+class _LiveSnapshot implements DocumentSnapshot {
+  _LiveSnapshot(this._data);
+  final Map<String, dynamic> _data;
+  @override
+  String get id => '65e238c7e1531eea88274de245d68d1e';
+  @override
+  Map<String, dynamic> data() => _data;
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
