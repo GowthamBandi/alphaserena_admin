@@ -119,4 +119,13 @@ class FsCollections {
   /// their twinned CrashReporters. Founder-only read, append-only, uid-bound
   /// create — see the backend's app_crash_reports rules block.
   static const String appCrashReports = 'app_crash_reports';
+
+  /// The SERVER-BUILT rollup over `app_crash_reports`: one row per DEFECT
+  /// (occurrences, distinct affected users, build breakdown, first/last seen,
+  /// derived priority). Written only by the onCrashReportCreated trigger,
+  /// which watches `app_crash_reports` — the console's own
+  /// `console_crash_reports` is NOT projected (one principal, one browser: the
+  /// firehose there is already the triage view). `write: if false` for every
+  /// client, founder included.
+  static const String crashSignatures = 'crash_signatures';
 }

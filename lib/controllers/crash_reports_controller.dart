@@ -19,6 +19,7 @@ import 'package:get/get.dart';
 
 import '../core/constants/firestore_collections.dart';
 import '../models/crash_report_model.dart';
+import '../models/crash_signature_model.dart';
 
 class CrashReportsController extends GetxController {
   /// Lazy for the same reason every controller here is: a field initializer
@@ -28,6 +29,27 @@ class CrashReportsController extends GetxController {
   final RxList<CrashReportModel> consoleReports = <CrashReportModel>[].obs;
   final RxList<CrashReportModel> appReports = <CrashReportModel>[].obs;
 
+  /// THE TRIAGE VIEW: one row per DEFECT, built on the server.
+  ///
+  /// Deliberately NOT capped the way the report streams are. A signature row
+  /// exists once per distinct defect, so the collection is small by
+  /// construction — that is the entire reason the projection exists. The cap
+  /// below is a runaway guard, not a window: if it is ever reached, the
+  /// platform has 500 distinct live defects and the founder has a much larger
+  /// problem than pagination.
+  final RxList<CrashSignatureModel> signatures = <CrashSignatureModel>[].obs;
+  final RxBool _signaturesLoading = true.obs;
+  final RxBool _signaturesError = false.obs;
+  static const int signatureCap = 500;
+
+  /// 'incidents' (grouped defects — the triage view) | 'reports' (the raw
+  /// evidence firehose). Incidents is the default because "what needs my
+  /// attention" is the question the screen exists to answer.
+  final RxString view = 'incidents'.obs;
+
+  bool get signaturesLoading => _signaturesLoading.value;
+  bool get signaturesError => _signaturesError.value;
+
   final RxBool _consoleLoading = true.obs;
   final RxBool _appsLoading = true.obs;
   final RxBool _consoleError = false.obs;
@@ -35,6 +57,13 @@ class CrashReportsController extends GetxController {
   final RxBool isLoadingMore = false.obs;
 
   final RxString search = ''.obs;
+
+  /// The search box's own controller, owned HERE because the search value is
+  /// set from two directions: the founder typing, and "see every occurrence of
+  /// this incident" jumping across from the Incidents view. An uncontrolled
+  /// field would take the second one silently — the list would filter to a
+  /// signature the visible search box does not mention.
+  final TextEditingController searchField = TextEditingController();
 
   /// 'all' | 'fatal' | 'nonfatal' | 'production'.
   final RxString kindFilter = 'all'.obs;
@@ -82,6 +111,7 @@ class CrashReportsController extends GetxController {
 
   StreamSubscription? _consoleSub;
   StreamSubscription? _appsSub;
+  StreamSubscription? _sigSub;
 
   @override
   void onInit() {
@@ -93,6 +123,8 @@ class CrashReportsController extends GetxController {
   void onClose() {
     _consoleSub?.cancel();
     _appsSub?.cancel();
+    _sigSub?.cancel();
+    searchField.dispose();
     super.onClose();
   }
 
@@ -111,6 +143,126 @@ class CrashReportsController extends GetxController {
       error: _appsError,
       replacing: _appsSub,
     );
+    _listenSignatures();
+  }
+
+  void _listenSignatures() {
+    _signaturesLoading.value = true;
+    _signaturesError.value = false;
+    _sigSub?.cancel();
+    try {
+      _sigSub = _db
+          .collection(FsCollections.crashSignatures)
+          .orderBy('lastSeenAt', descending: true)
+          .limit(signatureCap)
+          .snapshots()
+          .listen(
+        (snap) {
+          try {
+            signatures.value =
+                snap.docs.map(CrashSignatureModel.fromSnapshot).toList();
+            _signaturesError.value = false;
+          } catch (e) {
+            debugPrint('crash_signatures parse error: $e');
+          } finally {
+            _signaturesLoading.value = false;
+          }
+        },
+        onError: (e) {
+          debugPrint('crash_signatures stream error: $e');
+          _signaturesLoading.value = false;
+          _signaturesError.value = true;
+        },
+      );
+    } catch (e) {
+      debugPrint('crash_signatures subscribe failed: $e');
+      _signaturesLoading.value = false;
+      _signaturesError.value = true;
+    }
+  }
+
+  /// Incidents matching the current app / kind / search filters, worst first.
+  ///
+  /// Sorted by PRIORITY then recency, not by count: the founder's eye should
+  /// land on the outage, and an outage that started ten minutes ago has a
+  /// smaller number on it than a month-old nuisance.
+  List<CrashSignatureModel> get filteredSignatures {
+    final q = search.value.trim().toLowerCase();
+    final rows = signatures.where((s) {
+      final matchesApp = appFilter.value == 'all' || s.app == appFilter.value;
+      final matchesKind = switch (kindFilter.value) {
+        'fatal' => s.isFatal,
+        'nonfatal' => !s.isFatal,
+        'production' => s.production,
+        _ => true,
+      };
+      final matchesSearch = q.isEmpty ||
+          s.normalized.toLowerCase().contains(q) ||
+          s.errorClass.toLowerCase().contains(q) ||
+          s.label.toLowerCase().contains(q) ||
+          s.sampleSection.toLowerCase().contains(q) ||
+          s.appLabel.toLowerCase().contains(q) ||
+          s.builds.keys.any((b) => b.toLowerCase().contains(q));
+      return matchesApp && matchesKind && matchesSearch;
+    }).toList();
+
+    const rank = {'P0': 0, 'P1': 1, 'P2': 2, 'P3': 3};
+    rows.sort((a, b) {
+      final byPriority =
+          (rank[a.priority] ?? 9).compareTo(rank[b.priority] ?? 9);
+      if (byPriority != 0) return byPriority;
+      final at = a.lastSeenAt, bt = b.lastSeenAt;
+      if (at == null && bt == null) return 0;
+      if (at == null) return 1;
+      if (bt == null) return -1;
+      return bt.compareTo(at);
+    });
+    return rows;
+  }
+
+  /// Jumps from ONE incident to EVERY occurrence behind it.
+  ///
+  /// The rollup answers "how bad and how broad"; the individual reports answer
+  /// "what was this person doing" — breadcrumbs, section, session, the exact
+  /// stack. The signature is the join key, stamped on both sides by the
+  /// trigger, and this is the only navigation between them.
+  void showOccurrencesOf(String signature) {
+    searchField.text = signature;
+    search.value = signature;
+    view.value = 'reports';
+  }
+
+  /// EVIDENCE EXISTS BUT NO ROLLUP DESCRIBES IT.
+  ///
+  /// The projection is a deployed Cloud Function (`onCrashReportCreated`). If
+  /// it is not deployed, has been deleted, or is failing, `crash_signatures`
+  /// stays empty while `app_crash_reports` fills — and an empty Incidents view
+  /// that reads "nothing has crashed, that is the healthy state" then becomes
+  /// the most dangerous screen in this console: it reports health from an
+  /// absence of MEASUREMENT rather than an absence of crashes.
+  ///
+  /// Deliberately requires BOTH streams to have loaded: during startup either
+  /// one can be momentarily empty for no reason at all.
+  bool get rollupStalled =>
+      !_signaturesLoading.value &&
+      !_signaturesError.value &&
+      !_appsLoading.value &&
+      signatures.isEmpty &&
+      appReports.isNotEmpty;
+
+  /// Mobile reports carrying no `signature` stamp — the projection never
+  /// reached them. A handful is a trigger that is merely behind; all of them
+  /// is a trigger that is not running.
+  int get unprojectedReportCount =>
+      appReports.where((r) => r.signature.isEmpty).length;
+
+  /// How many defects sit at each priority — the "what needs attention" line.
+  Map<String, int> get priorityCounts {
+    final out = <String, int>{'P0': 0, 'P1': 0, 'P2': 0, 'P3': 0};
+    for (final s in filteredSignatures) {
+      out[s.priority] = (out[s.priority] ?? 0) + 1;
+    }
+    return out;
   }
 
   StreamSubscription? _listenTo({
@@ -162,6 +314,7 @@ class CrashReportsController extends GetxController {
   void markLoadedForTest() {
     _consoleLoading.value = false;
     _appsLoading.value = false;
+    _signaturesLoading.value = false;
   }
 
   @visibleForTesting
@@ -208,7 +361,13 @@ class CrashReportsController extends GetxController {
           r.build.toLowerCase().contains(q) ||
           r.commit.toLowerCase().contains(q) ||
           r.app.toLowerCase().contains(q) ||
-          r.appLabel.toLowerCase().contains(q);
+          r.appLabel.toLowerCase().contains(q) ||
+          // THE CROSS-REFERENCE. The incident dialog tells the founder to
+          // "search this id in All reports to read every occurrence"; before
+          // the trigger stamped `signature` onto the evidence document, that
+          // instruction returned nothing — an id that appeared nowhere in the
+          // collection it named.
+          r.signature.toLowerCase().contains(q);
       return matchesApp && matchesKind && matchesSearch;
     }).toList();
   }

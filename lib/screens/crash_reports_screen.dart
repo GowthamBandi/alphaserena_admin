@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 
 import '../controllers/crash_reports_controller.dart';
 import '../models/crash_report_model.dart';
+import '../models/crash_signature_model.dart';
 import '../widgets/page_shell.dart';
 
 class CrashReportsScreen extends StatelessWidget {
@@ -37,6 +38,7 @@ class CrashReportsScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
+            controller: ctrl.searchField,
             onChanged: (v) => ctrl.search.value = v,
             decoration: InputDecoration(
               hintText: 'Search error, section, build, commit…',
@@ -84,6 +86,22 @@ class CrashReportsScreen extends StatelessWidget {
                     onSelected: (_) => ctrl.appFilter.value = value,
                   ),
               ])),
+          const SizedBox(height: 8),
+          // INCIDENTS vs REPORTS. Incidents is one row per DEFECT (server-built
+          // `crash_signatures`); Reports is the raw append-only evidence. The
+          // triage question is asked of the first and answered with the second,
+          // so Incidents leads and Reports stays one tap away.
+          Obx(() => Wrap(spacing: 8, children: [
+                for (final (value, label) in const [
+                  ('incidents', 'Incidents'),
+                  ('reports', 'All reports'),
+                ])
+                  ChoiceChip(
+                    label: Text(label),
+                    selected: ctrl.view.value == value,
+                    onSelected: (_) => ctrl.view.value = value,
+                  ),
+              ])),
           const SizedBox(height: 14),
           // One source failing must not silently narrow the truth: say which
           // half of the picture is missing while still showing the other.
@@ -114,7 +132,9 @@ class CrashReportsScreen extends StatelessWidget {
           // context collapses to ZERO height with no exception — found live on
           // the first production open of this screen ("1 total", blank list).
           // The Audit Log renders its rows exactly this way for this reason.
-          Obx(() => _body(context)),
+          Obx(() => ctrl.view.value == 'incidents'
+              ? _incidentsBody(context)
+              : _body(context)),
         ],
       ),
     );
@@ -187,6 +207,295 @@ class CrashReportsScreen extends StatelessWidget {
                   ),
           ),
       ],
+    );
+  }
+
+  /// THE TRIAGE VIEW — one row per defect, worst first.
+  Widget _incidentsBody(BuildContext context) {
+    final p = context.palette;
+    if (ctrl.signaturesLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (ctrl.signaturesError) {
+      return _message(
+        context,
+        icon: Icons.cloud_off_outlined,
+        title: "Couldn't load incidents",
+        body: 'The crash_signatures rollup could not be read. Raw reports may '
+            'still be available under "All reports".',
+        action: FilledButton.icon(
+          onPressed: ctrl.retry,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Retry'),
+        ),
+      );
+    }
+    final rows = ctrl.filteredSignatures;
+    if (rows.isEmpty) {
+      // AN EMPTY ROLLUP OVER A NON-EMPTY FIREHOSE IS NOT HEALTH.
+      // It is the projection not running, and saying "nothing has crashed"
+      // there would be the console's worst possible sentence — a confident
+      // all-clear derived from missing measurement rather than from calm.
+      if (ctrl.rollupStalled) {
+        return _message(
+          context,
+          icon: Icons.report_problem_outlined,
+          title: 'Incidents are not being built',
+          body: '${ctrl.appReports.length} mobile crash report'
+              '${ctrl.appReports.length == 1 ? '' : 's'} exist, but no incident '
+              'rollup describes them — ${ctrl.unprojectedReportCount} carry no '
+              'signature. The onCrashReportCreated trigger is most likely not '
+              'deployed or is failing; check its logs. The raw evidence is '
+              'intact under "All reports".',
+          action: FilledButton.icon(
+            onPressed: () => ctrl.view.value = 'reports',
+            icon: const Icon(Icons.list_alt),
+            label: const Text('Open all reports'),
+          ),
+        );
+      }
+      return _message(
+        context,
+        icon: Icons.verified_outlined,
+        title: ctrl.isNarrowed ? 'No matching incident' : 'No open incidents',
+        body: ctrl.isNarrowed
+            ? 'No defect matches these filters.'
+            : 'No defect has been recorded in either mobile app. That is the '
+                'healthy state. (The console\'s own reports are evidence-only '
+                'and are not rolled up — see "All reports".)',
+      );
+    }
+    final counts = ctrl.priorityCounts;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // The one line that answers "what needs attention" before any reading.
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Wrap(spacing: 8, runSpacing: 6, children: [
+            for (final level in const ['P0', 'P1', 'P2', 'P3'])
+              if ((counts[level] ?? 0) > 0)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _priorityColor(context, level)
+                        .withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text('$level · ${counts[level]}',
+                      style: AppText.label(size: 12)
+                          .copyWith(color: _priorityColor(context, level))),
+                ),
+            Text('${rows.length} distinct defect${rows.length == 1 ? '' : 's'}',
+                style: AppText.body(size: 12).copyWith(color: p.textMuted)),
+          ]),
+        ),
+        for (final s in rows) ...[
+          _incidentRow(context, s),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+
+  Color _priorityColor(BuildContext context, String priority) {
+    final p = context.palette;
+    return switch (priority) {
+      'P0' => p.accent,
+      'P1' => p.accent,
+      'P2' => p.textSecondary,
+      _ => p.textMuted,
+    };
+  }
+
+  Widget _incidentRow(BuildContext context, CrashSignatureModel s) {
+    final p = context.palette;
+    final last = s.lastSeenAt == null
+        ? 'time unknown'
+        : DateFormat('d MMM · HH:mm').format(s.lastSeenAt!.toLocal());
+    return Material(
+      color: p.surface,
+      borderRadius: AppRadii.smR,
+      child: InkWell(
+        borderRadius: AppRadii.smR,
+        onTap: () => _openIncident(context, s),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _priorityColor(context, s.priority)
+                      .withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(s.priority,
+                    style: AppText.label(size: 11).copyWith(
+                        color: _priorityColor(context, s.priority),
+                        letterSpacing: 0.5)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${s.errorClass} — ${s.normalized}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.body(size: 13.5)
+                          .copyWith(color: p.textPrimary),
+                    ),
+                    const SizedBox(height: 4),
+                    // BREADTH FIRST. "8 users" is the number that decides
+                    // whether this is an outage; the occurrence count is
+                    // context, not the headline.
+                    Text(
+                      '${s.appLabel} · ${s.isFatal ? 'FATAL' : 'non-fatal'} · '
+                      '${s.affectedUsersLabel} user'
+                      '${s.affectedUsers == 1 && !s.affectedUsersTruncated ? '' : 's'} · '
+                      '${s.occurrences} occurrence'
+                      '${s.occurrences == 1 ? '' : 's'} · $last',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.body(size: 11.5)
+                          .copyWith(color: p.textMuted),
+                    ),
+                    if (s.isSingleBuild) ...[
+                      const SizedBox(height: 4),
+                      // The strongest signal a crash system emits: every
+                      // occurrence came from ONE build.
+                      Text('only in build ${s.buildsRanked.first.key}',
+                          style: AppText.label(size: 11)
+                              .copyWith(color: p.accent)),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.chevron_right, size: 18, color: p.textMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openIncident(BuildContext context, CrashSignatureModel s) {
+    final p = context.palette;
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720, maxHeight: 640),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _priorityColor(context, s.priority)
+                          .withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(s.priority,
+                        style: AppText.label(size: 11).copyWith(
+                            color: _priorityColor(context, s.priority))),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(s.errorClass,
+                        style: AppText.title(size: 16)
+                            .copyWith(color: p.textPrimary)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                Text(
+                  [
+                    s.appLabel,
+                    s.isFatal ? 'fatal' : 'non-fatal',
+                    if (s.production) 'production' else 'non-production',
+                    '${s.affectedUsersLabel} affected',
+                    '${s.occurrences} occurrences',
+                    if (s.firstSeenAt != null)
+                      'first ${DateFormat('d MMM yyyy · HH:mm').format(s.firstSeenAt!.toLocal())}',
+                    if (s.lastSeenAt != null)
+                      'last ${DateFormat('d MMM yyyy · HH:mm').format(s.lastSeenAt!.toLocal())}',
+                  ].join(' · '),
+                  style: AppText.body(size: 12).copyWith(color: p.textMuted),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      _section(context, 'Where it happens',
+                          SelectableText(
+                              'section: ${s.sampleSection.isEmpty ? 'unknown' : s.sampleSection}'
+                              '\nlabel: ${s.label}',
+                              style: _mono(p))),
+                      _section(
+                        context,
+                        'Builds affected',
+                        SelectableText(
+                          s.buildsRanked.isEmpty
+                              ? 'unknown'
+                              : s.buildsRanked
+                                  .map((e) => '${e.key}  ×${e.value}')
+                                  .join('\n'),
+                          style: _mono(p),
+                        ),
+                      ),
+                      _section(context, 'Sample error',
+                          SelectableText(s.sampleError, style: _mono(p))),
+                      if (s.sampleStack.isNotEmpty)
+                        _section(context, 'Sample stack',
+                            SelectableText(s.sampleStack, style: _mono(p))),
+                      _section(
+                        context,
+                        'Signature',
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SelectableText(s.id, style: _mono(p)),
+                            const SizedBox(height: 8),
+                            // The join key is stamped on BOTH sides by the
+                            // trigger, so this is a real jump rather than an
+                            // instruction to go and type an id by hand.
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                ctrl.showOccurrencesOf(s.id);
+                              },
+                              icon: const Icon(Icons.list_alt, size: 16),
+                              label: Text(
+                                'See every occurrence '
+                                '(${s.occurrences}) with its own breadcrumbs '
+                                'and stack',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

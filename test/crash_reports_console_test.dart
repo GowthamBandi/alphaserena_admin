@@ -4,11 +4,13 @@
 // capped live window, and a filtered miss over a capped window must read
 // "not found yet", never "none". Adds the incident-grouping contract: a
 // repeated failure must be tellable from an isolated one at a glance.
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:alphaserena_admin_portel/controllers/crash_reports_controller.dart';
 import 'package:alphaserena_admin_portel/models/crash_report_model.dart';
+import 'package:alphaserena_admin_portel/models/crash_signature_model.dart';
 import 'package:alphaserena_admin_portel/screens/crash_reports_screen.dart';
 
 class _FakeController extends CrashReportsController {
@@ -54,6 +56,7 @@ List<CrashReportModel> filler(int n) => List.generate(
     );
 
 void main() {
+  _triageTests();
   group('capped-window honesty (SA-01 inheritance)', () {
     test('a miss inside a FULL window is "not found yet", never "none"', () {
       final c = CrashReportsController();
@@ -141,6 +144,9 @@ void main() {
       final c = _FakeController();
       c.consoleReports.value = [report(error: 'StateError: THE_VISIBLE_ROW')];
       c.markLoadedForTest();
+      // Incidents is now the default view; this test is about the raw
+      // evidence list, so select it explicitly.
+      c.view.value = 'reports';
       Get.put<CrashReportsController>(c);
       addTearDown(Get.reset);
 
@@ -159,6 +165,7 @@ void main() {
       Get.testMode = true;
       final c = _FakeController();
       c.markLoadedForTest();
+      c.view.value = 'reports';
       Get.put<CrashReportsController>(c);
       addTearDown(Get.reset);
       await t.pumpWidget(GetMaterialApp(home: Scaffold(
@@ -252,4 +259,299 @@ void main() {
       expect(r.incidentKey, '|');
     });
   });
+}
+
+// ── THE TRIAGE VIEW (crash_signatures) ──────────────────────────────────────
+// One row per DEFECT. These pin the properties the per-occurrence report list
+// structurally could not express.
+
+CrashSignatureModel signature({
+  String id = 'sig1',
+  String app = 'alphasarena',
+  String kind = 'fatal',
+  String errorClass = 'StateError',
+  String normalized = 'Bad state: No element',
+  int occurrences = 1,
+  int affectedUsers = 1,
+  bool truncated = false,
+  Map<String, int> builds = const {'1.0.0+3': 1},
+  bool production = true,
+  String priority = 'P2',
+  DateTime? lastSeenAt,
+}) =>
+    CrashSignatureModel(
+      id: id,
+      app: app,
+      kind: kind,
+      label: 'FlutterError',
+      errorClass: errorClass,
+      normalized: normalized,
+      sampleError: '$errorClass: $normalized',
+      sampleStack: '#0 main',
+      sampleSection: 'home',
+      occurrences: occurrences,
+      affectedUsers: affectedUsers,
+      affectedUsersTruncated: truncated,
+      builds: builds,
+      production: production,
+      priority: priority,
+      firstSeenAt: DateTime(2026, 8, 20),
+      lastSeenAt: lastSeenAt ?? DateTime(2026, 8, 23),
+    );
+
+/// A mobile report as it looks AFTER the trigger has projected it: stamped
+/// with the incident it belongs to.
+CrashReportModel reportWithSignature(String sig, String error) =>
+    CrashReportModel(
+      id: 'r-$sig',
+      app: 'alphasarena',
+      platform: 'android',
+      kind: 'fatal',
+      label: 'FlutterError',
+      error: error,
+      stack: '#0 main',
+      breadcrumbs: const [],
+      build: '1.0.0+3',
+      commit: 'abc',
+      mode: 'release',
+      env: 'production',
+      uid: 'u1',
+      section: 'home',
+      sessionId: 's1',
+      occurrence: 1,
+      at: DateTime(2026, 8, 23),
+      signature: sig,
+    );
+
+void _triageTests() {
+  group('incident triage', () {
+    test('the WORST defect leads, regardless of how loud the others are', () {
+      final c = CrashReportsController();
+      c.signatures.value = [
+        signature(id: 'noisy', priority: 'P3', occurrences: 5000),
+        signature(id: 'outage', priority: 'P0', occurrences: 8),
+        signature(id: 'mid', priority: 'P2', occurrences: 900),
+      ];
+      expect(c.filteredSignatures.map((s) => s.id), ['outage', 'mid', 'noisy'],
+          reason: 'a founder opening this screen must land on the outage, and '
+              'an outage that started ten minutes ago carries a SMALLER '
+              'number than a month-old nuisance');
+    });
+
+    test('the priority summary counts what is actually shown', () {
+      final c = CrashReportsController();
+      c.signatures.value = [
+        signature(id: 'a', priority: 'P0'),
+        signature(id: 'b', priority: 'P0'),
+        signature(id: 'c', priority: 'P2'),
+      ];
+      expect(c.priorityCounts['P0'], 2);
+      expect(c.priorityCounts['P2'], 1);
+      expect(c.priorityCounts['P1'], 0);
+
+      // …and it follows the filters, so the header can never disagree with
+      // the list under it.
+      c.appFilter.value = 'trainersarena';
+      expect(c.priorityCounts['P0'], 0);
+    });
+
+    test('a truncated distinct-user count says "200+", never a number it '
+        'cannot stand behind', () {
+      expect(signature(affectedUsers: 12).affectedUsersLabel, '12');
+      expect(
+          signature(affectedUsers: 200, truncated: true).affectedUsersLabel,
+          '200+');
+    });
+
+    test('a defect confined to ONE build is flagged — that is a release '
+        'regression, not a long-standing bug', () {
+      expect(
+          signature(builds: {'1.0.0+4': 40}, occurrences: 40).isSingleBuild,
+          isTrue);
+      expect(
+          signature(builds: {'1.0.0+3': 20, '1.0.0+4': 20}, occurrences: 40)
+              .isSingleBuild,
+          isFalse);
+      // A single occurrence in a single build is not yet a pattern.
+      expect(signature(builds: {'1.0.0+4': 1}, occurrences: 1).isSingleBuild,
+          isFalse);
+    });
+
+    test('an absent `production` flag is NOT treated as production', () {
+      final s = CrashSignatureModel.fromSnapshot(_FakeSnap('x', const {}));
+      expect(s.production, isFalse,
+          reason: 'inventing an operational concern out of missing data is '
+              'how an alerting system loses its credibility');
+      expect(s.priority, 'P3');
+      expect(s.occurrences, 0);
+    });
+
+    testWidgets('an incident ROW actually builds inside PageShell', (t) async {
+      // Same regression the report list already carries a guard for: an
+      // Expanded/lazy list inside PageShell's scrollview collapses to zero
+      // height with no exception.
+      Get.testMode = true;
+      final c = _FakeController();
+      c.signatures.value = [
+        signature(errorClass: 'RangeError', normalized: 'THE_VISIBLE_INCIDENT',
+            priority: 'P0', affectedUsers: 8, occurrences: 12),
+      ];
+      c.markLoadedForTest();
+      Get.put<CrashReportsController>(c);
+      addTearDown(Get.reset);
+
+      await t.pumpWidget(GetMaterialApp(
+          home: Scaffold(body: CrashReportsScreen())));
+      await t.pump();
+
+      expect(find.textContaining('THE_VISIBLE_INCIDENT'), findsOneWidget);
+      expect(
+          t.getSize(find.textContaining('THE_VISIBLE_INCIDENT')).height,
+          greaterThan(0));
+      expect(find.text('P0'), findsWidgets);
+      // BREADTH is on the row, not buried in a dialog.
+      expect(find.textContaining('8 users'), findsOneWidget);
+    });
+
+    // ── THE MEASUREMENT ITSELF CAN FAIL ────────────────────────────────────
+
+    test('EVIDENCE WITHOUT A ROLLUP IS NOT HEALTH — the projection being down '
+        'must never render as "nothing has crashed"', () {
+      final c = _FakeController();
+      c.appReports.value = [
+        report(error: 'StateError: real crash 1'),
+        report(error: 'StateError: real crash 2'),
+      ];
+      c.signatures.clear();
+      c.markLoadedForTest();
+
+      expect(c.rollupStalled, isTrue,
+          reason: 'reports exist and no incident describes them');
+      expect(c.unprojectedReportCount, 2,
+          reason: 'neither report carries a signature stamp');
+    });
+
+    test('a genuinely quiet platform is NOT reported as a stalled projection',
+        () {
+      final c = _FakeController();
+      c.appReports.clear();
+      c.signatures.clear();
+      c.markLoadedForTest();
+      expect(c.rollupStalled, isFalse);
+    });
+
+    test('a STILL-LOADING stream is never diagnosed as stalled', () {
+      // Both streams start empty; calling it broken before they answer would
+      // flash a false alarm on every open.
+      final c = _FakeController();
+      c.appReports.value = [report()];
+      expect(c.rollupStalled, isFalse, reason: 'nothing has loaded yet');
+      c.markLoadedForTest();
+      expect(c.rollupStalled, isTrue);
+    });
+
+    test('a rollup that IS running clears the alarm', () {
+      final c = _FakeController();
+      c.appReports.value = [report()];
+      c.signatures.value = [signature()];
+      c.markLoadedForTest();
+      expect(c.rollupStalled, isFalse);
+    });
+
+    // ── INCIDENT → ITS OWN OCCURRENCES ─────────────────────────────────────
+
+    test('the signature JOINS the two views — an incident can reach every '
+        'occurrence behind it', () {
+      final c = _FakeController();
+      c.appReports.value = [
+        report(error: 'StateError: mine'),
+      ];
+      c.markLoadedForTest();
+      c.showOccurrencesOf('abc123');
+      expect(c.view.value, 'reports',
+          reason: 'the evidence lives in the reports view');
+      expect(c.search.value, 'abc123');
+      expect(c.searchField.text, 'abc123',
+          reason: 'the visible search box must say what the list is filtered '
+              'to — otherwise the founder reads a filtered list as the whole');
+    });
+
+    test('searching a signature id FINDS its occurrences', () {
+      final c = _FakeController();
+      c.appReports.value = [
+        reportWithSignature('sig-xyz', 'StateError: the incident'),
+        reportWithSignature('sig-other', 'StateError: something else'),
+      ];
+      c.markLoadedForTest();
+      c.showOccurrencesOf('sig-xyz');
+      expect(c.filtered, hasLength(1));
+      expect(c.filtered.single.error, contains('the incident'));
+    });
+
+    test('a report the projection never reached carries no signature, and is '
+        'not silently attributed to one', () {
+      final c = _FakeController();
+      c.appReports.value = [report(error: 'StateError: unprojected')];
+      c.markLoadedForTest();
+      expect(c.appReports.single.signature, isEmpty);
+      c.search.value = 'sig-anything';
+      expect(c.filtered, isEmpty);
+    });
+
+
+    testWidgets('an INCIDENT ROW actually builds inside the PageShell scroll '
+        'context — not a zero-height list', (t) async {
+      // The exact defect the report list shipped with: a ListView inside a
+      // scrolling parent collapses to zero height with NO exception, so the
+      // header says "3 distinct defects" over a blank page.
+      Get.testMode = true;
+      final c = _FakeController();
+      c.signatures.value = [
+        signature(id: 'sigA', normalized: 'Bad state: THE_VISIBLE_INCIDENT'),
+      ];
+      c.markLoadedForTest();
+      Get.put<CrashReportsController>(c);
+      addTearDown(Get.reset);
+
+      await t.pumpWidget(GetMaterialApp(
+          home: Scaffold(body: CrashReportsScreen())));
+      await t.pump();
+
+      expect(find.textContaining('THE_VISIBLE_INCIDENT'), findsOneWidget);
+      expect(find.textContaining('1 distinct defect'), findsOneWidget);
+      final size = t.getSize(find.textContaining('THE_VISIBLE_INCIDENT').first);
+      expect(size.height, greaterThan(0));
+    });
+
+    testWidgets('the STALLED-PROJECTION state is what an empty rollup over a '
+        'full firehose renders', (t) async {
+      Get.testMode = true;
+      final c = _FakeController();
+      c.appReports.value = [report(error: 'StateError: real crash')];
+      c.signatures.clear();
+      c.markLoadedForTest();
+      Get.put<CrashReportsController>(c);
+      addTearDown(Get.reset);
+
+      await t.pumpWidget(GetMaterialApp(
+          home: Scaffold(body: CrashReportsScreen())));
+      await t.pump();
+
+      expect(find.text('Incidents are not being built'), findsOneWidget);
+      expect(find.textContaining('healthy'), findsNothing,
+          reason: 'a broken projection must never be described as health');
+    });
+
+  });
+}
+
+class _FakeSnap implements DocumentSnapshot {
+  _FakeSnap(this.id, this._data);
+  @override
+  final String id;
+  final Map<String, dynamic> _data;
+  @override
+  Map<String, dynamic>? data() => _data;
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }

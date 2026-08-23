@@ -32,6 +32,17 @@ class CrashReportModel {
   final int occurrence;
   final DateTime? at;
 
+  /// The incident this occurrence belongs to — stamped on the evidence
+  /// document by the `onCrashReportCreated` trigger, in the same transaction
+  /// that counts it into `crash_signatures`.
+  ///
+  /// EMPTY IS MEANINGFUL, not merely missing: it is either a console report
+  /// (the trigger watches `app_crash_reports` only) or a mobile report the
+  /// projection has not reached — which, across many recent reports, is how
+  /// "the trigger is not running" becomes visible instead of looking like a
+  /// quiet week.
+  final String signature;
+
   const CrashReportModel({
     required this.id,
     this.app = 'console',
@@ -50,6 +61,7 @@ class CrashReportModel {
     required this.sessionId,
     required this.occurrence,
     required this.at,
+    this.signature = '',
   });
 
   bool get isFatal => kind == 'fatal';
@@ -92,6 +104,7 @@ class CrashReportModel {
       sessionId: _s(d['sessionId']),
       occurrence: _i(d['occurrence']),
       at: _date(d['at']),
+      signature: _s(d['signature']),
     );
   }
 
