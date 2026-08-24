@@ -10,7 +10,7 @@
 /// surfaces must never disagree.
 ///
 /// **Why this file is TWINNED across the three repositories** rather than
-/// imported. TrainerHQ, AlphaSerena and AlphaSerena Admin are separate Flutter
+/// imported. Trainersarena, Alphasarena and Alphasarena Admin are separate Flutter
 /// repositories with no shared package, and this ecosystem's established
 /// pattern for a cross-repo contract is a twinned file plus a drift guard (see
 /// `lifestyle_math.dart` and `prescription.dart`). `test/policy_registry_test`
@@ -83,7 +83,7 @@ class PolicyDocument {
   String get slug => id.slug;
 }
 
-/// Version, identity and content for every AlphaSerena policy document.
+/// Version, identity and content for every Alphasarena policy document.
 class PolicyRegistry {
   PolicyRegistry._();
 
@@ -109,10 +109,22 @@ class PolicyRegistry {
   /* ──────────────────────────────  identity  ───────────────────────────── */
 
   /// The publishing identity. Register item L-1 was resolved 2026-08-10 by
-  /// operator decision: the platform publishes under the name AlphaSerena.
+  /// operator decision: the platform publishes under the name Alphasarena.
   /// The documents describe it as the name the service is operated under and
   /// claim no registration — do not add a company suffix or number here.
-  static const String company = 'AlphaSerena';
+  static const String company = 'Alphasarena';
+
+  /// The coach / organization application's published name. The member app is
+  /// published under [company] itself, so it needs no separate constant; this
+  /// one exists because the trainer app's name is NOT the platform name, and
+  /// hand-typing it is how the coach app came to ship under three different
+  /// names at once.
+  ///
+  /// The retired spellings are deliberately NOT written out here: this file is
+  /// scanned for them by `policy_registry_parity_test.dart`, comments included,
+  /// precisely so that a stale mention cannot teach the next reader that an old
+  /// name was intentional. See that test for the list.
+  static const String trainerAppName = 'Trainersarena';
 
   /// The operational contact, including for privacy questions and refund
   /// requests (register item L-3, operator-decided). No separate statutory
@@ -154,17 +166,17 @@ class PolicyRegistry {
   static const PolicyDocument _privacy = PolicyDocument(
     id: PolicyId.privacy,
     summary:
-        'What AlphaSerena collects, why, who can see it, and what happens when '
+        'What Alphasarena collects, why, who can see it, and what happens when '
         'you delete your account.',
     sections: [
       PolicySection(
         'Who we are',
-        'AlphaSerena provides coaching software used by fitness coaches, '
+        'Alphasarena provides coaching software used by fitness coaches, '
             'coaching organizations and their members. It has three '
-            'applications sharing one backend: TrainerHQ (for organizations '
-            'and trainers), the AlphaSerena member app, and AlphaSerena Admin '
+            'applications sharing one backend: Trainersarena (for organizations '
+            'and trainers), the Alphasarena member app, and Alphasarena Admin '
             '(for the platform operator).\n\n'
-            'AlphaSerena is the name under which the service is operated and '
+            'Alphasarena is the name under which the service is operated and '
             'published. It is operated from India.\n\n'
             'Contact: $contact',
       ),
@@ -177,7 +189,7 @@ class PolicyRegistry {
             'to you.\n\n'
             'The organization you joined decides what coaching information is '
             'collected from you, sets the questions you are asked, writes your '
-            'plans, and keeps its own business record of you. AlphaSerena '
+            'plans, and keeps its own business record of you. Alphasarena '
             'operates the software those activities run on, and is '
             'responsible for the platform itself — not for the coaching '
             'decisions your organization makes.',
@@ -192,8 +204,18 @@ class PolicyRegistry {
       PolicySection(
         'Signing in',
         'Sign-in is handled by Firebase Authentication, provided by Google.\n\n'
-            'The member app signs you in with Google Sign-In. TrainerHQ and '
-            'AlphaSerena Admin use an email address and password.\n\n'
+            // ⚠️ THIS SENTENCE MUST NAME WHAT THE LOGIN SCREEN ACTUALLY OFFERS.
+            // It read "The member app signs you in with Google Sign-In" until
+            // 2026-08-19, which stopped being true when email/password became
+            // the member app's PRIMARY way in — and the wrong version was live
+            // on the published policy, so members were signing in by a method
+            // their own privacy policy did not disclose. Guarded by
+            // `policy_registry_test.dart` → "the sign-in section names every
+            // method the login screen offers", which reads `login_screen.dart`
+            // rather than trusting this comment.
+            'The member app signs you in with an email address and password, '
+            'or with Google Sign-In. Trainersarena and Alphasarena Admin use an '
+            'email address and password.\n\n'
             'We do not store your password — it is handled entirely by Firebase '
             'Authentication and never reaches our application code.\n\n'
             'When you enable notifications we store that device\'s messaging '
@@ -205,8 +227,19 @@ class PolicyRegistry {
       PolicySection(
         'Health, body and fitness information',
         'This is the most sensitive information on the platform.\n\n'
-            '• Body weight, body fat and measurements such as waist, chest, '
-            'arms, hips and thighs\n'
+            // ⚠️ EVERY FIELD THE PROFILE EDITOR COLLECTS MUST APPEAR IN THIS
+            // POLICY. `height` and `goalWeight` were collected by
+            // `ProfileEditField` and written to
+            // `clientProfiles.profile.bodyMetrics` from the first release, and
+            // appeared ZERO times in the published policy until 2026-08-19 —
+            // under-disclosure, which is the direction that harms members and
+            // the direction a Play Data Safety review compares against. Guarded
+            // by `policy_registry_test.dart` → "every field the profile editor
+            // collects is disclosed", which reads the ProfileEditField enum
+            // rather than trusting this comment.
+            '• Height, body weight and the goal weight you set\n'
+            '• Body fat and measurements such as waist, chest, arms, hips and '
+            'thighs\n'
             '• Sleep — bedtime and wake time, and the duration derived from '
             'them\n'
             '• Step counts and water intake\n'
@@ -220,6 +253,32 @@ class PolicyRegistry {
             'and any documents you upload\n\n'
             'Your coaching organization can see this information. That is how '
             'coaching works here.',
+      ),
+      PolicySection(
+        'Emergency contact',
+        // ⚠️ THIS IS PERSONAL DATA ABOUT SOMEONE WHO NEVER AGREED TO ANYTHING.
+        // The member types another person's phone number. That person is not a
+        // user of Alphasarena, cannot see the record, and cannot ask for it to
+        // be removed — only the member can. A policy that lists every field the
+        // MEMBER gives about THEMSELVES and stays silent about the one field
+        // that is about a THIRD PARTY has the disclosure gap exactly backwards.
+        //
+        // The sentence about it not reaching the organization is a claim about
+        // code, and it is checked: `clientProfiles/{uid}` is readable only by
+        // `request.auth.uid == uid` (firestore.rules), and the coach projection
+        // in `member_profile_form.dart` deliberately keeps `emergencyContact`
+        // out of `contact` so the projection cannot carry it. If either changes,
+        // this paragraph becomes false and must change with it.
+        'If you choose to give an emergency contact, we store the phone number '
+            'you enter on your own profile.\n\n'
+            'That number belongs to another person, so give it only if they are '
+            'content for you to. It is not shared with your coaching '
+            'organization or your coach, and it is not used to contact anyone '
+            'automatically — it is held so it can be found if you or someone '
+            'acting for you needs it.\n\n'
+            'You can change or remove it at any time from your profile, and it '
+            'is deleted with the rest of your profile when you delete your '
+            'account.',
       ),
       PolicySection(
         'Photographs and documents',
@@ -255,7 +314,7 @@ class PolicyRegistry {
             'agreements, salary payments, and documents such as contracts and '
             'identity documents.\n\n'
             'This information is private to that organization, and is not '
-            'readable by AlphaSerena operators — see "Operator access".',
+            'readable by Alphasarena operators — see "Operator access".',
       ),
       PolicySection(
         'Who can see your information',
@@ -270,13 +329,13 @@ class PolicyRegistry {
             'what an app chooses to display.',
       ),
       PolicySection(
-        'AlphaSerena operator access',
+        'Alphasarena operator access',
         'We would rather tell you this plainly.\n\n'
-            'Direct database access by AlphaSerena operators is limited to a '
+            'Direct database access by Alphasarena operators is limited to a '
             'specific, listed set of collections needed to run the platform. '
             'Anything not explicitly listed is denied by default. Employment '
             'records, salary agreements, salary payments and HR documents are '
-            'NOT readable by AlphaSerena operators — that restriction is '
+            'NOT readable by Alphasarena operators — that restriction is '
             'enforced by the security rules themselves.\n\n'
             'Some platform functions run with administrative privileges on our '
             'servers so we can provide support, resolve payment problems and '
@@ -286,7 +345,7 @@ class PolicyRegistry {
             'These accesses are recorded. Every privileged function call is '
             'written to an access register, and privileged changes are written '
             'to an audit log. Neither record can be edited or deleted by '
-            'anyone, including AlphaSerena operators.',
+            'anyone, including Alphasarena operators.',
       ),
       PolicySection(
         'How we use your information',
@@ -298,7 +357,7 @@ class PolicyRegistry {
             'support.\n\n'
             'We do not sell your personal information.\n\n'
             'There is no advertising, analytics or tracking software in any '
-            'AlphaSerena application. We do not build advertising profiles and '
+            'Alphasarena application. We do not build advertising profiles and '
             'we do not share your information with advertising networks. That '
             'is a property of how the apps are built, not only a promise.',
       ),
@@ -328,8 +387,8 @@ class PolicyRegistry {
             'function calls and errors generated by our hosting provider.\n\n'
             'Permissions: the member app uses your camera and your photo '
             'library (progress and profile photos), and notifications. '
-            'TrainerHQ additionally '
-            'uses the camera and photo library for exercise media. AlphaSerena '
+            'Trainersarena additionally '
+            'uses the camera and photo library for exercise media. Alphasarena '
             'Admin is a web application and asks for no device permissions.',
       ),
       PolicySection(
@@ -339,7 +398,7 @@ class PolicyRegistry {
             'actions, a cached postcode lookup, and setup markers.\n\n'
             'The applications contain no cookies, no tracking technologies, no '
             'advertising identifiers and no analytics software.\n\n'
-            'AlphaSerena Admin runs in a browser, where the Google sign-in '
+            'Alphasarena Admin runs in a browser, where the Google sign-in '
             'library keeps its own session so you are not signed out on every '
             'page load.',
       ),
@@ -401,7 +460,7 @@ class PolicyRegistry {
             'Audit logs, the privileged-access register, financial ledger '
             'entries, employment event history and trainer identifier '
             'reservations are permanent and cannot be edited or deleted by '
-            'anyone, including AlphaSerena operators. They exist so privileged '
+            'anyone, including Alphasarena operators. They exist so privileged '
             'actions and money movements remain reconstructable.\n\n'
             'Records your organization keeps about you remain with that '
             'organization.\n\n'
@@ -424,14 +483,14 @@ class PolicyRegistry {
             'payment notifications; App Check on the member and coach apps; '
             'and an audit log and access register that cannot be altered.\n\n'
             'WHAT WE DO NOT CLAIM. We do not claim end-to-end encryption. We do '
-            'not claim that AlphaSerena operators cannot access your data — '
+            'not claim that Alphasarena operators cannot access your data — '
             '"Operator access" describes when they can. We hold no security '
             'certification and claim compliance with no specific security or '
             'privacy standard or regulation. No system is completely secure.',
       ),
       PolicySection(
         'Children',
-        'AlphaSerena is for adults. You must be at least 18 years old to use '
+        'Alphasarena is for adults. You must be at least 18 years old to use '
             'it.\n\n'
             'The member app asks for your date of birth during onboarding and '
             'will not create a profile for anyone under 18. If we learn that '
@@ -444,7 +503,7 @@ class PolicyRegistry {
             'hours and do-not-disturb in the app; marketing is off unless you '
             'enable it. You can edit or clear the details you provided. '
             'Members can delete their account as described above.\n\n'
-            'AlphaSerena operates under the law of India. The specific rights '
+            'Alphasarena operates under the law of India. The specific rights '
             'available to you depend on the law that applies to you, and '
             'nothing in this policy takes away a right that law gives you. '
             'This policy does not claim certification under any particular '
@@ -459,33 +518,33 @@ class PolicyRegistry {
   static const PolicyDocument _terms = PolicyDocument(
     id: PolicyId.terms,
     summary:
-        'The agreement for using AlphaSerena — accounts, coaching, payments, '
+        'The agreement for using Alphasarena — accounts, coaching, payments, '
         'acceptable use and termination.',
     sections: [
       PolicySection(
         'About these terms',
-        'These terms govern your use of AlphaSerena and its applications: '
-            'TrainerHQ, the AlphaSerena member app, and AlphaSerena Admin.\n\n'
+        'These terms govern your use of Alphasarena and its applications: '
+            'Trainersarena, the Alphasarena member app, and Alphasarena Admin.\n\n'
             'Our Privacy Policy, Refund & Cancellation Policy and Health, '
             'Fitness, Nutrition & Wellness Disclaimer form part of these '
             'terms.\n\n'
-            'AlphaSerena is the name under which the service is operated and '
+            'Alphasarena is the name under which the service is operated and '
             'published. It is operated from India. Contact: $contact.',
       ),
       PolicySection(
-        'What AlphaSerena provides',
-        'AlphaSerena provides coaching SOFTWARE. It lets coaching '
+        'What Alphasarena provides',
+        'Alphasarena provides coaching SOFTWARE. It lets coaching '
             'organizations manage members, build workout and nutrition plans, '
             'communicate and take payment; and it lets members follow those '
             'plans and record their progress.\n\n'
-            'AlphaSerena does not provide coaching, training, dietary or '
+            'Alphasarena does not provide coaching, training, dietary or '
             'medical services. Your coaching relationship is with the '
-            'organization you join, not with AlphaSerena.',
+            'organization you join, not with Alphasarena.',
       ),
       PolicySection(
         'Eligibility and accounts',
         'You must be at least 18 years old, and able to enter a binding '
-            'agreement, to use AlphaSerena.\n\n'
+            'agreement, to use Alphasarena.\n\n'
             'Members sign in with Google Sign-In. Coaches and organization '
             'owners use an email address and password.\n\n'
             'If you are a trainer, your account is created for you by your '
@@ -498,7 +557,7 @@ class PolicyRegistry {
         'The coaching relationship',
         'Your coaching organization writes your coaching. Workout plans, '
             'nutrition targets, supplement plans and lifestyle targets are '
-            'created by your coach or organization. AlphaSerena delivers and '
+            'created by your coach or organization. Alphasarena delivers and '
             'records them; it does not write, review or endorse them.\n\n'
             'Your organization sets its own prices, membership plans and any '
             'discounts, and is responsible for honouring them. It can see the '
@@ -523,7 +582,7 @@ class PolicyRegistry {
       ),
       PolicySection(
         'Subscriptions (organizations)',
-        'A subscription enables your organization\'s use of TrainerHQ and sets '
+        'A subscription enables your organization\'s use of Trainersarena and sets '
             'its usage limits, such as the number of trainers and members.\n\n'
             'A subscription is for a FIXED TERM. When it expires, your ability '
             'to create and change data is restricted until it is renewed. Your '
@@ -532,7 +591,7 @@ class PolicyRegistry {
       ),
       PolicySection(
         'Payments, and no automatic renewal',
-        'AlphaSerena does not automatically renew memberships or subscriptions, '
+        'Alphasarena does not automatically renew memberships or subscriptions, '
             'and does not store a recurring payment mandate. When a term ends, '
             'access ends unless a new purchase is made. You will not be charged '
             'again automatically.\n\n'
@@ -570,12 +629,12 @@ class PolicyRegistry {
         'You keep ownership of the content you create — plans you write, '
             'messages you send, photographs and media you upload, and the '
             'information you record.\n\n'
-            'You grant AlphaSerena the limited permission needed to store, '
+            'You grant Alphasarena the limited permission needed to store, '
             'process, transmit and display that content so the platform can '
             'work.\n\n'
             'We do not use your content for advertising and we do not sell it. '
             'The applications contain no advertising or analytics software.\n\n'
-            'AlphaSerena owns the platform itself — its software, design and '
+            'Alphasarena owns the platform itself — its software, design and '
             'branding.',
       ),
       PolicySection(
@@ -585,12 +644,12 @@ class PolicyRegistry {
             'You can control most notifications, and marketing notifications '
             'are off unless you enable them. Some are always delivered because '
             'silencing them would be unsafe or misleading.\n\n'
-            'Do not use AlphaSerena\'s messaging or calling features for '
+            'Do not use Alphasarena\'s messaging or calling features for '
             'emergencies. See the Health Disclaimer.',
       ),
       PolicySection(
         'Health and fitness',
-        'AlphaSerena is not a medical provider and does not provide medical '
+        'Alphasarena is not a medical provider and does not provide medical '
             'advice. Workout plans, nutrition targets, supplement plans and '
             'wellness information are not medical advice, diagnosis or '
             'treatment, and are not a substitute for advice from an '
@@ -600,14 +659,14 @@ class PolicyRegistry {
       ),
       PolicySection(
         'Availability',
-        'We work to keep AlphaSerena available and working correctly, but we '
+        'We work to keep Alphasarena available and working correctly, but we '
             'provide it "as is" and "as available". We do not warrant that it '
             'will be uninterrupted, error-free, or that it will meet any '
             'particular requirement. Features may change.\n\n'
             'The platform depends on third-party services — including Google '
             'Firebase for hosting and Razorpay for payments — and on your '
             'device and network.\n\n'
-            'To the maximum extent permitted by applicable law, AlphaSerena '
+            'To the maximum extent permitted by applicable law, Alphasarena '
             'disclaims implied warranties and is not liable for indirect or '
             'consequential loss arising from use of the platform. Nothing in '
             'these terms excludes or limits liability that cannot be excluded '
@@ -615,7 +674,7 @@ class PolicyRegistry {
       ),
       PolicySection(
         'Suspension and termination',
-        'You may stop using AlphaSerena at any time. Members can delete their '
+        'You may stop using Alphasarena at any time. Members can delete their '
             'account in the app; coaches and organization owners should '
             'contact us.\n\n'
             'We may suspend, restrict or terminate access where an account or '
@@ -636,7 +695,7 @@ class PolicyRegistry {
             'coaching organization keeps its own business record, and some '
             'records — including audit, financial ledger and privileged-access '
             'records — are permanent by design and cannot be edited or deleted '
-            'by anyone, including AlphaSerena operators. The Privacy Policy '
+            'by anyone, including Alphasarena operators. The Privacy Policy '
             'describes this in full.',
       ),
       PolicySection(
@@ -662,7 +721,7 @@ class PolicyRegistry {
       PolicySection(
         'What this covers',
         'Two kinds of purchase: MEMBERSHIPS, sold by your coaching '
-            'organization to members; and SUBSCRIPTIONS, sold by AlphaSerena to '
+            'organization to members; and SUBSCRIPTIONS, sold by Alphasarena to '
             'coaching organizations.\n\n'
             'Read this together with the Terms of Service.',
       ),
@@ -681,7 +740,7 @@ class PolicyRegistry {
       PolicySection(
         'How payments are handled',
         'Payments are processed by Razorpay. Payment credentials are entered '
-            'in Razorpay\'s own interface and do not reach AlphaSerena\'s '
+            'in Razorpay\'s own interface and do not reach Alphasarena\'s '
             'servers.\n\n'
             'The amount payable — including any discount and any applicable tax '
             '— is calculated by our servers and shown to you before you pay, '
@@ -697,7 +756,7 @@ class PolicyRegistry {
         'There is no cancellation button, because there is nothing recurring '
             'to cancel.\n\n'
             'To stop future charges, do nothing — your access simply ends when '
-            'the paid term ends. To stop using AlphaSerena sooner, you can stop '
+            'the paid term ends. To stop using Alphasarena sooner, you can stop '
             'at any time, and members can delete their account in the app.\n\n'
             'Cancelling, stopping use, or deleting your account does not by '
             'itself create a refund.\n\n'
@@ -713,7 +772,7 @@ class PolicyRegistry {
             'expiry, and not on non-use.\n\n'
             'There is NO SELF-SERVICE REFUND. There is no button, form or '
             'in-app flow that requests or issues one.\n\n'
-            'Refunds are issued manually by authorized AlphaSerena '
+            'Refunds are issued manually by authorized Alphasarena '
             'administration, using the payment provider, after review. A refund '
             'may be full or partial, and every refund is recorded against the '
             'original transaction.\n\n'
@@ -739,7 +798,7 @@ class PolicyRegistry {
             'a refund is guaranteed. Refunds are considered case-by-case '
             'against the factors above, and no automatic entitlement should '
             'be inferred from this document.\n\n'
-            'Where AlphaSerena collects payment for a membership sold by a '
+            'Where Alphasarena collects payment for a membership sold by a '
             'coaching organization, refund decisions are made together with '
             'that organization, which holds the commercial relationship with '
             'you.',
@@ -749,7 +808,7 @@ class PolicyRegistry {
         'Nothing here limits any right you have under the law that applies to '
             'you. Where applicable law gives you a right to cancel or to a '
             'refund, that law prevails over this policy.\n\n'
-            'AlphaSerena operates under the law of India, including its '
+            'Alphasarena operates under the law of India, including its '
             'consumer-protection law.',
       ),
       PolicySection(
@@ -777,28 +836,28 @@ class PolicyRegistry {
   static const PolicyDocument _health = PolicyDocument(
     id: PolicyId.healthDisclaimer,
     summary:
-        'AlphaSerena is not a medical provider, and coaching content is not '
+        'Alphasarena is not a medical provider, and coaching content is not '
         'medical advice.',
     sections: [
       PolicySection(
-        'AlphaSerena is not a medical provider',
-        'AlphaSerena provides coaching software. It is not a healthcare '
+        'Alphasarena is not a medical provider',
+        'Alphasarena provides coaching software. It is not a healthcare '
             'provider, a medical service or a clinical tool.\n\n'
             'We do not provide medical advice, diagnosis, treatment or '
-            'monitoring, and using AlphaSerena does not create a '
+            'monitoring, and using Alphasarena does not create a '
             'doctor–patient or any other clinical relationship.',
       ),
       PolicySection(
         'Your plan is written by your coach',
         'Workout plans, nutrition targets, supplement plans and lifestyle '
             'targets are created by your coach or coaching organization.\n\n'
-            'AlphaSerena delivers and records them. We do not write, review, '
+            'Alphasarena delivers and records them. We do not write, review, '
             'approve or endorse them, and we do not assess whether a plan is '
             'appropriate for you.',
       ),
       PolicySection(
         'Coaching content is not medical advice',
-        'Everything you receive through AlphaSerena — workouts, exercises, '
+        'Everything you receive through Alphasarena — workouts, exercises, '
             'calorie and macronutrient targets, meal guidance, supplement '
             'plans, hydration, step and sleep targets — is general fitness and '
             'wellness information, not medical advice.\n\n'
@@ -811,7 +870,7 @@ class PolicyRegistry {
         'Coaches and trainers set their own profiles, including any '
             'qualifications, certifications and experience they choose to '
             'list.\n\n'
-            'AlphaSerena does not verify those qualifications, and being on the '
+            'Alphasarena does not verify those qualifications, and being on the '
             'platform does not mean a coach is a doctor, dietitian, '
             'physiotherapist or other regulated healthcare professional. If a '
             'specific qualification matters to you, ask your coach directly.',
@@ -843,7 +902,7 @@ class PolicyRegistry {
       ),
       PolicySection(
         'In an emergency',
-        'Do not use AlphaSerena to seek help in an emergency.\n\n'
+        'Do not use Alphasarena to seek help in an emergency.\n\n'
             'Messages go to your coach, who may not see them immediately and '
             'is not an emergency service.\n\n'
             'If you have a medical emergency, contact your local emergency '
@@ -851,7 +910,7 @@ class PolicyRegistry {
       ),
       PolicySection(
         'Supplements',
-        'Supplement plans are created by your coach, not by AlphaSerena.\n\n'
+        'Supplement plans are created by your coach, not by Alphasarena.\n\n'
             'We make no claim about the safety, quality, legality, efficacy or '
             'suitability of any supplement, and we do not sell, supply or '
             'verify supplements. Supplements can interact with medication and '
@@ -872,7 +931,7 @@ class PolicyRegistry {
       ),
       PolicySection(
         'Tracking and scores are descriptive, not clinical',
-        'AlphaSerena calculates adherence percentages, progress trends, '
+        'Alphasarena calculates adherence percentages, progress trends, '
             'streaks and weekly summaries from what you and your coach '
             'record.\n\n'
             'These are simple descriptive summaries of the data you entered. '
@@ -887,7 +946,7 @@ class PolicyRegistry {
       ),
       PolicySection(
         'Results vary',
-        'Outcomes depend on many factors neither AlphaSerena nor your coach '
+        'Outcomes depend on many factors neither Alphasarena nor your coach '
             'controls — health, genetics, consistency, sleep, stress, '
             'environment and circumstances.\n\n'
             'We make no promise about the results you will achieve. Any '
@@ -901,7 +960,7 @@ class PolicyRegistry {
             'within your own competence and qualifications, and for complying '
             'with any professional obligations or regulations that apply to '
             'you.\n\n'
-            'Do not use AlphaSerena to diagnose or treat a medical condition, '
+            'Do not use Alphasarena to diagnose or treat a medical condition, '
             'or to present yourself as a healthcare professional if you are '
             'not one.',
       ),

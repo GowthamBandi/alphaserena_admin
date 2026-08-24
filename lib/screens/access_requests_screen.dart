@@ -54,7 +54,7 @@ class AccessRequestsScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Organizations asking for TrainersArena access. Contact them, take '
+            'Organizations asking for Trainersarena access. Contact them, take '
             'payment outside the platform, record it here, then provision the '
             'organization and send the temporary credentials.',
             style: AppText.body(size: 13).copyWith(color: p.textMuted),
@@ -489,7 +489,7 @@ class _RequestDetailDialogState extends State<_RequestDetailDialog> {
         Text(
           'The temporary password was shown once, at provisioning, and is '
           'stored nowhere. If it was lost, the owner uses "Forgot password" '
-          'on the TrainersArena sign-in screen.',
+          'on the Trainersarena sign-in screen.',
           style: AppText.body(size: 11)
               .copyWith(color: context.palette.textMuted),
         ),
@@ -761,7 +761,7 @@ class _RequestDetailDialogState extends State<_RequestDetailDialog> {
                   DropdownButtonFormField<String>(
                     initialValue: planId,
                     decoration:
-                        const InputDecoration(labelText: 'TrainersArena plan'),
+                        const InputDecoration(labelText: 'Trainersarena plan'),
                     items: plans
                         .map((p) => DropdownMenuItem(
                               value: p.docId,
@@ -805,7 +805,7 @@ class _RequestDetailDialogState extends State<_RequestDetailDialog> {
                     controller: emailCtl,
                     decoration: const InputDecoration(
                       labelText: 'Sign-in email',
-                      helperText: 'This becomes their TrainersArena login',
+                      helperText: 'This becomes their Trainersarena login',
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -890,7 +890,7 @@ class _RequestDetailDialogState extends State<_RequestDetailDialog> {
                 'Send these credentials to the organization. THIS PASSWORD IS '
                 'SHOWN ONCE — it is stored nowhere and cannot be retrieved. '
                 'If it is lost, the owner uses "Forgot password" on the '
-                'TrainersArena sign-in screen.',
+                'Trainersarena sign-in screen.',
               ),
               const SizedBox(height: 14),
               SelectableText('Email:  ${res.email ?? ''}',
@@ -909,7 +909,7 @@ class _RequestDetailDialogState extends State<_RequestDetailDialog> {
           OutlinedButton.icon(
             onPressed: () {
               Clipboard.setData(ClipboardData(
-                text: 'TrainersArena sign-in\n'
+                text: 'Trainersarena sign-in\n'
                     'Email: ${res.email ?? ''}\n'
                     'Temporary password: ${res.tempPassword ?? ''}\n'
                     'Please change your password after signing in.',

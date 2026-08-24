@@ -440,7 +440,7 @@ class AdminsScreen extends StatelessWidget {
                 DropdownButtonFormField<String>(
                   initialValue: planId,
                   decoration:
-                      const InputDecoration(labelText: 'TrainersArena plan'),
+                      const InputDecoration(labelText: 'Trainersarena plan'),
                   items: plans
                       .map((pl) => DropdownMenuItem(
                             value: pl.docId,

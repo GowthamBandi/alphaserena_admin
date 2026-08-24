@@ -184,7 +184,7 @@ const List<ConsoleSection> kConsoleSections = <ConsoleSection>[
         id: 5,
         label: 'Revenue',
         icon: Icons.payments_outlined,
-        purpose: 'What organizations have paid TrainersArena (System A)',
+        purpose: 'What organizations have paid Trainersarena (System A)',
       ),
       ConsoleDestination(
         id: 6,

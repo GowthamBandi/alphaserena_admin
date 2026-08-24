@@ -1143,7 +1143,7 @@ class _MoneyBreakdown extends StatelessWidget {
             '−${formatMinor(s.gatewayFeeMinor)}',
             note: s.terms.orgBearsGatewayFee
                 ? "Razorpay's charge, deducted from the organization"
-                : 'Absorbed by TrainersArena',
+                : 'Absorbed by Trainersarena',
             color: p.textSecondary,
           ),
           line(
@@ -1466,7 +1466,7 @@ class _StateCard extends StatelessWidget {
           _KV('Platform fee rate', s.terms.platformFeeLabel),
           _KV(
             'Gateway fee borne by',
-            s.terms.orgBearsGatewayFee ? 'Organization' : 'TrainersArena',
+            s.terms.orgBearsGatewayFee ? 'Organization' : 'Trainersarena',
           ),
           _KV('Payout rail', s.payoutRail),
           if (s.payoutAttempt > 0)

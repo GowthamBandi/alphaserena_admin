@@ -207,8 +207,8 @@ void main() {
         () {
       expect(report(id: 'x').app, 'console');
       expect(report(id: 'x').appLabel, 'Console');
-      expect(report(id: 'y', app: 'trainersarena').appLabel, 'TrainerArena');
-      expect(report(id: 'z', app: 'alphasarena').appLabel, 'AlphaSarena');
+      expect(report(id: 'y', app: 'trainersarena').appLabel, 'Trainersarena');
+      expect(report(id: 'z', app: 'alphasarena').appLabel, 'Alphasarena');
     });
 
     test('ONE stream failing is partial, never total: the other apps\' '
@@ -599,7 +599,7 @@ void _liveContractTests() {
       expect(m.affectedUsers, 2);
       expect(m.affectedUsersLabel, '2');
       expect(m.isFatal, isTrue);
-      expect(m.appLabel, 'AlphaSarena');
+      expect(m.appLabel, 'Alphasarena');
       expect(m.errorClass, 'StateError');
       expect(m.priority, 'P1');
       expect(m.production, isTrue);

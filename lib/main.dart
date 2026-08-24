@@ -226,7 +226,7 @@ class AlphaSerenaAdminApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'AlphaSerena Admin',
+      title: 'Alphasarena Admin',
       debugShowCheckedModeBanner: false,
       initialBinding: AppBindings(),
 

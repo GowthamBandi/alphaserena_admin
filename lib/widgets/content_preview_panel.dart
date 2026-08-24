@@ -31,12 +31,12 @@ class ContentPreviewPanel extends StatelessWidget {
         final stacked = c.maxWidth < 760;
         final cards = [
           _DevicePreview(
-            appName: 'TrainerHQ',
+            appName: 'Trainersarena',
             bodyMaxLines: 2,
             preview: preview,
           ),
           _DevicePreview(
-            appName: 'AlphaSerena',
+            appName: 'Alphasarena',
             bodyMaxLines: 3,
             preview: preview,
           ),

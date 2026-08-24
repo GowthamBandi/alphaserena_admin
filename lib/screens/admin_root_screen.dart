@@ -311,7 +311,7 @@ class _BrandHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "AlphaSerena",
+                  "Alphasarena",
                   style: AppText.cardTitle(size: 16)
                       .copyWith(color: p.textPrimary),
                 ),

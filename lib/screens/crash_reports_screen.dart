@@ -76,8 +76,8 @@ class CrashReportsScreen extends StatelessWidget {
           Obx(() => Wrap(spacing: 8, children: [
                 for (final (value, label) in const [
                   ('all', 'All apps'),
-                  ('trainersarena', 'TrainerArena'),
-                  ('alphasarena', 'AlphaSarena'),
+                  ('trainersarena', 'Trainersarena'),
+                  ('alphasarena', 'Alphasarena'),
                   ('console', 'Console'),
                 ])
                   ChoiceChip(

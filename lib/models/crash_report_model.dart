@@ -71,8 +71,8 @@ class CrashReportModel {
   /// itself rather than being folded into a known app.
   String get appLabel => switch (app) {
         'console' => 'Console',
-        'trainersarena' => 'TrainerArena',
-        'alphasarena' => 'AlphaSarena',
+        'trainersarena' => 'Trainersarena',
+        'alphasarena' => 'Alphasarena',
         _ => app,
       };
 

@@ -376,7 +376,7 @@ class _GlobalFoodScreenState extends State<GlobalFoodScreen> {
               title: 'Found the library from the seed catalog',
               body:
                   'The curated Indian dataset that used to be bundled inside '
-                  'the TrainerHQ app. It is frozen migration data now — no app '
+                  'the Trainersarena app. It is frozen migration data now — no app '
                   'reads it at runtime. Import it ONCE to found the global '
                   'library.\n\n'
                   'The importer always validates first and shows you exactly '
