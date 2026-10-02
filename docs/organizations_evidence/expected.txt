@@ -1,0 +1,42 @@
+== TILE COUNTS ==
+all              14
+attention        7
+pending          1
+noSubscription   1
+expiring         1
+blocked          1
+recent           2
+active           9
+warning          1
+operating        10
+total 14
+
+== PER ORG ==
+FitStart Studio        org-pending-gym                standing=awaiting  sub=none            days=None operating=False trainers_live=0/0 members=0 receipts=0 requests=0
+   record=['awaiting_approval'] related=['no_storefront(info)'] attention=True
+Flex Arena             org-flex-arena                 standing=approved  sub=active          days=365 operating=True trainers_live=1/1 members=3 receipts=0 requests=0
+   record=[] related=['no_storefront(info)', 'no_receipt_for_subscription(info)'] attention=False
+Ghost Gym              org-no-email                   standing=approved  sub=active          days=60 operating=True trainers_live=0/0 members=0 receipts=0 requests=0
+   record=['no_owner_email'] related=['no_storefront(info)', 'no_receipt_for_subscription(info)'] attention=True
+Iron Temple Fitness    org-iron-temple                standing=approved  sub=active          days=365 operating=True trainers_live=2/3 members=5 receipts=1 requests=0
+   record=[] related=[] attention=False
+Lapsed Fitness         org-nosub-gym                  standing=approved  sub=none            days=None operating=False trainers_live=1/1 members=0 receipts=1 requests=0
+   record=['approved_no_subscription'] related=['no_storefront(info)', 'failed_backend_operation(critical)'] attention=True
+Mega Fitness Chain     org-big-gym                    standing=approved  sub=active          days=200 operating=True trainers_live=25/25 members=400 receipts=1 requests=0
+   record=[] related=['no_storefront(info)', 'over_plan_limits'] attention=False
+Odd Gym                org-weird-status               standing=unknown   sub=active          days=60 operating=False trainers_live=0/0 members=0 receipts=0 requests=0
+   record=['unknown_status'] related=['no_storefront(info)', 'no_receipt_for_subscription(info)'] attention=True
+Old Owner              org-legacy-gym                 standing=approved  sub=activeNoEndDate days=None operating=True trainers_live=0/0 members=0 receipts=0 requests=0
+   record=['active_no_end_date', 'no_org_name', 'no_created_at'] related=['no_storefront(info)', 'no_receipt_for_subscription(info)'] attention=True
+PowerHouse Gym         org-past-due                   standing=approved  sub=activePastEnd   days=-5 operating=True trainers_live=2/2 members=6 receipts=1 requests=0
+   record=['active_past_end'] related=['over_plan_limits'] attention=True
+Pulse Fitness Club     4G8P4M1Rw0EWhFOR5ZmfzviwBLMr   standing=warning   sub=active          days=122 operating=True trainers_live=1/1 members=4 receipts=2 requests=1
+   record=['warning_on_file'] related=[] attention=False
+Refund Fitness         org-refunded-gym               standing=approved  sub=active          days=20 operating=True trainers_live=0/0 members=0 receipts=1 requests=0
+   record=[] related=['no_storefront(info)'] attention=False
+Shady Gym              org-blocked-gym                standing=blocked   sub=none            days=None operating=False trainers_live=1/1 members=1 receipts=0 requests=0
+   record=['blocked'] related=['trainer_access_stale'] attention=False
+Twice Gym              org-dup-request                standing=approved  sub=active          days=60 operating=True trainers_live=0/0 members=0 receipts=0 requests=2
+   record=[] related=['no_storefront(info)', 'no_receipt_for_subscription(info)', 'multiple_access_requests'] attention=False
+Zen Yoga Studio        org-zen-yoga                   standing=approved  sub=expiringSoon    days=3 operating=True trainers_live=1/1 members=3 receipts=2 requests=0
+   record=['expiring_soon'] related=[] attention=True

@@ -45,15 +45,15 @@ class SaasOnboardingService {
   ];
 
   static String label(String status) => switch (status) {
-        requested => 'Requested',
-        contacted => 'Contacted',
-        paymentPending => 'Payment pending',
-        paymentConfirmed => 'Payment confirmed',
-        approved => 'Approved',
-        organizationCreated => 'Organization created',
-        rejected => 'Rejected',
-        _ => status,
-      };
+    requested => 'Requested',
+    contacted => 'Contacted',
+    paymentPending => 'Payment pending',
+    paymentConfirmed => 'Payment confirmed',
+    approved => 'Approved',
+    organizationCreated => 'Organization created',
+    rejected => 'Rejected',
+    _ => status,
+  };
 
   /// Moves a request along the pipeline. Entering [paymentConfirmed] REQUIRES
   /// evidence — the server refuses it otherwise, because "we were paid" is
@@ -68,25 +68,22 @@ class SaasOnboardingService {
     await FirebaseFunctions.instance
         .httpsCallable('setAccessRequestStatus')
         .call(<String, dynamic>{
-      'requestId': requestId,
-      'status': status,
-      if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
-      if (status == paymentConfirmed)
-        'paymentEvidence': <String, dynamic>{
-          'reference': paymentReference?.trim(),
-          'amount': paymentAmount,
-        },
-    });
+          'requestId': requestId,
+          'status': status,
+          if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+          if (status == paymentConfirmed)
+            'paymentEvidence': <String, dynamic>{
+              'reference': paymentReference?.trim(),
+              'amount': paymentAmount,
+            },
+        });
   }
 
   /// Appends an internal note (team-visible only; the prospect never sees it).
   static Future<void> addNote(String requestId, String text) async {
-    await FirebaseFunctions.instance
-        .httpsCallable('addAccessRequestNote')
-        .call(<String, dynamic>{
-      'requestId': requestId,
-      'text': text.trim(),
-    });
+    await FirebaseFunctions.instance.httpsCallable('addAccessRequestNote').call(
+      <String, dynamic>{'requestId': requestId, 'text': text.trim()},
+    );
   }
 
   /// Creates the organization: Firebase Auth account, `admins/{uid}` seed,
@@ -112,16 +109,16 @@ class SaasOnboardingService {
     final res = await FirebaseFunctions.instance
         .httpsCallable('provisionOrganization')
         .call(<String, dynamic>{
-      'requestId': requestId,
-      'planId': planId,
-      'months': months,
-      if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
-      if (ownerName != null && ownerName.trim().isNotEmpty)
-        'ownerName': ownerName.trim(),
-      if (organizationName != null && organizationName.trim().isNotEmpty)
-        'organizationName': organizationName.trim(),
-      if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
-    });
+          'requestId': requestId,
+          'planId': planId,
+          'months': months,
+          if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+          if (ownerName != null && ownerName.trim().isNotEmpty)
+            'ownerName': ownerName.trim(),
+          if (organizationName != null && organizationName.trim().isNotEmpty)
+            'organizationName': organizationName.trim(),
+          if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+        });
     final m = Map<String, dynamic>.from(res.data as Map);
     return ProvisionResult(
       uid: (m['uid'] ?? '') as String,
@@ -136,24 +133,96 @@ class SaasOnboardingService {
   /// subscription on an EXISTING organization — renewal, plan change, or a
   /// comped term. The reference is the idempotency key: one payment
   /// reference activates at most one grant, on exactly one organization.
-  static Future<String?> grantSubscription({
+  /// The console sends what was COLLECTED and the term; it never sends a
+  /// price, a discount, an expiry or limits. The server reads the plan's list
+  /// price itself, computes the pricing evidence, extends the expiry from the
+  /// live record, and returns all three — which is what the console shows
+  /// afterwards, instead of anything it worked out on its own.
+  ///
+  /// [expectedListPrice] is the list price the dialog SHOWED for the chosen
+  /// term (C4) — an assertion, not a price the server uses: when the plan
+  /// was re-priced while the dialog was open, the server refuses with
+  /// `failed-precondition` / `reason: price_changed` and writes nothing. Null
+  /// (an unpriced plan) sends no assertion. A backend that predates the
+  /// field ignores it.
+  static Future<GrantResult> grantSubscription({
     required String adminUid,
     required String planId,
     required int months,
     required String reference,
     required double amount,
+    double? expectedListPrice,
   }) async {
     final res = await FirebaseFunctions.instance
         .httpsCallable('grantSubscription')
         .call(<String, dynamic>{
-      'adminUid': adminUid,
-      'planId': planId,
-      'months': months,
-      'reference': reference.trim(),
-      'amount': amount,
-    });
+          'adminUid': adminUid,
+          'planId': planId,
+          'months': months,
+          'reference': reference.trim(),
+          'amount': amount,
+          if (expectedListPrice != null) 'expectedListPrice': expectedListPrice,
+        });
     final m = Map<String, dynamic>.from(res.data as Map);
-    return m['expiry'] as String?;
+    return GrantResult.fromMap(m);
+  }
+}
+
+/// What the server says it recorded. Every number here is the BACKEND's.
+class GrantResult {
+  const GrantResult({
+    this.expiry,
+    this.planName,
+    this.pricingBasis,
+    this.listPrice,
+    this.listTermMonths,
+    this.collected,
+    this.discount,
+    this.overpayment,
+    this.pricingTerm,
+    this.replayed = false,
+  });
+
+  /// `pricing.term` — `monthly` | `yearly` | `custom` — when stamped.
+  final String? pricingTerm;
+
+  /// The server recognised a repeat of an ALREADY-recorded request (same
+  /// organization, plan, months, amount and reference) and returned the
+  /// existing receipt's figures: nothing new was charged or extended.
+  final bool replayed;
+
+  final String? expiry;
+  final String? planName;
+  final String? pricingBasis;
+  final double? listPrice;
+  final int? listTermMonths;
+  final double? collected;
+  final double? discount;
+  final double? overpayment;
+
+  factory GrantResult.fromMap(Map<String, dynamic> m) {
+    final raw = m['pricing'];
+    final Map p = raw is Map ? raw : const {};
+    double? d(String k) {
+      final v = p[k];
+      return v is num ? v.toDouble() : null;
+    }
+
+    final term = p['term']?.toString();
+    return GrantResult(
+      expiry: m['expiry'] is String ? m['expiry'] as String : null,
+      planName: m['planName'] is String ? m['planName'] as String : null,
+      pricingTerm: (term == null || term.isEmpty) ? null : term,
+      replayed: m['replayed'] == true,
+      pricingBasis: p['basis']?.toString(),
+      listPrice: d('listPrice'),
+      listTermMonths: p['listTermMonths'] is num
+          ? (p['listTermMonths'] as num).toInt()
+          : null,
+      collected: d('collected'),
+      discount: d('discount'),
+      overpayment: d('overpayment'),
+    );
   }
 }
 

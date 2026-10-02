@@ -16,9 +16,16 @@
 //  * Amount field order — dashboard read `amount ?? price ?? paidAmount ??
 //    totalAmount`; the model reads `amount ?? amountPaid ?? price ?? …`.
 //    The model order wins (payments semantics).
-//  * Missing dates — dashboard dropped undated payments from the month
-//    buckets; the model defaults a missing `createdAt` to "now", so such a
-//    payment lands in the current bucket (payments semantics).
+//  * Missing dates — a payment with NO date (`createdAtKnown == false`)
+//    counts toward the all-time total and the per-plan / per-org breakdowns
+//    (the money is real) but toward NO period figure: not today, not this
+//    week, not this or last month, no chart bucket, and it sorts LAST in
+//    `paymentsByDateDesc`. It used to inherit the model's `DateTime.now()`
+//    placeholder and so landed in whichever month the console happened to be
+//    opened in — proven on a live run, where one undated receipt sat at the
+//    top of "Recent payments" as "just now" after every snapshot and inflated
+//    "This month" indefinitely. [RevenueReport.undatedCount] says how many
+//    such receipts exist so a screen can disclose them.
 
 import '../../models/subscription_model.dart';
 
@@ -53,8 +60,17 @@ class RevenueReport {
   /// `monthsOfHistory` entries, current month last.
   final List<MonthRevenueBucket> monthlyBuckets;
 
-  /// All payments sorted newest-first by createdAt (for "recent payments").
+  /// All payments sorted newest-first by createdAt (for "recent payments");
+  /// payments with no recorded date come last, in input order.
   final List<SubscriptionModel> paymentsByDateDesc;
+
+  /// Receipts with no recorded date — in [totalRevenue], in no period figure.
+  final int undatedCount;
+
+  /// Net revenue across [monthlyBuckets] — the figure that belongs beside a
+  /// chart titled "Last N months" (the all-time total does not).
+  double get windowRevenue =>
+      monthlyBuckets.fold<double>(0, (sum, b) => sum + b.value);
 
   const RevenueReport({
     required this.totalRevenue,
@@ -69,6 +85,7 @@ class RevenueReport {
     required this.revenueByAdmin,
     required this.monthlyBuckets,
     required this.paymentsByDateDesc,
+    this.undatedCount = 0,
   });
 }
 
@@ -76,8 +93,18 @@ class RevenueEngine {
   RevenueEngine._();
 
   static const List<String> _monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   /// Computes the full [RevenueReport]. `now` is a parameter (never read from
@@ -90,8 +117,11 @@ class RevenueEngine {
     final prevMonth = DateTime(now.year, now.month - 1);
     final yesterday = now.subtract(const Duration(days: 1));
 
+    // Every sum runs in integer PAISE and is converted to rupees once at the
+    // end: receipts carry fractional rupees (GST-inclusive amounts, manual
+    // ₹999.50), and summing floats drifts (1178.82 - 1178 = 0.8199999…).
     // Month buckets, oldest → newest, current month last.
-    final buckets = <String, double>{};
+    final buckets = <String, int>{};
     final order = <String>[];
     for (int i = monthsOfHistory - 1; i >= 0; i--) {
       final k = monthKey(DateTime(now.year, now.month - i));
@@ -99,17 +129,26 @@ class RevenueEngine {
       order.add(k);
     }
 
-    double total = 0, today = 0, week = 0, month = 0;
-    double yesterdayRev = 0, prevMonthRev = 0;
-    final byPlan = <String, double>{};
-    final byAdmin = <String, double>{};
+    int total = 0, today = 0, week = 0, month = 0;
+    int yesterdayRev = 0, prevMonthRev = 0;
+    final byPlan = <String, int>{};
+    final byAdmin = <String, int>{};
+    int undated = 0;
 
     for (final s in payments) {
-      // Net of founder-issued refunds — revenue is money actually kept.
-      final amount = s.netAmount;
+      // Net of every refund the receipt records — revenue is money kept.
+      final amount = s.netMinor;
       final date = s.createdAt;
 
       total += amount;
+      byPlan[s.planName] = (byPlan[s.planName] ?? 0) + amount;
+      byAdmin[s.adminUid] = (byAdmin[s.adminUid] ?? 0) + amount;
+
+      if (!s.createdAtKnown) {
+        // Real money, unknown date: no period may claim it.
+        undated++;
+        continue;
+      }
 
       if (isSameDay(date, now)) today += amount;
       if (isSameDay(date, yesterday)) yesterdayRev += amount;
@@ -124,29 +163,31 @@ class RevenueEngine {
 
       final k = monthKey(date);
       if (buckets.containsKey(k)) buckets[k] = buckets[k]! + amount;
-
-      byPlan[s.planName] = (byPlan[s.planName] ?? 0) + amount;
-      byAdmin[s.adminUid] = (byAdmin[s.adminUid] ?? 0) + amount;
     }
 
-    final sorted = List<SubscriptionModel>.from(payments)
+    // Dated newest-first; undated after them, in input order (a stable sort
+    // keeps it deterministic).
+    final dated = payments.where((p) => p.createdAtKnown).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final sorted = [...dated, ...payments.where((p) => !p.createdAtKnown)];
 
+    double r(int minor) => minor / 100;
     return RevenueReport(
-      totalRevenue: total,
-      todayRevenue: today,
-      weekRevenue: week,
-      monthRevenue: month,
-      prevMonthRevenue: prevMonthRev,
+      totalRevenue: r(total),
+      todayRevenue: r(today),
+      weekRevenue: r(week),
+      monthRevenue: r(month),
+      prevMonthRevenue: r(prevMonthRev),
       totalTransactions: payments.length,
-      dailyGrowth: growthPercent(today, yesterdayRev),
-      monthlyGrowth: growthPercent(month, prevMonthRev),
-      revenueByPlan: byPlan,
-      revenueByAdmin: byAdmin,
+      dailyGrowth: growthPercent(r(today), r(yesterdayRev)),
+      monthlyGrowth: growthPercent(r(month), r(prevMonthRev)),
+      revenueByPlan: byPlan.map((k, v) => MapEntry(k, r(v))),
+      revenueByAdmin: byAdmin.map((k, v) => MapEntry(k, r(v))),
       monthlyBuckets: order
-          .map((k) => MonthRevenueBucket(k, monthLabel(k), buckets[k] ?? 0))
+          .map((k) => MonthRevenueBucket(k, monthLabel(k), r(buckets[k] ?? 0)))
           .toList(),
       paymentsByDateDesc: sorted,
+      undatedCount: undated,
     );
   }
 

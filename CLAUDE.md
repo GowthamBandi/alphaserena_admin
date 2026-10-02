@@ -799,3 +799,119 @@ Full spec: `/Users/gowthambandi/flutters/trainersHQ/DESIGN_SYSTEM.md`.
      "passes" by denying everything — a false PASS that hides real breakage.
 
 # END — update PART 12 as each item completes; never delete done items, mark them ✅.
+
+## Phase J — SUPERADMIN DASHBOARD AUDIT + HARDENING ✅ (5–6 Sep 2026)
+  Report: `docs/SUPERADMIN_DASHBOARD_CERTIFICATION_2026-09-05.md` (read before touching
+  the dashboard). 14 defects fixed, 38 tests added (543/543 green), emulator-verified.
+  • Org arithmetic is now the pure `core/services/dashboard_metrics.dart` (`OrgStats`):
+    unmodelled statuses → "Other" slice; expiries on CALENDAR days; past-due (expired but
+    `isSubscriptionActive` still true) is red "expired", sorts first — never "today".
+  • Headcounts: per-collection ready/error state (a failed count is a dash + retry, never
+    0), debounced refresh on org activity, 5-min timer, header Refresh + "Headcounts as of".
+  • `SubscriptionModel.createdAtKnown` / `captureVerified`; `RevenueEngine` keeps undated
+    receipts in the total but in NO period/bucket (they used to re-date to "now" every
+    snapshot). Recent payments disclose org / refund / unverified capture / no date.
+  • Every KPI, legend entry and list card navigates (Organizations gets the status filter);
+    ids pinned in `nav_reachability_test`. `MergeSemantics` so the labelled node IS the button.
+  • Dev: `lib/dev/emulator_session_main.dart` (emulator+debug only) signs in a seeded
+    founder; the emulator guard also needs a settled settlement with a Storage proof object.
+  ⚠️ UNCOMMITTED/UNDEPLOYED. Production KPI eyeball + deployed-rules parity still owed.
+
+## Phase K — OPERATIONS CENTER REDESIGN + CERTIFICATION ✅ (6 Sep 2026)
+  Report: `docs/SUPERADMIN_OPERATIONS_CENTER_CERTIFICATION_2026-09-06.md`. 13 defects fixed,
+  44 tests added (592/592 green), emulator + browser + authz verified. PRODUCTION READY,
+  uncommitted/undeployed.
+  • ALL operator-facing words live in `core/services/ops_language.dart` (pure): backend
+    incident types / paymentAlert kinds → title, why-it-matters, urgency, affected, action.
+    Add a backend type there FIRST; unknown types render honestly with details.
+  • Model: 4 urgencies (Critical/High/Needs attention/Informational) × 4 statuses (Needs
+    attention/In progress/Resolved/Information). `payment_failed` is INFORMATIONAL (Dismiss),
+    not an alarm. Resolved rows always sort last; a bounded 30-day/50-row history is streamed
+    with a single-field range (no composite index).
+  • Every write is rules-bounded (status/acknowledgedAt/resolvedAt/resolutionNote only);
+    `busyId` locks all write buttons during a call; failures always say "Nothing was changed".
+  • GOTCHA fixed twice this cycle: reads inside a nested Builder/LayoutBuilder are NOT tracked
+    by Obx — read reactive values in the Obx closure. And `Semantics(label)` over a button needs
+    `MergeSemantics` or the labelled node cannot be activated.
+
+## Phase L — ACCESS REQUESTS REDESIGN + CERTIFICATION ✅ (6 Sep 2026)
+  Report: `docs/SUPERADMIN_ACCESS_REQUESTS_CERTIFICATION_2026-09-06.md`. 11 defects fixed,
+  33 tests added (625/625 green), emulator (real provisionOrganization) + browser + authz
+  verified. PRODUCTION READY, uncommitted/undeployed.
+  • Access Requests = COMMERCIAL INTAKE (gym asks to join); approval = CREATE the organization.
+    No cancel/expiry/revoke exist — never imply them. Reject needs a reason; Reopen exists.
+  • Words/ordering live in `core/services/access_request_language.dart`: open rows OLDEST
+    first, urgency = age only (3d waiting / 7d overdue), actors resolved via PlatformStaff.
+  • "Open organization" must find the created record by `provisionedOrgUid` (details may have
+    been edited at creation) — searching by the request's email found nothing.
+  • Browser-pane limitation: mobile (<768px) emulation drops clicks; verify phone layout by
+    widget test, interact at tablet/desktop.
+
+## Phase M — ORGANIZATIONS COMMAND CENTER + CERTIFICATION ✅ (6 Sep 2026)
+  Report: `docs/SUPERADMIN_ORGANIZATIONS_CERTIFICATION_2026-09-06.md`. List rewritten as a work queue,
+  new workspace (`screens/organization/`), one action surface in `AdminController`, per-org feeds in
+  `OrganizationDetailController`; 97 tests added (722/722 green), emulator (real callables) + browser +
+  authz verified. NOT YET PRODUCTION READY only because uncommitted/undeployed/unobserved live.
+  • ALL organization words/rules live in `core/services/organization_language.dart` (pure, 49 tests):
+    standing, subscription state, record + relationship + quota + incident issues, filters, sorts, action
+    plans (WHAT/WHO/CHANGES/UNDO), receipt states, timeline. Change a rule THERE first.
+  • Six actions only — approve / warn / block / reactivate / record payment / refund — each mapped to an
+    existing super-admin callable. No delete, archive, change-owner or trainer/member management exists in
+    the backend; do not add buttons for them.
+  • Every status call re-reads the record from the SERVER first and refuses if it changed ("changed while
+    you were deciding"); `setAdminStatus` has no compare-and-set — a backend gap, recorded.
+  • `Semantics(label:)` around a button must be wrapped in `MergeSemantics` or the label is a separate,
+    unpressable node (bit this cycle twice). Reads inside `LayoutBuilder` are NOT tracked by Obx — read
+    reactive values in the Obx closure and pass them down.
+  • Browser QA against the emulator: drive Flutter buttons by JS-clicking their `flt-semantics` nodes (the
+    pane's pointer clicks do not reach Flutter); type into fields by Tab-focusing them (or `autofocus`).
+    A persisted session from an earlier bundle breaks the emulator auto sign-in on reload — delete
+    `firebaseLocalStorageDb` and reload.
+
+## Phase N — MEMBERS INTELLIGENCE WORKSPACE + CERTIFICATION ✅ (24 Sep 2026)
+  Report: `docs/SUPERADMIN_MEMBERS_CERTIFICATION_2026-09-24.md` (read before touching Members).
+  List rewritten as a work queue (6 tiles + 5 queue chips, search, org + sort, insights), new
+  read-only workspace (`screens/member/member_workspace.dart`, 5 tabs, 17 bounded feeds via
+  `MemberDetailController`), model rebuilt from the 23 real writers. 65 tests added
+  (805/805 green), 8/8 mutation checks caught, browser-verified on production data.
+  UNCOMMITTED.
+  • ALL member words/rules live in `core/services/member_language.dart` (pure). The document id is
+    RANDOM and `authUid` is the person; one person = one record per organization. `name` is often
+    empty — resolve per field from `sharedProfile.identity` first (trainersHQ rule). Membership state
+    is DERIVED from `membershipExpiry` + `membershipFrozen`; `membershipActive` lags the hourly sweep
+    (2-hour grace before it is called stale). Coach = `trainerId ‖ owner`, and `trainerId == adminId`
+    IS the owner (9 of 20 live records).
+  • Founder READS only: `clients`, `memberPayments`, `settlements`, the activity collections,
+    `audit_logs`, reviews, feedback. `clientProfiles` is owner-only; `client_progress` MUST be
+    queried with `visibility == 'shared'`; `coach_assignment_events` has no founder branch (coach
+    changes come from `audit_logs.set_client_coach` with details `{from,to,source,reason}`).
+    `test/members_read_only_guard_test.dart` pins all of this.
+  • Soft-deleted rows match NO filter (agrees with the Dashboard headcount); the directory streams
+    the whole collection with no `orderBy` (house pattern) — server-side search is the next step
+    past a few thousand members.
+
+## Phase O — ORGANIZATIONS DEEP GAP DISCOVERY + COMMERCIAL INTEGRITY 🟡 PARTIALLY CERTIFIED (25 Sep 2026)
+  Report: `docs/SUPERADMIN_ORGANIZATIONS_CERTIFICATION_2026-09-25.md` (gap register §23, product
+  decisions, production-verification state §24). 9 defects fixed across BOTH repos, 16/16 mutations
+  caught, backend 2200/2200 + emulator 12/12 (`scripts/test_org_concurrency.sh`) + rules 460/460,
+  console 824/824, browser-verified read-only on production. UNCOMMITTED, backend UNDEPLOYED.
+  • PRICING EVIDENCE: every receipt (manual + online) now carries `pricing {basis, listPrice,
+    listTermMonths, collected, discount, overpayment}` stamped by the SERVER from the plan document
+    (`resolvePlanTerm`), never from the client. `plan_term` computes discount/overpayment;
+    `negotiated_term` records the basis and computes NOTHING (no proration rule exists — founder
+    decision). `grantSubscription` returns `{expiry, planName, pricing}`; the console banner repeats
+    the server's figures via `OrganizationLanguage.pricingSentence`, never the dialog preview.
+  • COMPARE-AND-SET: `setAdminStatus` takes `expectedStatus` and refuses in a transaction when the
+    record changed (`approved` ≡ `active`, missing ≡ `pending` — lib/moderation_core.ts). The
+    console (Organizations AND the Dashboard approve/reject path) always sends it.
+  • `expireSubscriptions` re-reads + re-checks inside a transaction (a renewal mid-sweep used to be
+    switched off forever). `refundPayment` refuses over-refund / already-refunded BEFORE the lock
+    and the gateway. Post-commit audit writes in grant/provision are guarded (`audit_write_failed`
+    incident). Receipt model has `startKnown/expiryKnown/termKnown` — never print placeholders.
+  • Grant dialog = plan → term (plan's own / negotiated) → pricing basis (shown) → amount → named
+    difference → reference → review; differing amount, negotiated term or ₹0 requires a ticked
+    acknowledgement. Preview extension base is `max(now, planExpiry)` exactly like the backend.
+  • Source guards: backend `org_integrity_guards.test.mjs`; console
+    `organizations_commercial_integrity_test.dart`. Receipts are now on the History timeline.
+  • OPEN: dashboard-issued Razorpay refunds on subscription payments are invisible (webhooks.ts,
+    O-10); concurrent same-email provisioning fails hard (O-11); five product decisions in §23.

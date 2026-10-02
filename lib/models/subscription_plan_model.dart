@@ -56,10 +56,10 @@ enum PlanStatus { published, hidden, archived }
 
 extension PlanStatusX on PlanStatus {
   String get label => switch (this) {
-        PlanStatus.published => 'Published',
-        PlanStatus.hidden => 'Hidden',
-        PlanStatus.archived => 'Archived',
-      };
+    PlanStatus.published => 'Published',
+    PlanStatus.hidden => 'Hidden',
+    PlanStatus.archived => 'Archived',
+  };
 }
 
 extension BillingPeriodX on BillingPeriod {
@@ -103,8 +103,7 @@ class PlanCapabilities {
   };
 
   static String labelOf(String slug) => catalog
-      .firstWhere((e) => e.key == slug,
-          orElse: () => MapEntry(slug, slug))
+      .firstWhere((e) => e.key == slug, orElse: () => MapEntry(slug, slug))
       .value;
 
   static List<String> get slugs => catalog.map((e) => e.key).toList();
@@ -129,21 +128,21 @@ enum PlanResource {
 extension PlanResourceX on PlanResource {
   /// Business-language label — what a founder reads, never a variable name.
   String get label => switch (this) {
-        PlanResource.teamMembers => 'Team Members',
-        PlanResource.activeClients => 'Active Clients',
-        PlanResource.workoutPlans => 'Workout Programs',
-        PlanResource.dietPlans => 'Diet Programs',
-        PlanResource.exerciseLibrary => 'Exercise Library',
-      };
+    PlanResource.teamMembers => 'Team Members',
+    PlanResource.activeClients => 'Active Clients',
+    PlanResource.workoutPlans => 'Workout Programs',
+    PlanResource.dietPlans => 'Diet Programs',
+    PlanResource.exerciseLibrary => 'Exercise Library',
+  };
 
   /// Nested `limits.<key>` name the backend / catalog reads.
   String get limitKey => switch (this) {
-        PlanResource.teamMembers => 'trainers',
-        PlanResource.activeClients => 'clients',
-        PlanResource.workoutPlans => 'workoutPlans',
-        PlanResource.dietPlans => 'dietPlans',
-        PlanResource.exerciseLibrary => 'workouts',
-      };
+    PlanResource.teamMembers => 'trainers',
+    PlanResource.activeClients => 'clients',
+    PlanResource.workoutPlans => 'workoutPlans',
+    PlanResource.dietPlans => 'dietPlans',
+    PlanResource.exerciseLibrary => 'workouts',
+  };
 
   /// Trainer seats are enforced live server-side (`usage < max` in
   /// createTrainer); the other resources are gated client-side by TrainerHQ
@@ -184,11 +183,28 @@ class SubscriptionPlanModel {
   // ── Pricing (owner sets both; yearly is NEVER derived) ───────────────────
   final double monthlyPrice;
   final double yearlyPrice;
+
   /// The charged term in months. Stored (not derived) so a legacy plan with an
   /// off-catalog term (e.g. 3 or 6 months) round-trips losslessly instead of
   /// being silently collapsed to 1 or 12. New/edited V2 plans use 1 (monthly)
   /// or 12 (yearly); the billing period is derived from this.
   final int durationMonths;
+
+  /// Whether the STORED document itself carries `monthlyPrice` /
+  /// `yearlyPrice`. [monthlyPrice] / [yearlyPrice] are MIGRATED from the
+  /// single legacy `price` when it does not, and the backend's grant term
+  /// rule (CONTRACTS C4) only sells a second term that the document AUTHORS:
+  /// a 12-month grant uses `yearlyPrice` only when the document carries a
+  /// positive one, a 1-month grant `monthlyPrice` likewise; everything else is
+  /// the document's own live term. The grant dialog mirrors that rule, so it
+  /// must know which prices were authored rather than migrated.
+  final bool dualPricesAuthored;
+
+  /// The monthly price the document AUTHORS (0 when migrated or absent).
+  double get authoredMonthlyPrice => dualPricesAuthored ? monthlyPrice : 0;
+
+  /// The yearly price the document AUTHORS (0 when migrated or absent).
+  double get authoredYearlyPrice => dualPricesAuthored ? yearlyPrice : 0;
 
   // ── Limits (model holds decoded values; `unlimited` == -1) ───────────────
   /// resource → limit value (-1 = unlimited).
@@ -229,6 +245,7 @@ class SubscriptionPlanModel {
     required this.monthlyPrice,
     required this.yearlyPrice,
     required this.durationMonths,
+    this.dualPricesAuthored = true,
     required this.limits,
     required this.capabilities,
     required this.points,
@@ -348,7 +365,9 @@ class SubscriptionPlanModel {
     // only, never a prose duration.
     var rawMonths = _toInt(map['durationMonths'] ?? map['months']);
     if (rawMonths <= 0) {
-      final m = RegExp(r'^\s*(\d+)').firstMatch((map['duration'] ?? '').toString());
+      final m = RegExp(
+        r'^\s*(\d+)',
+      ).firstMatch((map['duration'] ?? '').toString());
       if (m != null) rawMonths = int.tryParse(m.group(1)!) ?? 0;
     }
     final months = rawMonths > 0 ? rawMonths : 1;
@@ -397,12 +416,28 @@ class SubscriptionPlanModel {
       monthlyPrice: monthly,
       yearlyPrice: yearly,
       durationMonths: months,
+      dualPricesAuthored: hasDual,
       limits: {
-        PlanResource.teamMembers: readLimit(PlanResource.teamMembers, 'maxTrainers'),
-        PlanResource.activeClients: readLimit(PlanResource.activeClients, 'maxClients'),
-        PlanResource.workoutPlans: readLimit(PlanResource.workoutPlans, 'maxWorkoutPlans'),
-        PlanResource.dietPlans: readLimit(PlanResource.dietPlans, 'maxDietPlans'),
-        PlanResource.exerciseLibrary: readLimit(PlanResource.exerciseLibrary, 'maxWorkouts'),
+        PlanResource.teamMembers: readLimit(
+          PlanResource.teamMembers,
+          'maxTrainers',
+        ),
+        PlanResource.activeClients: readLimit(
+          PlanResource.activeClients,
+          'maxClients',
+        ),
+        PlanResource.workoutPlans: readLimit(
+          PlanResource.workoutPlans,
+          'maxWorkoutPlans',
+        ),
+        PlanResource.dietPlans: readLimit(
+          PlanResource.dietPlans,
+          'maxDietPlans',
+        ),
+        PlanResource.exerciseLibrary: readLimit(
+          PlanResource.exerciseLibrary,
+          'maxWorkouts',
+        ),
       },
       capabilities: caps,
       points: _toList(map['points']),
@@ -429,8 +464,9 @@ class SubscriptionPlanModel {
 
     final chargePrice = price;
     final months = durationMonths;
-    final enabledCaps =
-        PlanCapabilities.slugs.where((s) => capabilities[s] == true).toList();
+    final enabledCaps = PlanCapabilities.slugs
+        .where((s) => capabilities[s] == true)
+        .toList();
 
     return {
       'docId': docId,
@@ -484,7 +520,9 @@ class SubscriptionPlanModel {
       if (!isCustomTerm) 'billingPeriod': billingPeriod.wire,
       if (!isCustomTerm) 'monthlyPrice': monthlyPrice,
       if (!isCustomTerm) 'yearlyPrice': yearlyPrice,
-      'capabilities': {for (final s in PlanCapabilities.slugs) s: capabilities[s] == true},
+      'capabilities': {
+        for (final s in PlanCapabilities.slugs) s: capabilities[s] == true,
+      },
       // The slug array the backend projects onto admins/{uid}.features at
       // activation (planFeatureProjection) for TrainerHQ's hasFeature() gate.
       'capabilityKeys': enabledCaps,
@@ -538,6 +576,7 @@ class SubscriptionPlanModel {
       monthlyPrice: monthlyPrice,
       yearlyPrice: yearlyPrice,
       durationMonths: durationMonths,
+      dualPricesAuthored: dualPricesAuthored,
       limits: Map<PlanResource, int>.from(limits),
       capabilities: Map<String, bool>.from(capabilities),
       points: List<String>.from(points),

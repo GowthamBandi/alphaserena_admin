@@ -49,4 +49,38 @@ void main() {
     expect(RegExp(r'\\\$').hasMatch(r"debugPrint('x: \$e');"), isTrue);
     expect(RegExp(r'\\\$').hasMatch(r"debugPrint('x: $e');"), isFalse);
   });
+
+  // ── WIDENED 2026-09-09 (Superadmin ↔ Trainersarena E2E run) ───────────────
+  //
+  // The original guard only watched `debugPrint`. During this run a NEW chart
+  // label was written as '\\${m.count}' and shipped to the browser rendering the
+  // literal text, on a founder-facing screen — the same escape, one layer up,
+  // where the audience is the operator instead of the log.
+  //
+  // `\\${` is never intentional: a literal dollar is written `\\$` and a literal
+  // brace needs no escape. Anything matching it is an interpolation that will
+  // print its own source.
+  test('no string escapes an interpolated EXPRESSION anywhere in lib/', () {
+    final offenders = <String>[];
+
+    for (final f in Directory('lib')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart'))) {
+      final lines = f.readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i];
+        final trimmed = line.trimLeft();
+        // Comments explain the trap; they must not trip it.
+        if (trimmed.startsWith('//') || trimmed.startsWith('///')) continue;
+        if (RegExp(r'\\\$\{').hasMatch(line)) {
+          offenders.add('${f.path}:${i + 1}  ${line.trim()}');
+        }
+      }
+    }
+
+    expect(offenders, isEmpty,
+        reason: 'these strings render their own source instead of the value:\n'
+            '${offenders.join('\n')}');
+  });
 }

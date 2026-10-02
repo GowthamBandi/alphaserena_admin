@@ -180,7 +180,18 @@ class SupportController extends GetxController {
   // ── Actions (super-admin update; rules-gated) ───────────────────────
   /// Respond to an org's feedback and optionally mark it resolved. Writes only
   /// the response + status fields the founder owns.
-  Future<void> respond(
+  /// Returns TRUE when the reply was committed, so the caller can close its
+  /// dialog only on success and keep the operator's typed text on failure.
+  ///
+  /// ⚠️ THE SUCCESS SNACKBAR IS RAISED BY THE CALLER, AFTER IT POPS.
+  /// A GetX snackbar is a ROUTE. Showing it here — before the dialog's
+  /// `Get.back()` — made `Get.back()` pop the SNACKBAR instead of the dialog:
+  /// the reply committed, the row behind went to Resolved, the organization saw
+  /// the answer, and the operator was left looking at an open form with their
+  /// text still in it and no way to tell whether it had sent. Observed against
+  /// the emulator on 2026-09-09; the identical trap is already documented in
+  /// `global_exercise_controller.save` and `communication_controller.submit`.
+  Future<bool> respond(
     String id, {
     required String response,
     required bool resolve,
@@ -193,21 +204,20 @@ class SupportController extends GetxController {
         'respondedBy': FirebaseAuth.instance.currentUser?.uid,
         'status': resolve ? 'resolved' : 'open',
       });
-      AppSnackbar.show(
-        title: 'Sent',
-        message: resolve ? 'Reply sent · marked resolved' : 'Reply sent',
-        background: Colors.green.shade700,
-      );
+      return true;
     } catch (e) {
       debugPrint('respond error: $e');
       AppSnackbar.show(title: 'Error', message: 'Could not send the reply');
+      return false;
     } finally {
       isProcessing.value = false;
     }
   }
 
   /// Toggle only the status (resolve / reopen) without touching the reply.
-  Future<void> setResolved(String id, bool resolved) async {
+  /// Returns TRUE when the status change was committed. Like [respond], the
+  /// success snackbar belongs to the CALLER, after it pops — see the note there.
+  Future<bool> setResolved(String id, bool resolved) async {
     try {
       isProcessing.value = true;
       await _db.collection(FsCollections.orgFeedback).doc(id).update({
@@ -215,14 +225,11 @@ class SupportController extends GetxController {
         'statusUpdatedAt': FieldValue.serverTimestamp(),
         'statusUpdatedBy': FirebaseAuth.instance.currentUser?.uid,
       });
-      AppSnackbar.show(
-        title: 'Done',
-        message: resolved ? 'Marked resolved' : 'Reopened',
-        background: Colors.green.shade700,
-      );
+      return true;
     } catch (e) {
       debugPrint('setResolved error: $e');
       AppSnackbar.show(title: 'Error', message: 'Could not update status');
+      return false;
     } finally {
       isProcessing.value = false;
     }

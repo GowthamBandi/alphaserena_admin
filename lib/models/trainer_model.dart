@@ -10,6 +10,7 @@ class TrainerModel {
   final String phone;
   final String? profilePicUrl;
   final String? specialization;
+
   /// Free TEXT, e.g. "8 years" — NOT a number.
   ///
   /// The canonical type is set by the two writers that own this document:
@@ -19,6 +20,7 @@ class TrainerModel {
   /// and the next save here silently WIPED the coach's experience.
   final String? experience;
   final String? bio;
+
   /// pending | active | blocked | suspended | **removed**
   ///
   /// `removed` is what `removeTrainer` writes (trainers.ts:507). It is NOT a
@@ -38,6 +40,19 @@ class TrainerModel {
   /// When the soft delete happened. Null unless [isDeleted].
   final DateTime? removedAt;
   final String? assignedBy; // adminDocId or adminUid
+
+  /// The organization's operate-state, denormalized onto the trainer by the
+  /// backend's `propagateOrgActive` (status not pending/blocked AND the
+  /// subscription active). Null when the document has never been stamped.
+  /// Read-only here: the Organizations workspace compares it with the state
+  /// computed from the organization record to detect a stale cascade.
+  final bool? orgActive;
+
+  /// The owner-set permission map (`workoutPlans`, `dietPlans`, `weeklyPlans`,
+  /// `exercises`, `food` → bool) and its schema version, written by
+  /// `createTrainer` / `setTrainerPermissions`. Read-only here.
+  final Map<String, dynamic>? permissions;
+  final int? permissionsVersion;
   final List<String> clientIds;
   final bool isVerified;
   final Map<String, dynamic>? metadata;
@@ -61,6 +76,9 @@ class TrainerModel {
     this.isDeleted = false,
     this.removedAt,
     this.assignedBy,
+    this.orgActive,
+    this.permissions,
+    this.permissionsVersion,
     this.clientIds = const [],
     this.isVerified = false,
     this.metadata,
@@ -97,29 +115,47 @@ class TrainerModel {
   // ----------------------------------------------------------------------
   // 🔥 FROM MAP (normal constructor)
   // ----------------------------------------------------------------------
+  // Tolerant per-field readers. A trainer document is partly written by the
+  // trainer's own app, so a field of the wrong type must read as blank —
+  // never throw and take the whole organization's trainer list down with it.
+  static String _s(dynamic v, [String fallback = '']) =>
+      v is String ? v : ((v is num || v is bool) ? v.toString() : fallback);
+  static String? _sn(dynamic v) =>
+      v is String ? v : ((v is num || v is bool) ? v.toString() : null);
+
   factory TrainerModel.fromMap(Map<String, dynamic> map, String docId) {
+    final rawClients = map['clientIds'];
     return TrainerModel(
       docId: docId,
       uid: map['uid']?.toString() ?? "", // empty until login
-      name: map['name'] ?? '',
-      email: map['email'] ?? '',
-      password: map['password'], // only used BEFORE auth creation
-      phone: map['phone'] ?? '',
-      profilePicUrl: map['profilePicUrl'],
-      specialization: map['specialization'],
+      name: _s(map['name']),
+      email: _s(map['email']),
+      password: _sn(map['password']), // only used BEFORE auth creation
+      phone: _s(map['phone']),
+      profilePicUrl: _sn(map['profilePicUrl']),
+      specialization: _sn(map['specialization']),
       experience: _experienceText(map['experience']),
-      bio: map['bio'],
-      status: map['status'] ?? 'pending',
+      bio: _sn(map['bio']),
+      status: _s(map['status'], 'pending'),
       // Defensive: production writes a real bool, but a legacy/absent field
       // must read as NOT deleted rather than throwing or silently hiding a
       // live coach.
       isDeleted: map['isDeleted'] == true,
       removedAt: map['removedAt'] == null ? null : _parseDate(map['removedAt']),
-      assignedBy: map['assignedBy'],
-      clientIds: List<String>.from(map['clientIds'] ?? []),
-      isVerified: map['isVerified'] ?? false,
-      metadata: map['metadata'] != null
-          ? Map<String, dynamic>.from(map['metadata'])
+      assignedBy: _sn(map['assignedBy']),
+      orgActive: map['orgActive'] is bool ? map['orgActive'] as bool : null,
+      permissions: map['permissions'] is Map
+          ? Map<String, dynamic>.from(map['permissions'] as Map)
+          : null,
+      permissionsVersion: map['permissionsVersion'] is num
+          ? (map['permissionsVersion'] as num).toInt()
+          : null,
+      clientIds: rawClients is List
+          ? rawClients.whereType<Object>().map((e) => e.toString()).toList()
+          : const [],
+      isVerified: map['isVerified'] == true,
+      metadata: map['metadata'] is Map
+          ? Map<String, dynamic>.from(map['metadata'] as Map)
           : null,
       createdAt: _parseDate(map['createdAt']),
       updatedAt: _parseDate(map['updatedAt']),
@@ -200,6 +236,9 @@ class TrainerModel {
       isDeleted: isDeleted ?? this.isDeleted,
       removedAt: removedAt ?? this.removedAt,
       assignedBy: assignedBy ?? this.assignedBy,
+      orgActive: orgActive,
+      permissions: permissions,
+      permissionsVersion: permissionsVersion,
       clientIds: clientIds ?? this.clientIds,
       isVerified: isVerified ?? this.isVerified,
       metadata: metadata ?? this.metadata,

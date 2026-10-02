@@ -18,6 +18,20 @@
       "port": 5601
     },
     {
+      "name": "admin-web-emu-bundle",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5602",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/private/tmp/claude-501/-Users-bandigowtham-flutter-works/5fc63e36-1232-434a-8d81-27aae4e14972/scratchpad/emu/web"
+      ],
+      "port": 5602
+    },
+    {
       "name": "admin-web",
       "runtimeExecutable": "flutter",
       "runtimeArgs": [

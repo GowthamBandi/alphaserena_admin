@@ -103,7 +103,7 @@ void main() {
 
     await _pump(tester);
 
-    expect(find.text('All clear'), findsNothing,
+    expect(find.textContaining('caught up'), findsNothing,
         reason: 'nothing has been read yet — the badge is asserting health it '
             'has not observed');
   });
@@ -116,7 +116,7 @@ void main() {
 
     await _pump(tester);
 
-    expect(find.text('All clear'), findsNothing);
+    expect(find.textContaining('caught up'), findsNothing);
   });
 
   testWidgets('FAILED does not read as "All clear"', (tester) async {
@@ -126,7 +126,7 @@ void main() {
 
     await _pump(tester);
 
-    expect(find.text('All clear'), findsNothing);
+    expect(find.textContaining('caught up'), findsNothing);
   });
 
   testWidgets('CONTROL — loaded, healthy and empty DOES read as "All clear"',
@@ -139,6 +139,6 @@ void main() {
     await _pump(tester);
 
     // Two: the header badge and the body's empty state, which agree.
-    expect(find.text('All clear'), findsWidgets);
+    expect(find.textContaining('caught up'), findsWidgets);
   });
 }

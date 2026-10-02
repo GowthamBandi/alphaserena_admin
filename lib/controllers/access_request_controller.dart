@@ -5,22 +5,28 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
+import '../core/controllers/session_controller.dart';
+import '../core/services/access_request_language.dart';
+import '../core/services/action_outcomes.dart';
 import '../core/services/saas_onboarding_service.dart';
 import '../core/utils/console_errors.dart';
-import '../core/utils/list_ordering.dart';
 import '../models/access_request_model.dart';
+import 'platform_staff_controller.dart';
 
 /// ACCESS REQUESTS — the intake side of TrainerArena's commercial flow.
 ///
 /// TrainerArena stopped selling itself inside its own app. Prospects submit a
-/// request here; the team contacts them, agrees terms and takes payment on a
+/// request; the team contacts them, agrees terms and takes payment on a
 /// Razorpay payment link over WhatsApp; then a super admin records the
-/// payment and provisions the organization from this screen.
+/// payment and creates the organization from this screen.
 ///
 /// Every mutation goes through [SaasOnboardingService] (Cloud Functions).
 /// This controller never writes Firestore: `access_requests` denies client
 /// writes to everyone, super admins included, so the status machine and the
 /// provisioning idempotency key cannot be bypassed from a console session.
+///
+/// Words and ordering live in `core/services/access_request_language.dart`;
+/// this class owns data, counts and the one-at-a-time action lock.
 class AccessRequestController extends GetxController {
   // Resolved LAZILY, matching SubscriptionController: constructing this
   // controller must not require an initialized Firebase app, so a widget test
@@ -32,13 +38,23 @@ class AccessRequestController extends GetxController {
   final RxBool isLoading = true.obs;
   final Rxn<ConsoleError> loadError = Rxn<ConsoleError>();
 
-  /// Guards every mutating action. Provisioning creates an organization, so a
-  /// double-click must not be able to start two. The server is idempotent as
-  /// well — this is the cheap half of that defence, not the whole of it.
+  /// When the last snapshot arrived — the screen's freshness line.
+  final Rxn<DateTime> lastUpdatedAt = Rxn<DateTime>();
+
+  /// Guards every mutating action. Creating an organization mints an account,
+  /// so a double-click must not be able to start two. The server is
+  /// idempotent as well — this is the cheap half of that defence, not the
+  /// whole of it.
   final RxBool isProcessing = false.obs;
+
+  /// The request an action is in flight for (row-level progress).
+  final RxnString busyRequestId = RxnString();
   final RxnString actionError = RxnString();
 
   final RxString search = ''.obs;
+
+  /// 'open' (default) · 'all' · a group key (new/conversation/ready/created/
+  /// rejected) · or a raw status. See [AccessRequestLanguage.matchesFilter].
   final RxString statusFilter = 'open'.obs;
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _sub;
@@ -64,64 +80,125 @@ class AccessRequestController extends GetxController {
     // NO orderBy, for the same reason the Organizations list has none: an
     // `orderBy('createdAt')` silently drops any document missing the field,
     // and a request the founder cannot see is a customer nobody answers.
-    // Sorted in Dart instead.
-    _sub = _db.collection('access_requests').snapshots().listen(
-      (snap) {
-        try {
-          requests.value = newestFirst(
-            snap.docs.map(AccessRequestModel.fromSnapshot),
-            (r) => r.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-          );
-          loadError.value = null;
-        } catch (e) {
-          debugPrint('Access request parse error: $e');
-        } finally {
-          isLoading.value = false;
-        }
-      },
-      onError: (Object e) {
-        isLoading.value = false;
-        loadError.value = describeStreamError(
-          e,
-          subject: 'the Access Requests list',
+    // Sorted in Dart instead (open oldest-first, completed newest-first).
+    _sub = _db
+        .collection('access_requests')
+        .snapshots()
+        .listen(
+          (snap) {
+            try {
+              requests.value = AccessRequestLanguage.sorted(
+                snap.docs.map(AccessRequestModel.fromSnapshot),
+              );
+              loadError.value = null;
+              lastUpdatedAt.value = DateTime.now();
+            } catch (e) {
+              debugPrint('Access request parse error: $e');
+            } finally {
+              isLoading.value = false;
+            }
+          },
+          onError: (Object e) {
+            isLoading.value = false;
+            loadError.value = describeStreamError(
+              e,
+              subject: 'the Access Requests list',
+            );
+            debugPrint('access_requests stream error: $e');
+          },
         );
-        debugPrint('access_requests stream error: $e');
-      },
-    );
   }
 
-  /// The queue that needs a human. Everything that has become an organization
-  /// or was rejected drops out of `open` — the default — so the list is a
-  /// worklist rather than an archive.
-  List<AccessRequestModel> get filtered {
-    final q = search.value.trim().toLowerCase();
-    return requests.where((r) {
-      final matchesSearch = q.isEmpty ||
-          r.organizationName.toLowerCase().contains(q) ||
-          r.ownerName.toLowerCase().contains(q) ||
-          r.email.toLowerCase().contains(q) ||
-          r.phone.contains(q);
-      final s = r.status;
-      final matchesStatus = switch (statusFilter.value) {
-        'all' => true,
-        'open' => s != SaasOnboardingService.organizationCreated &&
-            s != SaasOnboardingService.rejected,
-        _ => s == statusFilter.value,
-      };
-      return matchesSearch && matchesStatus;
-    }).toList();
+  // ── views ───────────────────────────────────────────────────────────────
+
+  /// The current filter + search, in work order.
+  List<AccessRequestModel> get filtered => requests
+      .where(
+        (r) =>
+            AccessRequestLanguage.matches(r, search.value) &&
+            AccessRequestLanguage.matchesFilter(r, statusFilter.value),
+      )
+      .toList();
+
+  bool get hasActiveFilters =>
+      search.value.trim().isNotEmpty || statusFilter.value != 'open';
+
+  void clearFilters() {
+    search.value = '';
+    statusFilter.value = 'open';
   }
 
   int countByStatus(String status) =>
       requests.where((r) => r.status == status).length;
 
-  int get openCount => requests
-      .where((r) =>
-          r.status != SaasOnboardingService.organizationCreated &&
-          r.status != SaasOnboardingService.rejected)
+  int groupCount(RequestGroup g) => requests
+      .where((r) => AccessRequestLanguage.groupOf(r.status) == g)
       .length;
 
-  // ── Mutations ───────────────────────────────────────────────────────
+  /// Rows a human must act on (every open stage, plus rows whose stage this
+  /// console does not recognise — those need eyes, not silence).
+  int get openCount => requests
+      .where((r) => AccessRequestLanguage.matchesFilter(r, 'open'))
+      .length;
+
+  int get unknownStageCount => groupCount(RequestGroup.unknown);
+
+  int overdueCount({DateTime? now}) {
+    final n = now ?? DateTime.now();
+    return requests
+        .where(
+          (r) =>
+              AccessRequestLanguage.waitLevel(r, now: n) == WaitLevel.overdue,
+        )
+        .length;
+  }
+
+  /// Days the longest-waiting open request has waited (0 when none).
+  int oldestWaitingDays({DateTime? now}) {
+    final n = now ?? DateTime.now();
+    var max = 0;
+    for (final r in requests) {
+      if (!AccessRequestLanguage.groupOf(r.status).isOpen) continue;
+      final d = AccessRequestLanguage.daysWaiting(r, now: n);
+      if (d > max) max = d;
+    }
+    return max;
+  }
+
+  int recentCount(RequestGroup g, {DateTime? now}) {
+    final n = now ?? DateTime.now();
+    return requests
+        .where(
+          (r) =>
+              AccessRequestLanguage.groupOf(r.status) == g &&
+              AccessRequestLanguage.completedRecently(r, now: n),
+        )
+        .length;
+  }
+
+  // ── people ──────────────────────────────────────────────────────────────
+
+  /// The signed-in super-admin's uid, for "you" in the timeline.
+  String? get currentUid => Get.isRegistered<SessionController>()
+      ? Get.find<SessionController>().user.value?.uid
+      : null;
+
+  /// A staff member's display (email) for a uid recorded by the backend.
+  String? staffName(String uid) {
+    if (!Get.isRegistered<PlatformStaffController>()) return null;
+    for (final s in Get.find<PlatformStaffController>().staff) {
+      if (s.uid == uid) return s.email.isNotEmpty ? s.email : null;
+    }
+    return null;
+  }
+
+  String actorName(String by) => AccessRequestLanguage.actor(
+    by,
+    staffName: staffName,
+    currentUid: currentUid,
+  );
+
+  // ── Mutations ───────────────────────────────────────────────────────────
 
   Future<bool> setStatus(
     String requestId,
@@ -129,26 +206,37 @@ class AccessRequestController extends GetxController {
     String? note,
     String? paymentReference,
     double? paymentAmount,
-  }) =>
-      _run(() => SaasOnboardingService.setStatus(
-            requestId,
-            status,
-            note: note,
-            paymentReference: paymentReference,
-            paymentAmount: paymentAmount,
-          ));
+  }) => _run(
+    requestId,
+    () => SaasOnboardingService.setStatus(
+      requestId,
+      status,
+      note: note,
+      paymentReference: paymentReference,
+      paymentAmount: paymentAmount,
+    ),
+  );
 
   Future<bool> addNote(String requestId, String text) {
     if (text.trim().isEmpty) return Future.value(false);
-    return _run(() => SaasOnboardingService.addNote(requestId, text));
+    return _run(
+      requestId,
+      () => SaasOnboardingService.addNote(requestId, text),
+    );
   }
 
-  /// Provisions the organization and returns the one-time credentials.
+  /// Creates the organization and returns the one-time credentials.
   ///
   /// Returns null on failure ([actionError] carries the reason). On an
   /// idempotent repeat the result's `tempPassword` is null and
   /// `alreadyProvisioned` is true — the caller must show that honestly rather
   /// than presenting a blank password as a new one.
+  /// True only when the LAST failed creation was a DEFINITE refusal
+  /// (nothing was created). A lost response or a server error part-way may
+  /// have created the organization (C5: an ambiguous commit is never rolled
+  /// back), so the screen must not title it "Organization not created".
+  final RxBool createFailureDefinite = false.obs;
+
   Future<ProvisionResult?> provision({
     required String requestId,
     required String planId,
@@ -160,6 +248,7 @@ class AccessRequestController extends GetxController {
   }) async {
     if (isProcessing.value) return null;
     isProcessing.value = true;
+    busyRequestId.value = requestId;
     actionError.value = null;
     try {
       return await SaasOnboardingService.provisionOrganization(
@@ -172,56 +261,78 @@ class AccessRequestController extends GetxController {
         phone: phone,
       );
     } catch (e) {
-      actionError.value = _error(e);
+      createFailureDefinite.value = ActionOutcomes.changedVerdict(e) == false;
+      actionError.value = friendlyError(e, creating: true);
       debugPrint('provisionOrganization failed: $e');
       return null;
     } finally {
       isProcessing.value = false;
+      busyRequestId.value = null;
     }
   }
 
-  Future<bool> _run(Future<void> Function() action) async {
+  Future<bool> _run(String requestId, Future<void> Function() action) async {
     if (isProcessing.value) return false;
     isProcessing.value = true;
+    busyRequestId.value = requestId;
     actionError.value = null;
     try {
       await action();
       return true;
     } catch (e) {
-      actionError.value = _error(e);
+      actionError.value = friendlyError(e);
       debugPrint('access request action failed: $e');
       return false;
     } finally {
       isProcessing.value = false;
+      busyRequestId.value = null;
     }
   }
 
-  /// Server refusals are translated, never echoed raw. `failed-precondition`
-  /// carries the server's own sentence because it is the one code whose
-  /// message is genuinely the useful information (an illegal transition, a
-  /// reused payment reference, a request no longer provisionable).
-  String _error(Object e) {
+  /// Server refusals are translated, never echoed raw, and every message says
+  /// whether anything changed. `failed-precondition` and `invalid-argument`
+  /// carry the server's own sentence because it is the useful information
+  /// (an illegal stage move, a reused payment reference, a request no longer
+  /// creatable).
+  static String friendlyError(Object e, {bool creating = false}) {
+    const nothing = 'Nothing was changed.';
     if (e is FirebaseFunctionsException) {
       switch (e.code) {
         case 'failed-precondition':
         case 'invalid-argument':
-          return e.message ?? 'The server refused that change.';
+          return '${e.message ?? 'The server refused that change.'} $nothing';
         case 'already-exists':
-          return e.message ??
-              'That email already has an account. Resolve the conflict '
-                  'before provisioning.';
+          return '${e.message ?? 'That email already has an account.'} '
+              '$nothing Resolve the conflict, then try again.';
         case 'not-found':
-          return 'That request no longer exists. Refresh the list.';
+          return 'That request no longer exists. $nothing Refresh the list.';
         case 'permission-denied':
-          return 'Your account is not a platform super-admin.';
+          return 'Your account is not a platform super-admin, so it cannot '
+              'change requests. $nothing';
         case 'unauthenticated':
-          return 'Your session expired. Sign in again and retry.';
+          return 'Your session expired. $nothing Sign in again and retry.';
         case 'unavailable':
         case 'deadline-exceeded':
-          return 'Could not reach the onboarding service. Check your '
-              'connection and try again.';
+          return creating
+              ? 'Could not reach the server, so it is unclear whether the '
+                    'organization was created. Refresh this list before trying '
+                    'again — if it was created, the request will show '
+                    '"Organization created" and the sign-in details can be '
+                    'reset with "Forgot password".'
+              : 'Could not reach the server. $nothing Check your connection '
+                    'and try again.';
+        case 'internal':
+          // A server error part-way through creation may have created the
+          // organization (the backend never deletes an owner account on an
+          // ambiguous commit), so "nothing was changed" is not knowable here.
+          return creating
+              ? 'The server hit an error part-way, so it is unclear whether '
+                    'the organization was created. Refresh this list before '
+                    'trying again — a second attempt on the same request is '
+                    'recognised and never creates a duplicate.'
+              : 'The server hit an error. $nothing Try again.';
       }
     }
-    return 'Could not complete that action. Please try again.';
+    return 'Could not complete that action. $nothing Try again.';
   }
 }

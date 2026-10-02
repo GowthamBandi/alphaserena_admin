@@ -114,6 +114,13 @@ class AdminModel {
 
   // System
   final DateTime createdAt;
+
+  /// False when the document carries no readable `createdAt`. [createdAt] is
+  /// then a parse-time placeholder, never a fact: the Organizations screen
+  /// prints "Creation date not recorded" instead of a date and sorts such
+  /// records last. Legacy documents seeded before timestamps were stamped are
+  /// the known case.
+  final bool createdAtKnown;
   final DateTime updatedAt;
   final DateTime? lastLogin;
 
@@ -122,7 +129,37 @@ class AdminModel {
   final List<String> clientIds;
 
   // Misc
+  /// OWNER-EDITABLE (the rules do not denylist `metadata`). Never present a
+  /// key under it — `createdFrom`, `features` — as a platform fact.
   final Map<String, dynamic>? metadata;
+
+  /// The plan-projected capability whitelist, read from the TOP-LEVEL
+  /// `features` key that `grantSubscription` / the online activation write and
+  /// the coach app's `hasFeature()` gate reads (server-only under the rules).
+  ///
+  /// TRI-STATE, exactly as the backend reads it (lib/payments.ts):
+  ///   • null — the field is ABSENT: a legacy, ungated organization;
+  ///   • []   — present and empty: every gated feature is denied;
+  ///   • [..] — the slugs the organization may use.
+  final List<String>? features;
+
+  /// Fields that are PRESENT on the document with a type this console cannot
+  /// read as intended. The record still parses — each such field reads as a
+  /// blank / default — so the organization stays listed, counted and
+  /// moderatable. An owner can write most profile keys with any type (the
+  /// rules denylist only the commercial and moderation keys), so one
+  /// type-drifted write used to throw inside the whole-list parse and blank
+  /// the founder's Organizations list: the org that caused it vanished from
+  /// moderation along with everyone else.
+  final List<String> malformedFields;
+
+  /// True when the document could not be parsed at all and this row is a
+  /// placeholder carrying only what could be read (its id, and its status
+  /// when that was readable). Never skipped: an unreadable organization is
+  /// exactly the one the founder must still be able to find and block.
+  final bool unreadable;
+
+  bool get hasMalformedFields => unreadable || malformedFields.isNotEmpty;
 
   const AdminModel({
     required this.docId,
@@ -153,96 +190,139 @@ class AdminModel {
     this.statusUpdatedBy,
     this.statusUpdatedAt,
     required this.createdAt,
+    this.createdAtKnown = true,
     required this.updatedAt,
     this.lastLogin,
     this.trainerIds = const [],
     this.clientIds = const [],
     this.metadata,
+    this.features,
+    this.malformedFields = const [],
+    this.unreadable = false,
   });
 
-  // -------------------------------------------------------------
-  // DATE PARSER (STRICT + SAFE)
-  // -------------------------------------------------------------
-  static DateTime? _parseDate(dynamic v) {
-    if (v == null) return null;
-    if (v is Timestamp) return v.toDate();
-    if (v is DateTime) return v;
-    if (v is String) return DateTime.tryParse(v);
-    return null;
+  /// The status exactly as the console's fresh server read normalises it
+  /// (`AdminController._freshStatusFromServer`): missing → `pending`,
+  /// `approved` → `active`, anything else as its text. Both sides MUST agree,
+  /// or a record with an odd status could never pass the stale-decision guard
+  /// and could never be moderated.
+  static String normalizeStatus(dynamic raw) {
+    if (raw == null) return 'pending';
+    final s = raw.toString();
+    return s == 'approved' ? 'active' : s;
   }
 
   // -------------------------------------------------------------
-  // FROM MAP
+  // FROM MAP — tolerant PER FIELD (never throws on a wrong type)
   // -------------------------------------------------------------
   factory AdminModel.fromMap(Map<String, dynamic> map, String docId) {
-    return AdminModel(
+    final r = _FieldReader(map);
+    final created = r.date('createdAt');
+    final rawStatus = map['status'];
+    if (rawStatus != null && rawStatus is! String) r.bad.add('status');
+    final uid = r.str('uid');
+    final limits = r.mapOrNull('subscriptionLimits');
+    final model = AdminModel(
       docId: docId,
-      uid: map['uid'] ?? docId,
-      password: map['password'],
-      name: map['name'] ?? '',
-      email: map['email'] ?? '',
-      phone: map['phone'] ?? '',
-      organizationName: map['organizationName'] ?? '',
-      role: map['role'] ?? 'admin',
+      uid: uid.isEmpty ? docId : uid,
+      password: r.strOrNull('password'),
+      name: r.str('name'),
+      email: r.str('email'),
+      phone: r.str('phone'),
+      organizationName: r.str('organizationName'),
+      role: r.str('role', 'admin'),
       // trainersHQ's own super-admin screen can set status 'approved' (approved,
       // not-yet-subscribed). This console models active|pending|warning|blocked;
       // normalize 'approved'→'active' so such orgs stay visible + counted +
       // actionable (subscription state is shown separately via isSubscriptionActive).
-      status: (map['status'] == 'approved') ? 'active' : (map['status'] ?? 'pending'),
-      profilePicUrl: map['profilePicUrl'],
-      isVerified: map['isVerified'] ?? false,
+      status: normalizeStatus(rawStatus),
+      profilePicUrl: r.strOrNull('profilePicUrl'),
+      isVerified: r.boolean('isVerified', false),
 
       // Address
-      address: map['address'],
-      state: map['state'],
-      area: map['area'],
-      pincode: map['pincode'],
+      address: r.strOrNull('address'),
+      state: r.strOrNull('state'),
+      area: r.strOrNull('area'),
+      pincode: r.strOrNull('pincode'),
 
       // Business
-      gstNumber: map['gstNumber'],
-      panNumber: map['panNumber'],
+      gstNumber: r.strOrNull('gstNumber'),
+      panNumber: r.strOrNull('panNumber'),
 
       // Languages
-      spokenLanguages: List<String>.from(map['spokenLanguages'] ?? const []),
+      spokenLanguages: r.strList('spokenLanguages'),
 
       // 🔒 PAYMENT METADATA ONLY
-      subscription: map['subscription'] != null
-          ? Map<String, dynamic>.from(map['subscription'])
-          : null,
+      subscription: r.mapOrNull('subscription'),
 
       // 🔥 LIMITS — FIXED SOURCE
-      subscriptionLimits: AdminSubscriptionLimits.fromMap(
-        map['subscriptionLimits'],
-      ),
+      subscriptionLimits: AdminSubscriptionLimits.fromMap(limits),
 
-      planName: map['planName'],
-      planExpiry: _parseDate(map['planExpiry']),
-      isSubscriptionActive: map['isSubscriptionActive'] == true,
+      planName: r.strOrNull('planName'),
+      planExpiry: r.date('planExpiry'),
+      isSubscriptionActive: r.boolean('isSubscriptionActive', false),
 
-      approvedBy: map['approvedBy'],
-      statusReason: map['statusReason'],
-      statusUpdatedBy: map['statusUpdatedBy'],
-      statusUpdatedAt: _parseDate(map['statusUpdatedAt']),
+      approvedBy: r.strOrNull('approvedBy'),
+      statusReason: r.strOrNull('statusReason'),
+      statusUpdatedBy: r.strOrNull('statusUpdatedBy'),
+      statusUpdatedAt: r.date('statusUpdatedAt'),
 
-      createdAt: _parseDate(map['createdAt']) ?? DateTime.now(),
-      updatedAt: _parseDate(map['updatedAt']) ?? DateTime.now(),
-      lastLogin: _parseDate(map['lastLogin']),
+      createdAt: created ?? DateTime.now(),
+      createdAtKnown: created != null,
+      updatedAt: r.date('updatedAt') ?? DateTime.now(),
+      lastLogin: r.date('lastLogin'),
 
-      trainerIds: List<String>.from(map['trainerIds'] ?? const []),
-      clientIds: List<String>.from(map['clientIds'] ?? const []),
+      trainerIds: r.strList('trainerIds'),
+      clientIds: r.strList('clientIds'),
 
-      metadata: map['metadata'] != null
-          ? Map<String, dynamic>.from(map['metadata'])
-          : null,
+      metadata: r.mapOrNull('metadata'),
+      features: r.strListOrNull('features'),
+      malformedFields: List.unmodifiable(r.bad),
     );
+    return model;
   }
 
-  factory AdminModel.fromSnapshot(DocumentSnapshot snap) {
-    return AdminModel.fromMap(
-      snap.data() as Map<String, dynamic>? ?? {},
-      snap.id,
-    );
+  /// A row for a document that could not be parsed at all. Carries its id
+  /// and — when readable — its status, so the organization is still listed
+  /// and the founder can still moderate it.
+  factory AdminModel.unreadableRecord(String docId, {dynamic rawStatus}) =>
+      AdminModel(
+        docId: docId,
+        uid: docId,
+        name: '',
+        email: '',
+        phone: '',
+        organizationName: '',
+        role: 'admin',
+        status: normalizeStatus(rawStatus),
+        subscriptionLimits: AdminSubscriptionLimits.empty(),
+        createdAt: DateTime.now(),
+        createdAtKnown: false,
+        updatedAt: DateTime.now(),
+        malformedFields: const ['(the whole record)'],
+        unreadable: true,
+      );
+
+  /// Parses ONE document and never throws: a document that defeats even the
+  /// per-field reader becomes an [unreadableRecord] placeholder. Every list
+  /// that shows organizations builds its rows through this, one document at
+  /// a time, so no single record can take the others down with it.
+  static AdminModel parseDoc(String docId, Object? data) {
+    if (data is Map) {
+      try {
+        return AdminModel.fromMap(
+          data.map((k, v) => MapEntry(k.toString(), v)),
+          docId,
+        );
+      } catch (e) {
+        return AdminModel.unreadableRecord(docId, rawStatus: data['status']);
+      }
+    }
+    return AdminModel.unreadableRecord(docId);
   }
+
+  factory AdminModel.fromSnapshot(DocumentSnapshot snap) =>
+      parseDoc(snap.id, snap.data());
 
   // -------------------------------------------------------------
   // TO MAP
@@ -350,11 +430,101 @@ class AdminModel {
       isSubscriptionActive: isSubscriptionActive ?? this.isSubscriptionActive,
       approvedBy: approvedBy ?? this.approvedBy,
       createdAt: createdAt ?? this.createdAt,
+      createdAtKnown: createdAtKnown,
       updatedAt: updatedAt ?? this.updatedAt,
       lastLogin: lastLogin ?? this.lastLogin,
       trainerIds: trainerIds ?? this.trainerIds,
       clientIds: clientIds ?? this.clientIds,
       metadata: metadata ?? this.metadata,
+      features: features,
+      malformedFields: malformedFields,
+      unreadable: unreadable,
     );
+  }
+}
+
+/// Reads one Firestore map field by field, recording every field that is
+/// present with the wrong type instead of throwing. A readable scalar in a
+/// text field (a number typed as the phone) is kept as its text AND recorded.
+class _FieldReader {
+  _FieldReader(this.map);
+  final Map<String, dynamic> map;
+  final List<String> bad = [];
+
+  void _flag(String k) {
+    if (!bad.contains(k)) bad.add(k);
+  }
+
+  String str(String k, [String fallback = '']) {
+    final v = map[k];
+    if (v == null) return fallback;
+    if (v is String) return v;
+    _flag(k);
+    return (v is num || v is bool) ? v.toString() : fallback;
+  }
+
+  String? strOrNull(String k) {
+    final v = map[k];
+    if (v == null) return null;
+    if (v is String) return v;
+    _flag(k);
+    return (v is num || v is bool) ? v.toString() : null;
+  }
+
+  List<String> strList(String k) => strListOrNull(k) ?? const [];
+
+  List<String>? strListOrNull(String k) {
+    final v = map[k];
+    if (v == null) return null;
+    if (v is! List) {
+      _flag(k);
+      return null;
+    }
+    final out = <String>[];
+    for (final e in v) {
+      if (e is String) {
+        out.add(e);
+      } else if (e is num || e is bool) {
+        _flag(k);
+        out.add(e.toString());
+      } else {
+        _flag(k);
+      }
+    }
+    return out;
+  }
+
+  Map<String, dynamic>? mapOrNull(String k) {
+    final v = map[k];
+    if (v == null) return null;
+    if (v is Map) return v.map((key, val) => MapEntry(key.toString(), val));
+    _flag(k);
+    return null;
+  }
+
+  bool boolean(String k, bool fallback) {
+    final v = map[k];
+    if (v == null) return fallback;
+    if (v is bool) return v;
+    _flag(k);
+    return fallback;
+  }
+
+  /// A present value that is not a readable date is MALFORMED, not absent:
+  /// the backend's `toEpochMs` cannot read it either (a plain
+  /// `{seconds, nanoseconds}` map, an unparseable string), so for
+  /// `planExpiry` it is the "never expires" state and must be named.
+  DateTime? date(String k) {
+    final v = map[k];
+    if (v == null) return null;
+    if (v is Timestamp) return v.toDate();
+    if (v is DateTime) return v;
+    if (v is String) {
+      final d = DateTime.tryParse(v);
+      if (d == null) _flag(k);
+      return d;
+    }
+    _flag(k);
+    return null;
   }
 }

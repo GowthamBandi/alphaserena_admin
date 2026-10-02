@@ -48,6 +48,14 @@ const _notInTheSidebar = <String, String>{
   'auth/admin_login_screen.dart': 'pre-session; RootGate shows it',
   'auth/forgot_password_dialog.dart': 'a dialog raised from the login screen',
   'legal/legal_screen.dart': 'opened from the profile menu, not the sidebar',
+  'organization/organization_workspace.dart':
+      'the detail view Organizations swaps in when a row is opened',
+  'organization/organization_action_dialogs.dart':
+      'dialogs raised from the Organizations list and workspace',
+  'trainer/trainer_workspace.dart':
+      'the detail view Trainers swaps in when a row is opened',
+  'member/member_workspace.dart':
+      'the detail view Members swaps in when a row is opened',
 };
 
 /// Cross-screen jump targets: the constant, and the destination label it is
@@ -55,10 +63,44 @@ const _notInTheSidebar = <String, String>{
 /// coincidence.
 const _jumpTargets = <String, String>{
   '_navAdmins': 'Organizations',
-  '_navPayments': 'Revenue',
   '_navSupport': 'Support',
   '_navCommunication': 'Announcements',
+  // Operations Center language layer (core/services/ops_language.dart OpsNav):
+  // every "Open …" action on an operations row lands here.
+  'organizations': 'Organizations',
+  'trainers': 'Trainers',
+  'revenue': 'Revenue',
+  'support': 'Support',
+  'announcements': 'Announcements',
+  'settlements': 'Settlements',
+  'crashReports': 'Crash Reports',
+  // Dashboard: the attention strip and every KPI / list card is a door.
   'opsNavIndex': 'Operations Center',
+  '_navOrganizations': 'Organizations',
+  '_navTrainers': 'Trainers',
+  '_navMembers': 'Members',
+  '_navRevenue': 'Revenue',
+};
+
+/// Constants declared in the dashboard screen (the rest live in
+/// operations_controller.dart).
+const _dashboardConstants = {
+  'opsNavIndex',
+  '_navOrganizations',
+  '_navTrainers',
+  '_navMembers',
+  '_navRevenue',
+};
+
+/// `OpsNav` members in the operations language layer (`static const int`).
+const _opsNavConstants = {
+  'organizations',
+  'trainers',
+  'revenue',
+  'support',
+  'announcements',
+  'settlements',
+  'crashReports',
 };
 
 String _read(String path) => File(path).readAsStringSync();
@@ -68,6 +110,7 @@ void main() {
   final destinations = _read('lib/core/navigation/console_destinations.dart');
   final operations = _read('lib/controllers/operations_controller.dart');
   final dashboard = _read('lib/screens/dash_board_responsive_screen.dart');
+  final opsLanguage = _read('lib/core/services/ops_language.dart');
 
   /// The `case N:` labels present in the page factory.
   Set<int> routedIndices() => RegExp(r'^\s*case (\d+):', multiLine: true)
@@ -166,9 +209,16 @@ void main() {
       final constant = entry.key;
       final expectedLabel = entry.value;
 
-      final source = constant == 'opsNavIndex' ? dashboard : operations;
-      final match =
-          RegExp('$constant\\s*=\\s*(\\d+)').firstMatch(source);
+      final isOpsNav = _opsNavConstants.contains(constant);
+      final source = isOpsNav
+          ? opsLanguage
+          : _dashboardConstants.contains(constant)
+              ? dashboard
+              : operations;
+      final match = RegExp(isOpsNav
+              ? 'static const int $constant\\s*=\\s*(\\d+)'
+              : '$constant\\s*=\\s*(\\d+)')
+          .firstMatch(source);
       expect(match, isNotNull,
           reason: '$constant no longer exists — if the jump was removed, '
               'remove it from _jumpTargets too');

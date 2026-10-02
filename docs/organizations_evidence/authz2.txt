@@ -1,0 +1,13 @@
+revert claims: 200
+== CHANGING-VALUE writes by the owner (a no-change PATCH is not a test) ==
+  owner PATCH admins/ZEN status→blocked                         403  founder: 403
+  owner PATCH admins/ZEN status→pending                         403  founder: 403
+  owner PATCH admins/ZEN isSubscriptionActive→false             403  founder: 403
+  owner PATCH admins/ZEN role→super_admin                       403  founder: 403
+  owner PATCH admins/ZEN subscriptionLimits                     403  founder: 403
+  owner PATCH admins/ZEN trainerIds                             403  founder: 403
+  owner PATCH admins/ZEN planName                               403  founder: 403
+  owner PATCH admins/ZEN approvedBy                             403  founder: 403
+  owner PATCH admins/ZEN organizationName (allowed profile field) 200  founder: 403
+  owner PATCH admins/ZEN address (allowed)                      200  founder: 403
+ZEN now: status= {'stringValue': 'active'} isSubscriptionActive= {'booleanValue': True} role= {'stringValue': 'admin'} address= {'stringValue': '1 Lotus Lane'}

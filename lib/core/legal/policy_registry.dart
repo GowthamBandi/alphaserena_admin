@@ -184,6 +184,11 @@ class PolicyRegistry {
         'Your role changes what applies',
         'If you are a MEMBER, you receive coaching from an organization, and '
             'your coach can see the information you record.\n\n'
+            'If you send an ENQUIRY to an organization you have not joined, '
+            'that organization receives your name, email address, phone number '
+            'and your answers to its enquiry questions, so it can contact you. '
+            'It does not receive your health, body, fitness or other coaching '
+            'information.\n\n'
             'If you are a COACH, TRAINER or ORGANIZATION OWNER, you run a '
             'coaching organization and can see data for the members assigned '
             'to you.\n\n'
@@ -214,8 +219,14 @@ class PolicyRegistry {
             // method the login screen offers", which reads `login_screen.dart`
             // rather than trusting this comment.
             'The member app signs you in with an email address and password, '
-            'or with Google Sign-In. Trainersarena and Alphasarena Admin use an '
-            'email address and password.\n\n'
+            'with Google Sign-In, or with Sign in with Apple. Trainersarena and '
+            'Alphasarena Admin use an email address and password.\n\n'
+            'If you use Sign in with Apple you may choose to hide your email '
+            'address. Apple then gives us a forwarding address instead of your '
+            'own, and that forwarding address is the only one we ever hold. '
+            'Apple sends us your name once, on the first sign-in only, and we '
+            'use it solely to fill in your profile if it is otherwise '
+            'empty.\n\n'
             'We do not store your password — it is handled entirely by Firebase '
             'Authentication and never reaches our application code.\n\n'
             'When you enable notifications we store that device\'s messaging '
@@ -284,9 +295,14 @@ class PolicyRegistry {
         'Photographs and documents',
         '• Progress and transformation photographs you upload\n'
             '• Profile photographs\n'
-            '• Exercise demonstration videos and organization media uploaded '
-            'by coaches\n'
-            '• Documents you upload when answering onboarding questions',
+            '• Photographs of meals you attach to your food log\n'
+            '• Exercise demonstration videos and organization media uploaded by '
+            'coaches\n'
+            '• Documents you upload when answering onboarding questions\n\n'
+            'Photographs are stored as your device provides them. If your '
+            'camera embeds the place a photograph was taken, that location '
+            'stays inside the photograph. The apps never ask for, read or use '
+            'your device\'s location.',
       ),
       PolicySection(
         'Messages',
@@ -325,6 +341,11 @@ class PolicyRegistry {
             'cannot read member feedback submitted about them.\n\n'
             'Your ORGANIZATION OWNER sees all data belonging to their own '
             'organization, and cannot see another organization\'s data.\n\n'
+            'An organization you send an enquiry to sees that enquiry — your '
+            'name, email address, phone number and answers — together with its '
+            'own notes about it. Its owner sees every enquiry sent to it; a '
+            'trainer sees only the enquiries the owner assigns to them. '
+            'Alphasarena operators cannot read enquiries.\n\n'
             'Access is enforced by server-side security rules, not only by '
             'what an app chooses to display.',
       ),
@@ -356,10 +377,14 @@ class PolicyRegistry {
             'turned off; to detect and investigate misuse; and to provide '
             'support.\n\n'
             'We do not sell your personal information.\n\n'
-            'There is no advertising, analytics or tracking software in any '
-            'Alphasarena application. We do not build advertising profiles and '
-            'we do not share your information with advertising networks. That '
-            'is a property of how the apps are built, not only a promise.',
+            'There is no advertising or tracking software in any Alphasarena '
+            'application, and we run no third-party analytics service of our '
+            'own. We do not build advertising profiles and we do not share your '
+            'information with advertising networks. Two things we want to name '
+            'plainly: the apps send their own crash and error reports to our '
+            'server (described under "Your device"), and Razorpay\'s payment '
+            'screen records information about the checkout it runs, under '
+            'Razorpay\'s own privacy policy.',
       ),
       PolicySection(
         'Notifications',
@@ -385,19 +410,32 @@ class PolicyRegistry {
         'We hold the notification token described above, and information '
             'needed to operate and secure the service, including records of '
             'function calls and errors generated by our hosting provider.\n\n'
+            'If an app crashes or hits an unexpected error, it sends a report '
+            'to our server: the error and where in the code it happened, the '
+            'screen you were on, a short list of your recent in-app steps, the '
+            'app version and platform, and your account identifier. These '
+            'reports can be read only by the platform operator and are used '
+            'solely to find and fix defects.\n\n'
             'Permissions: the member app uses your camera and your photo '
             'library (progress and profile photos), and notifications. '
-            'Trainersarena additionally '
-            'uses the camera and photo library for exercise media. Alphasarena '
-            'Admin is a web application and asks for no device permissions.',
+            'Trainersarena additionally uses the camera and photo library for '
+            'exercise media. Alphasarena Admin is a web application and asks '
+            'for no device permissions.',
       ),
       PolicySection(
         'Information stored on your device',
         'A small amount, so the apps work properly: your light/dark theme '
             'preference, unsent workout drafts, a local record of recent '
-            'actions, a cached postcode lookup, and setup markers.\n\n'
-            'The applications contain no cookies, no tracking technologies, no '
-            'advertising identifiers and no analytics software.\n\n'
+            'actions, a cached postcode lookup, setup markers, the answers of '
+            'an enquiry you are writing or whose delivery is not yet '
+            'confirmed, and a record of your last enquiry to each '
+            'organization, so nothing is lost or sent twice if the app closes. '
+            'They are kept on the device, also after you sign out, until they '
+            'are no longer needed or you delete your account.\n\n'
+            'The applications contain no cookies, no tracking technologies and '
+            'no advertising identifiers. The only usage information they '
+            'produce is the crash and error reporting described under "Your '
+            'device".\n\n'
             'Alphasarena Admin runs in a browser, where the Google sign-in '
             'library keeps its own session so you are not signed out on every '
             'page load.',
@@ -412,6 +450,9 @@ class PolicyRegistry {
             'and refunds\n'
             '• GOOGLE SIGN-IN — account information you choose to share, if you '
             'sign in that way\n'
+            '• SIGN IN WITH APPLE — your Apple account identifier, and either '
+            'your email address or an Apple forwarding address, if you sign in '
+            'that way\n'
             '• USDA FOODDATA CENTRAL — the TEXT OF FOOD SEARCHES you run. When '
             'you search for a food that is not already in the app\'s own data, '
             'the words you type are sent to this public service to retrieve '
@@ -431,6 +472,10 @@ class PolicyRegistry {
             'your measurement log — your profile photograph, your '
             'transformation photographs, photographs attached to your weekly '
             'reports, and your sign-in account.\n\n'
+            'Your enquiries are also cleared: your name, contact details and '
+            'answers are removed from every enquiry you sent. The organization '
+            'keeps only the fact that an enquiry was received and any notes its '
+            'own staff wrote.\n\n'
             'WHAT IS NOT DELETED: your coaching organization\'s own record of '
             'you — the client record it created, your payment history, the '
             'training and coaching logs it reviewed, the documents you '
@@ -545,7 +590,8 @@ class PolicyRegistry {
         'Eligibility and accounts',
         'You must be at least 18 years old, and able to enter a binding '
             'agreement, to use Alphasarena.\n\n'
-            'Members sign in with Google Sign-In. Coaches and organization '
+            'Members sign in with an email address and password, with Google '
+            'Sign-In, or with Sign in with Apple. Coaches and organization '
             'owners use an email address and password.\n\n'
             'If you are a trainer, your account is created for you by your '
             'organization, which sets your initial credentials and decides what '

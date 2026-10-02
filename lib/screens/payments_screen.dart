@@ -2,14 +2,30 @@
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../controllers/admin_controller.dart';
 import '../../controllers/payments_controller.dart';
 import '../../models/subscription_model.dart';
+import '../../core/services/action_outcomes.dart';
+import '../../core/services/organization_language.dart';
 import '../../core/widgets/console/console_chrome.dart';
 
 class PaymentsScreen extends StatelessWidget {
   PaymentsScreen({super.key});
 
   final ctrl = Get.put(PaymentsController());
+
+  /// Names the organization behind a payment record. Falls back to an honest
+  /// "Unknown organization (…)" rather than a bare uid — see
+  /// `OrganizationLanguage.labelForUid`. Reads the organization list that the
+  /// console already streams; if it is not registered (a widget test that only
+  /// builds this screen) the uid is left as-is rather than crashing.
+  String _orgLabel(String uid) {
+    if (!Get.isRegistered<AdminController>()) return uid;
+    return OrganizationLanguage.labelForUid(
+      uid,
+      Get.find<AdminController>().admins,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +124,7 @@ class PaymentsScreen extends StatelessWidget {
             const SizedBox(height: 8),
 
             Text(
-              "₹${value.toInt()}",
+              OrganizationLanguage.rupees(value),
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
 
@@ -196,9 +212,9 @@ class PaymentsScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
                   children: [
-                    Expanded(child: Text(e.key)),
+                    Expanded(child: Text(_orgLabel(e.key))),
                     Text(
-                      "₹${e.value.toInt()}",
+                      OrganizationLanguage.rupees(e.value),
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ],
@@ -237,7 +253,7 @@ class PaymentsScreen extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(child: Text(e.key)),
-                    Text("₹${e.value.toInt()}"),
+                    Text(OrganizationLanguage.rupees(e.value)),
                   ],
                 ),
               ),
@@ -317,9 +333,22 @@ class PaymentsScreen extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Text(s.planName)),
-          Expanded(child: Text("₹${s.amountPaid}")),
-          Expanded(child: Text(s.adminUid)),
-          Expanded(child: Text(s.paymentId)),
+          Expanded(
+            child: Text(
+              s.refundMinor > 0
+                  ? '${OrganizationLanguage.rupees(s.amountPaid)} · '
+                        '${OrganizationLanguage.rupees(s.refundAmount)} refunded'
+                  : OrganizationLanguage.rupees(s.amountPaid),
+            ),
+          ),
+          Expanded(child: Text(_orgLabel(s.adminUid))),
+          Expanded(
+            child: Text(
+              (s.reference ?? '').isNotEmpty && s.razorpayPaymentId.isEmpty
+                  ? 'ref ${s.reference}'
+                  : s.paymentId,
+            ),
+          ),
           Expanded(child: Text(_fmt(s.createdAt))),
           SizedBox(width: 48, child: _refundAction(s)),
         ],
@@ -357,184 +386,33 @@ class PaymentsScreen extends StatelessWidget {
   }
 
   void _openRefundDialog(SubscriptionModel s) {
-    final maxRefundable = s.netAmount.floor();
-    bool isPartial = false;
-    bool revokeAccess = false;
-    String? amountError;
-    final amountCtrl = TextEditingController();
-    final reasonCtrl = TextEditingController();
-
+    // The dialog owns its text controllers and disposes them in
+    // State.dispose (REF-13): disposing them in `Get.dialog(...).then` —
+    // when the route's future completes, while the exit animation is still
+    // rebuilding the fields — is this codebase's recorded dialog crash.
     Get.dialog(
-      StatefulBuilder(
-        builder: (context, setState) {
-          bool isValid() {
-            if (reasonCtrl.text.trim().isEmpty) return false;
-            if (!isPartial) return true;
-            final v = int.tryParse(amountCtrl.text.trim());
-            return v != null && v >= 1 && v <= maxRefundable;
-          }
-
-          return Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Container(
-              width: 440,
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Refund Payment",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Context — org / plan / amounts
-                  _refundInfoRow("Organization", s.adminUid),
-                  _refundInfoRow("Plan", s.planName),
-                  _refundInfoRow("Paid", "₹${s.amountPaid}"),
-                  if (s.refundAmount > 0)
-                    _refundInfoRow(
-                      "Already refunded",
-                      "₹${s.refundAmount.toInt()}",
-                    ),
-                  _refundInfoRow("Refundable", "₹$maxRefundable"),
-                  const SizedBox(height: 16),
-
-                  // Full vs partial
-                  Row(
-                    children: [
-                      ChoiceChip(
-                        label: const Text("Full refund"),
-                        selected: !isPartial,
-                        onSelected: (_) => setState(() {
-                          isPartial = false;
-                          amountError = null;
-                        }),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text("Partial"),
-                        selected: isPartial,
-                        onSelected: (_) => setState(() => isPartial = true),
-                      ),
-                    ],
-                  ),
-
-                  if (isPartial) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: amountCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: "Amount (₹, 1–$maxRefundable)",
-                        errorText: amountError,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      onChanged: (v) => setState(() {
-                        final n = int.tryParse(v.trim());
-                        amountError =
-                            (v.trim().isEmpty ||
-                                (n != null && n >= 1 && n <= maxRefundable))
-                            ? null
-                            : "Enter a whole amount between 1 and $maxRefundable";
-                      }),
-                    ),
-                  ],
-
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: reasonCtrl,
-                    decoration: InputDecoration(
-                      labelText: "Reason (required)",
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    value: revokeAccess,
-                    onChanged: (v) => setState(() => revokeAccess = v ?? false),
-                    title: const Text(
-                      "Also deactivate subscription",
-                      style: TextStyle(fontSize: 14),
-                    ),
-                    subtitle: const Text(
-                      "Ends the org's access now. The backend REJECTS the "
-                      "whole refund if this is not the org's current "
-                      "subscription payment — uncheck to refund an older "
-                      "payment.",
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Get.back(),
-                        child: const Text("Cancel"),
-                      ),
-                      const SizedBox(width: 8),
-                      Obx(() {
-                        final busy = ctrl.isRefunding.value;
-                        return ElevatedButton(
-                          onPressed: busy || !isValid()
-                              ? null
-                              : () async {
-                                  final ok = await ctrl.refundPayment(
-                                    s,
-                                    amount: isPartial
-                                        ? int.parse(amountCtrl.text.trim())
-                                        : null,
-                                    reason: reasonCtrl.text.trim(),
-                                    revokeAccess: revokeAccess,
-                                  );
-                                  if (ok) Get.back();
-                                },
-                          child: busy
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text("Refund"),
-                        );
-                      }),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+      PaymentsRefundDialog(
+        ctrl: ctrl,
+        receiptId: s.id,
+        initial: s,
+        orgLabel: _orgLabel(s.adminUid),
       ),
       barrierDismissible: false,
-    ).then((_) {
-      // Dialog closed (save or cancel) — release the field controllers.
-      amountCtrl.dispose();
-      reasonCtrl.dispose();
-    });
+    );
   }
 
-  Widget _refundInfoRow(String label, String value) {
+  static Widget refundInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          SizedBox(width: 130, child: Text(label, style: _label())),
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: const TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+          ),
           Expanded(
             child: Text(
               value,
@@ -563,4 +441,245 @@ class PaymentsScreen extends StatelessWidget {
   TextStyle _label() => const TextStyle(color: Colors.grey, fontSize: 13);
 
   String _fmt(DateTime d) => "${d.day}/${d.month}/${d.year}";
+}
+
+/// The Revenue screen's refund dialog. A StatefulWidget that OWNS its field
+/// controllers (disposed in [State.dispose]) and its refund INTENT: one id per
+/// opening, reused on every retry from this dialog (C2), so a repeated press
+/// of the same decision is answered with the stored outcome instead of
+/// reaching the gateway twice.
+///
+/// The refundable maximum is computed ONCE, from the LIVE receipt, when the
+/// dialog opens. The dialog closes on every answer except a definite "no":
+/// after a refund, an in-flight refund or an UNKNOWN outcome the same form
+/// must not be one press away from a second refund — the next opening
+/// recomputes the maximum from the receipt as it then stands.
+class PaymentsRefundDialog extends StatefulWidget {
+  const PaymentsRefundDialog({
+    super.key,
+    required this.ctrl,
+    required this.receiptId,
+    required this.initial,
+    required this.orgLabel,
+  });
+
+  final PaymentsController ctrl;
+  final String receiptId;
+  final SubscriptionModel initial;
+  final String orgLabel;
+
+  @override
+  State<PaymentsRefundDialog> createState() => _PaymentsRefundDialogState();
+}
+
+class _PaymentsRefundDialogState extends State<PaymentsRefundDialog> {
+  final _amount = TextEditingController();
+  final _reason = TextEditingController();
+  late final String _intentId = ActionOutcomes.newRefundIntentId();
+  late final SubscriptionModel _receipt =
+      widget.ctrl.receiptById(widget.receiptId) ?? widget.initial;
+  bool _partial = false;
+  bool _revoke = false;
+
+  /// A definite "not refunded" answer, shown in the dialog (which stays open
+  /// so the founder can correct and retry with the same intent).
+  RefundOutcome? _refusal;
+
+  static final RegExp _wholeRupees = RegExp(r'^\d{1,9}$');
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _reason.dispose();
+    super.dispose();
+  }
+
+  int get _max => OrganizationLanguage.maxPartialRefundRupees(_receipt);
+
+  int? get _partialValue {
+    final t = _amount.text.trim();
+    return _wholeRupees.hasMatch(t) ? int.parse(t) : null;
+  }
+
+  bool get _valid {
+    if (_reason.text.trim().isEmpty) return false;
+    if (!_partial) return _receipt.netMinor > 0;
+    final v = _partialValue;
+    return v != null && v >= 1 && v <= _max;
+  }
+
+  Future<void> _submit() async {
+    final outcome = await widget.ctrl.refundPayment(
+      _receipt,
+      amount: _partial ? _partialValue : null,
+      reason: _reason.text.trim(),
+      revokeAccess: _revoke,
+      intentId: _intentId,
+    );
+    if (!mounted) return;
+    if (!outcome.closesDialog) {
+      setState(() => _refusal = outcome);
+      return;
+    }
+    // Pop FIRST, then report: a GetX snackbar is a route and would swallow
+    // the pop meant for this dialog.
+    Get.back();
+    Get.snackbar(
+      outcome.title,
+      outcome.message,
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 10),
+      backgroundColor: outcome.verdict == RefundVerdict.refunded
+          ? null
+          : Colors.orange.shade100,
+      colorText: outcome.verdict == RefundVerdict.refunded
+          ? null
+          : Colors.orange.shade900,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _receipt;
+    const row = PaymentsScreen.refundInfoRow;
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Container(
+        width: 460,
+        padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Refund Payment",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 16),
+              row("Organization", widget.orgLabel),
+              row("Plan", s.planName),
+              row("Paid", OrganizationLanguage.rupees(s.amountPaid)),
+              if (s.refundMinor > 0)
+                row(
+                  "Already refunded",
+                  OrganizationLanguage.rupees(s.refundAmount),
+                ),
+              row("Refundable", OrganizationLanguage.rupees(s.netAmount)),
+              for (final x in s.refunds)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    'Refund: ${OrganizationLanguage.refundLine(x)}',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: Text(
+                      "Full refund · ${OrganizationLanguage.rupees(s.netAmount)}",
+                    ),
+                    selected: !_partial,
+                    onSelected: (_) => setState(() => _partial = false),
+                  ),
+                  ChoiceChip(
+                    label: const Text("Partial"),
+                    selected: _partial,
+                    onSelected: (_) => setState(() => _partial = true),
+                  ),
+                ],
+              ),
+              if (_partial) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _amount,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: "Amount (whole ₹, 1–$_max)",
+                    errorText:
+                        _amount.text.trim().isEmpty ||
+                            (_partialValue != null &&
+                                _partialValue! >= 1 &&
+                                _partialValue! <= _max)
+                        ? null
+                        : "Enter a whole amount between 1 and $_max",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: _reason,
+                decoration: InputDecoration(
+                  labelText: "Reason (required)",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: _revoke,
+                onChanged: (v) => setState(() => _revoke = v ?? false),
+                title: const Text(
+                  "Also deactivate subscription",
+                  style: TextStyle(fontSize: 14),
+                ),
+                subtitle: const Text(
+                  "Ends the org's access now. The backend REJECTS the "
+                  "whole refund if this is not the org's current "
+                  "subscription payment — uncheck to refund an older "
+                  "payment.",
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+              if (_refusal != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${_refusal!.title}. ${_refusal!.message}',
+                  style: TextStyle(fontSize: 12.5, color: Colors.red.shade700),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Obx(() {
+                final busy = widget.ctrl.isRefunding.value;
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      // Not while the call is in flight: closing now would
+                      // lose the answer to a money-moving request.
+                      onPressed: busy ? null : () => Get.back(),
+                      child: const Text("Cancel"),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: busy || !_valid ? null : _submit,
+                      child: busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text("Refund"),
+                    ),
+                  ],
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

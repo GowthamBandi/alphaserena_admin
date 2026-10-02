@@ -1,371 +1,377 @@
 // lib/controllers/client_controller.dart
+//
+// MEMBERS — platform-wide oversight of every organization's members. READ-ONLY.
+//
+// Member records are created by payments and managed by their organization's
+// owner and coaches in the Trainersarena app, and by the member in their own
+// app. The rules deny the founder every write to `clients`. The previous
+// version of this controller carried create/update/delete methods and two
+// invented flags (`isActive`, `isVerified`) that the rules refused and no
+// writer set — dead code and a revert magnet; they are gone.
+//
+// This controller streams, joins, filters, sorts and pages; it never writes.
+// The organization join comes from [AdminController] and the coach join from
+// [TrainerController], both of which already stream their whole collections
+// for their own screens — no per-emission `whereIn` lookups.
 
 import 'dart:async';
-import 'package:alphaserena_admin_portel/models/clints_model.dart';
-import 'package:alphaserena_admin_portel/core/utils/list_ordering.dart';
-import 'package:alphaserena_admin_portel/core/utils/console_errors.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../core/constants/firestore_collections.dart';
+import '../core/services/member_language.dart';
+import '../core/services/organization_language.dart';
+import '../core/utils/console_errors.dart';
+import '../models/admin_model.dart';
+import '../models/clints_model.dart';
+import '../models/trainer_model.dart';
+import 'admin_controller.dart';
+import 'member_detail_controller.dart';
+import 'trainer_controller.dart';
+
 class ClientController extends GetxController {
-  // Resolved LAZILY. Constructing the controller must not require an
-  // initialized Firebase app, so a widget test can subclass it, skip onInit,
-  // and drive the screen's states without a network. Matches
-  // SubscriptionController, which already did this for the plan editor.
   late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // ============================================================
-  // 🔥 CORE STATE
-  // ============================================================
+  /// Every member record on the platform, as streamed (soft-deleted rows are
+  /// kept here and excluded by every filter, so the list agrees with the
+  /// Dashboard headcount).
   final RxList<ClientModel> clients = <ClientModel>[].obs;
-  /// Set when the stream itself failed. Rendered as a classified error state —
-  /// an empty list must never be shown for a load that did not happen.
   final Rxn<ConsoleError> loadError = Rxn<ConsoleError>();
-
   final RxBool isLoading = false.obs;
-  final RxBool isProcessing = false.obs;
+  final Rxn<DateTime> lastReceived = Rxn<DateTime>();
+
+  // ── list state ────────────────────────────────────────────────────────────
+  final RxString search = ''.obs;
+
+  /// Filter key — see [MemberLanguage.filterKeys].
+  final RxString selectedFilter = 'all'.obs;
+
+  /// Organization uid, or `all`.
+  final RxString orgFilter = 'all'.obs;
+  final RxString sortKey = 'attention'.obs;
+
+  static const int pageSize = 50;
+  final RxInt visibleCount = pageSize.obs;
+
+  final RxString selectedMemberId = ''.obs;
 
   StreamSubscription? _sub;
+  final List<Worker> _workers = [];
 
-  // ============================================================
-  // 🔍 FILTERS
-  // ============================================================
-  final RxString search = ''.obs;
-  final RxString statusFilter = 'all'.obs;
+  /// Clock seam for tests.
+  DateTime Function() clock = DateTime.now;
 
-  // ============================================================
-  // 📊 KPI ENGINE (REAL SAAS METRICS)
-  // ============================================================
-  int get total => clients.length;
-
-  // Honest KPIs from REAL `clients` fields (the legacy isActive/isVerified are
-  // never set on the real doc, so they were showing wrong numbers).
-  int get active => clients.where((c) => c.membershipActive).length;
-
-  int get inactive => clients.where((c) => !c.membershipActive).length;
-
-  int get withTrainer =>
-      clients.where((c) => (c.trainerId ?? '').isNotEmpty).length;
-
-  int get unassigned =>
-      clients.where((c) => (c.trainerId ?? '').isEmpty).length;
-
-  // ============================================================
-  // 🧠 FORM STATE
-  // ============================================================
-  final nameCtrl = TextEditingController();
-  final emailCtrl = TextEditingController();
-  final phoneCtrl = TextEditingController();
-
-  final goalCtrl = TextEditingController();
-  final ageCtrl = TextEditingController();
-  final heightCtrl = TextEditingController();
-  final weightCtrl = TextEditingController();
-
-  final RxString selectedTrainerId = ''.obs;
-  final RxString selectedAdminId = ''.obs;
-
-  final RxBool isActive = true.obs;
-  final RxBool isVerified = false.obs;
-
-  // ============================================================
-  // 🏢 CACHE (TRAINERS + ADMINS)
-  // ============================================================
-  final RxMap<String, String> trainerCache = <String, String>{}.obs;
-  final RxMap<String, String> adminCache = <String, String>{}.obs;
-
-  // ============================================================
-  // 🚀 INIT
-  // ============================================================
   @override
   void onInit() {
     super.onInit();
     _listenClients();
+    wireFilters();
   }
+
+  /// Filters reset paging and, when set from another screen, close an open
+  /// workspace. Public so an offline test controller keeps the behaviour.
+  void wireFilters() {
+    for (final rx in [selectedFilter, search, orgFilter]) {
+      _workers.add(
+        ever(rx, (_) {
+          visibleCount.value = pageSize;
+          if (!_openingFromElsewhere) closeMember();
+        }),
+      );
+    }
+    _workers.add(ever(sortKey, (_) => visibleCount.value = pageSize));
+  }
+
+  bool _openingFromElsewhere = false;
 
   @override
   void onClose() {
     _sub?.cancel();
-    nameCtrl.dispose();
-    emailCtrl.dispose();
-    phoneCtrl.dispose();
-    goalCtrl.dispose();
-    ageCtrl.dispose();
-    heightCtrl.dispose();
-    weightCtrl.dispose();
+    for (final w in _workers) {
+      w.dispose();
+    }
+    _disposeDetail();
     super.onClose();
   }
 
-  // ============================================================
-  // 🔥 REAL-TIME LISTENER
-  // ============================================================
   void retryLoad() => _listenClients();
+
+  /// The header's Refresh: re-subscribes the stream (a snapshot listener is
+  /// already live, so this mostly re-asserts after a network hiccup) and
+  /// asks the joined lists to refresh too.
+  void refreshAll() {
+    _listenClients();
+    _admins?.retryLoad();
+    _trainers?.retryLoad();
+  }
 
   void _listenClients() {
     isLoading.value = true;
     loadError.value = null;
     _sub?.cancel();
-
     // NO orderBy: `orderBy("createdAt")` would exclude every member document
     // that has no `createdAt`, while the Dashboard's headcount — a count()
-    // aggregate — includes them. Sorted in Dart instead; see
-    // core/utils/list_ordering.dart.
-    _sub = _db
-        .collection("clients")
-        .snapshots()
-        .listen(
-          (snap) {
-            clients.value = newestFirst(
-              snap.docs.map((e) => ClientModel.fromMap(e.data())),
-              (c) => c.createdAt,
-            );
-
-            _syncCaches();
-
-            loadError.value = null;
-            isLoading.value = false;
-          },
-          onError: (Object e) {
-            isLoading.value = false;
-            loadError.value =
-                describeStreamError(e, subject: 'the Members list');
-            debugPrint('clients stream error: $e');
-          },
-        );
-  }
-
-  // ============================================================
-  // 🧠 CACHE SYNC
-  // ============================================================
-  void _syncCaches() {
-    final trainerIds = clients
-        .map((c) => c.trainerId)
-        .where((e) => e != null && e.isNotEmpty)
-        .cast<String>()
-        .toSet()
-        .toList();
-
-    final adminIds = clients
-        .map((c) => c.adminId)
-        .where((e) => e != null && e.isNotEmpty)
-        .cast<String>()
-        .toSet()
-        .toList();
-
-    if (trainerIds.isNotEmpty) fetchTrainers(trainerIds);
-    if (adminIds.isNotEmpty) fetchAdmins(adminIds);
-  }
-
-  Future<void> fetchTrainers(List<String> ids) async {
-    final missing = ids.where((e) => !trainerCache.containsKey(e)).toList();
-    if (missing.isEmpty) return;
-
-    const chunk = 10;
-
-    for (int i = 0; i < missing.length; i += chunk) {
-      final batch = missing.skip(i).take(chunk).toList();
-
-      final snap = await _db
-          .collection("trainers")
-          .where("uid", whereIn: batch)
-          .get();
-
-      for (var d in snap.docs) {
-        final data = d.data();
-        trainerCache[data['uid']] = data['name'] ?? "Trainer";
-      }
-    }
-  }
-
-  Future<void> fetchAdmins(List<String> ids) async {
-    final missing = ids.where((e) => !adminCache.containsKey(e)).toList();
-    if (missing.isEmpty) return;
-
-    const chunk = 10;
-
-    for (int i = 0; i < missing.length; i += chunk) {
-      final batch = missing.skip(i).take(chunk).toList();
-
-      final snap = await _db
-          .collection("admins")
-          .where("uid", whereIn: batch)
-          .get();
-
-      for (var d in snap.docs) {
-        final data = d.data();
-        adminCache[data['uid']] = data['name'] ?? "Admin";
-      }
-    }
-  }
-
-  String getTrainerName(String? id) {
-    if (id == null || id.isEmpty) return "Unassigned";
-    return trainerCache[id] ?? "Loading...";
-  }
-
-  String getAdminName(String? id) {
-    if (id == null || id.isEmpty) return "System";
-    return adminCache[id] ?? "Loading...";
-  }
-
-  // ============================================================
-  // 🔍 FILTERED LIST
-  // ============================================================
-  List<ClientModel> get filteredClients {
-    final q = search.value.toLowerCase();
-
-    return clients.where((c) {
-      final matchSearch =
-          q.isEmpty ||
-          c.name.toLowerCase().contains(q) ||
-          c.email.toLowerCase().contains(q);
-
-      final matchStatus =
-          statusFilter.value == "all" ||
-          (statusFilter.value == "active" && c.membershipActive) ||
-          (statusFilter.value == "inactive" && !c.membershipActive);
-
-      return matchSearch && matchStatus;
-    }).toList();
-  }
-
-  // ============================================================
-  // 🧾 FORM
-  // ============================================================
-  void loadToForm(ClientModel c) {
-    nameCtrl.text = c.name;
-    emailCtrl.text = c.email;
-    phoneCtrl.text = c.phone;
-
-    goalCtrl.text = c.goal ?? "";
-    ageCtrl.text = c.age?.toString() ?? "";
-    heightCtrl.text = c.height?.toString() ?? "";
-    weightCtrl.text = c.weight?.toString() ?? "";
-
-    selectedTrainerId.value = c.trainerId ?? "";
-    selectedAdminId.value = c.adminId ?? "";
-
-    isActive.value = c.isActive;
-    isVerified.value = c.isVerified;
-  }
-
-  void clearForm() {
-    nameCtrl.clear();
-    emailCtrl.clear();
-    phoneCtrl.clear();
-    goalCtrl.clear();
-    ageCtrl.clear();
-    heightCtrl.clear();
-    weightCtrl.clear();
-
-    selectedTrainerId.value = "";
-    selectedAdminId.value = "";
-
-    isActive.value = true;
-    isVerified.value = false;
-  }
-
-  // ============================================================
-  // ➕ CREATE
-  // ============================================================
-  Future<void> createClient() async {
+    // aggregate — includes them. Sorted in Dart instead.
     try {
-      isProcessing.value = true;
+      _sub = _db
+          .collection(FsCollections.clients)
+          .snapshots()
+          .listen(
+            (snap) {
+              clients.value = snap.docs.map(ClientModel.fromSnapshot).toList();
+              loadError.value = null;
+              lastReceived.value = DateTime.now();
+              isLoading.value = false;
+            },
+            onError: (Object e) {
+              isLoading.value = false;
+              loadError.value = describeStreamError(
+                e,
+                subject: 'the Members list',
+              );
+              debugPrint('clients stream error: $e');
+            },
+          );
+    } catch (e) {
+      isLoading.value = false;
+      loadError.value = describeStreamError(e, subject: 'the Members list');
+    }
+  }
 
-      final doc = _db.collection("clients").doc();
-      final now = DateTime.now();
+  // ── organization join ─────────────────────────────────────────────────────
 
-      final client = ClientModel(
-        docId: doc.id,
-        uid: doc.id,
-        name: nameCtrl.text.trim(),
-        email: emailCtrl.text.trim(),
-        phone: phoneCtrl.text.trim(),
-        goal: goalCtrl.text.trim(),
-        age: int.tryParse(ageCtrl.text),
-        height: double.tryParse(heightCtrl.text),
-        weight: double.tryParse(weightCtrl.text),
-        trainerId: selectedTrainerId.value.isEmpty
-            ? null
-            : selectedTrainerId.value,
-        adminId: selectedAdminId.value.isEmpty ? null : selectedAdminId.value,
-        isActive: isActive.value,
-        isVerified: isVerified.value,
-        createdAt: now,
-        updatedAt: now,
+  AdminController? get _admins =>
+      Get.isRegistered<AdminController>() ? Get.find<AdminController>() : null;
+
+  /// True once the organization list has been read at least once. Until
+  /// then "organization missing" cannot be claimed about any member.
+  bool get orgsKnown {
+    final a = _admins;
+    if (a == null) return false;
+    return a.lastReceived.value != null || a.admins.isNotEmpty;
+  }
+
+  ConsoleError? get orgsError => _admins?.loadError.value;
+
+  AdminModel? orgOf(ClientModel m) {
+    final id = (m.adminId ?? '').trim();
+    if (id.isEmpty) return null;
+    return _admins?.byId(id);
+  }
+
+  String orgName(ClientModel m) {
+    final id = (m.adminId ?? '').trim();
+    if (id.isEmpty) return 'No organization';
+    final o = orgOf(m);
+    if (o != null) return OrganizationLanguage.displayName(o);
+    if (!orgsKnown) return 'Loading organization…';
+    if (orgsError != null) return 'Organization unavailable';
+    return 'Organization missing';
+  }
+
+  List<MapEntry<String, String>> get orgOptions {
+    final seen = <String, String>{};
+    for (final m in clients) {
+      if (m.isDeleted) continue;
+      final id = (m.adminId ?? '').trim();
+      if (id.isEmpty || seen.containsKey(id)) continue;
+      seen[id] = orgName(m);
+    }
+    final list = seen.entries.toList()
+      ..sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
+    return list;
+  }
+
+  // ── coach join ────────────────────────────────────────────────────────────
+
+  TrainerController? get _trainers => Get.isRegistered<TrainerController>()
+      ? Get.find<TrainerController>()
+      : null;
+
+  bool get trainersKnown {
+    final t = _trainers;
+    if (t == null) return false;
+    return t.lastReceived.value != null || t.trainers.isNotEmpty;
+  }
+
+  ConsoleError? get trainersError => _trainers?.loadError.value;
+
+  /// The delegated trainer's record, or null when owner-coached / unknown.
+  TrainerModel? trainerOf(ClientModel m) {
+    final id = (m.trainerId ?? '').trim();
+    if (id.isEmpty) return null;
+    return _trainers?.byId(id);
+  }
+
+  /// A coach uid → display name, for the list and the history.
+  String coachName(String uid) {
+    final id = uid.trim();
+    if (id.isEmpty) return 'the owner';
+    final t = _trainers?.byId(id);
+    if (t != null) return t.name.trim().isEmpty ? 'a trainer' : t.name.trim();
+    final o = _admins?.byId(id);
+    if (o != null) return 'the owner (${OrganizationLanguage.ownerName(o)})';
+    return 'coach $id';
+  }
+
+  String coachLine(ClientModel m) => MemberLanguage.coachLine(
+    m,
+    trainer: trainerOf(m),
+    trainersKnown: trainersKnown,
+    trainersFailed: trainersError != null && trainerOf(m) == null,
+  );
+
+  // ── issues (record + joins) ───────────────────────────────────────────────
+
+  List<MemberIssue> issuesOf(ClientModel m, {DateTime? now}) =>
+      MemberLanguage.sortIssues(
+        MemberLanguage.issues(
+          m,
+          org: orgOf(m),
+          orgKnown: orgsKnown,
+          trainer: trainerOf(m),
+          trainersKnown: trainersKnown,
+          now: now ?? clock(),
+        ),
       );
 
-      await doc.set(client.toMap());
+  // ── counts (the contract the tile/filter tests pin) ───────────────────────
 
-      clearForm();
-      Get.back();
-      Get.snackbar("Success", "Client created");
-    } catch (e) {
-      Get.snackbar("Error", "$e");
-    } finally {
-      isProcessing.value = false;
-    }
+  /// Live records: everything not soft-deleted. Matches the Dashboard.
+  Iterable<ClientModel> get live => clients.where((c) => !c.isDeleted);
+
+  int get totalCount => live.length;
+
+  int countFor(String key) {
+    final now = clock();
+    return clients
+        .where(
+          (m) => MemberLanguage.matchesFilter(
+            m,
+            key,
+            org: orgOf(m),
+            orgKnown: orgsKnown,
+            trainer: trainerOf(m),
+            trainersKnown: trainersKnown,
+            now: now,
+          ),
+        )
+        .length;
   }
 
-  // ============================================================
-  // ✏️ UPDATE
-  // ============================================================
-  Future<void> updateClient(String id) async {
+  // Legacy names still read by older tests/screens.
+  int get total => totalCount;
+  int get active => countFor('current');
+  int get withTrainer =>
+      live.where((c) => !MemberLanguage.isOwnerCoached(c)).length;
+  int get unassigned => countFor('ownerCoached');
+
+  // ── filtering / sorting ───────────────────────────────────────────────────
+
+  List<ClientModel> get filteredClients {
+    final now = clock();
+    final q = search.value;
+    final f = selectedFilter.value;
+    final org = orgFilter.value;
+    final rows = clients.where(
+      (m) =>
+          MemberLanguage.matchesFilter(
+            m,
+            f,
+            org: orgOf(m),
+            orgKnown: orgsKnown,
+            trainer: trainerOf(m),
+            trainersKnown: trainersKnown,
+            now: now,
+          ) &&
+          (org == 'all' || (m.adminId ?? '') == org) &&
+          MemberLanguage.matches(
+            m,
+            q,
+            orgName: orgOf(m) == null
+                ? ''
+                : OrganizationLanguage.displayName(orgOf(m)!),
+            coachName: MemberLanguage.isOwnerCoached(m)
+                ? ''
+                : (trainerOf(m)?.name ?? ''),
+          ),
+    );
+    return MemberLanguage.sorted(
+      rows,
+      sortKey.value,
+      orgNameOf: (m) =>
+          orgOf(m) == null ? '' : OrganizationLanguage.displayName(orgOf(m)!),
+      issuesOf: (m) => issuesOf(m, now: now),
+    );
+  }
+
+  List<ClientModel> get page =>
+      filteredClients.take(visibleCount.value).toList();
+  void showMore() => visibleCount.value += pageSize;
+
+  bool get hasActiveFilters =>
+      search.value.trim().isNotEmpty ||
+      selectedFilter.value != 'all' ||
+      orgFilter.value != 'all';
+
+  void clearFilters() {
+    search.value = '';
+    selectedFilter.value = 'all';
+    orgFilter.value = 'all';
+  }
+
+  ClientModel? byId(String id) {
+    for (final m in clients) {
+      if (m.docId == id) return m;
+    }
+    return null;
+  }
+
+  // ── opening a member ──────────────────────────────────────────────────────
+
+  @visibleForTesting
+  MemberDetailController Function(String id) detailFactory =
+      MemberDetailController.new;
+
+  MemberDetailController? get detail {
+    final id = selectedMemberId.value;
+    if (id.isEmpty || !Get.isRegistered<MemberDetailController>(tag: id)) {
+      return null;
+    }
+    return Get.find<MemberDetailController>(tag: id);
+  }
+
+  void openMember(String id) {
+    final mid = id.trim();
+    if (mid.isEmpty || selectedMemberId.value == mid) return;
+    _disposeDetail();
+    Get.put<MemberDetailController>(detailFactory(mid), tag: mid);
+    selectedMemberId.value = mid;
+  }
+
+  /// From another section: clear the filters so the list behind is complete.
+  void openMemberFromElsewhere(String id) {
+    _openingFromElsewhere = true;
     try {
-      isProcessing.value = true;
-
-      await _db.collection("clients").doc(id).update({
-        "name": nameCtrl.text.trim(),
-        "phone": phoneCtrl.text.trim(),
-        "goal": goalCtrl.text.trim(),
-        "age": int.tryParse(ageCtrl.text),
-        "height": double.tryParse(heightCtrl.text),
-        "weight": double.tryParse(weightCtrl.text),
-        "trainerId": selectedTrainerId.value.isEmpty
-            ? FieldValue.delete()
-            : selectedTrainerId.value,
-        "adminId": selectedAdminId.value.isEmpty
-            ? FieldValue.delete()
-            : selectedAdminId.value,
-        "isActive": isActive.value,
-        "isVerified": isVerified.value,
-        "updatedAt": DateTime.now().toIso8601String(),
-      });
-
-      Get.back();
-      Get.snackbar("Updated", "Client updated");
-    } catch (e) {
-      Get.snackbar("Error", "$e");
+      clearFilters();
     } finally {
-      isProcessing.value = false;
+      _openingFromElsewhere = false;
     }
+    openMember(id);
   }
 
-  // ============================================================
-  // ❌ DELETE
-  // ============================================================
-  Future<void> deleteClient(String id) async {
-    try {
-      await _db.collection("clients").doc(id).delete();
-      Get.snackbar("Deleted", "Client removed");
-    } catch (e) {
-      Get.snackbar("Error", "$e");
+  void closeMember() {
+    if (selectedMemberId.value.isEmpty) return;
+    _disposeDetail();
+    selectedMemberId.value = '';
+  }
+
+  void _disposeDetail() {
+    final id = selectedMemberId.value;
+    if (id.isNotEmpty && Get.isRegistered<MemberDetailController>(tag: id)) {
+      Get.delete<MemberDetailController>(tag: id, force: true);
     }
-  }
-
-  // ============================================================
-  // ⚡ QUICK ACTIONS
-  // ============================================================
-  Future<void> toggleActive(ClientModel c) async {
-    await _db.collection("clients").doc(c.docId).update({
-      "isActive": !c.isActive,
-    });
-  }
-
-  Future<void> toggleVerified(ClientModel c) async {
-    await _db.collection("clients").doc(c.docId).update({
-      "isVerified": !c.isVerified,
-    });
   }
 }

@@ -77,7 +77,8 @@ void main() {
     expect(
       PolicyRegistry.company,
       'Alphasarena',
-      reason: 'every live legal page says AlphaSarena; the console must not '
+      reason:
+          'every live legal page says AlphaSarena; the console must not '
           'name a different operating entity than the documents it links to. '
           'This assertion previously pinned the retired spelling.',
     );
@@ -87,8 +88,10 @@ void main() {
     // Deliberately checks the whole suite, not just the identity constant:
     // the spelling appeared in dozens of sentences, not only in `company`.
     final prose = _allProse();
-    final offenders =
-        _retiredSpellings.fold<int>(0, (n, b) => n + RegExp(b).allMatches(prose).length);
+    final offenders = _retiredSpellings.fold<int>(
+      0,
+      (n, b) => n + RegExp(b).allMatches(prose).length,
+    );
     expect(
       offenders,
       0,
@@ -105,7 +108,8 @@ void main() {
     expect(
       _retiredSpellings.any(src.contains),
       isFalse,
-      reason: 'including comments — a stale comment here is how the next '
+      reason:
+          'including comments — a stale comment here is how the next '
           'person concludes the old spelling was intentional',
     );
   });
@@ -117,7 +121,8 @@ void main() {
       expect(
         prose.toLowerCase(),
         contains('another person'),
-        reason: 'the point of the section is that the number belongs to '
+        reason:
+            'the point of the section is that the number belongs to '
             'someone who never agreed to anything',
       );
     });
@@ -128,7 +133,8 @@ void main() {
       expect(
         prose.contains('goal weight'),
         isTrue,
-        reason: 'the profile editor collects both; omitting them from the '
+        reason:
+            'the profile editor collects both; omitting them from the '
             'collected-data list is under-disclosure',
       );
     });
@@ -149,15 +155,18 @@ void main() {
           'The member app signs you in with an email address and password',
         ),
         isTrue,
-        reason: 'email+password is the MEMBER app\'s primary method since '
+        reason:
+            'email+password is the MEMBER app\'s primary method since '
             '2026-08-19; a sentence that names it only for the coach and '
             'console apps leaves members signing in by an undisclosed method',
       );
       expect(
-        prose.contains('or with Google Sign-In'),
+        prose.contains('with Google Sign-In, or with Sign in with Apple'),
         isTrue,
-        reason: 'the member app offers both; naming only one means members '
-            'sign in by a method their own policy does not disclose',
+        reason:
+            'the member app offers all three (Sign in with Apple shipped '
+            'in the iOS release); naming fewer means members sign in by a '
+            'method their own policy does not disclose',
       );
     });
   });

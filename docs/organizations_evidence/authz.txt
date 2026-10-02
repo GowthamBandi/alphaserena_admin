@@ -1,0 +1,41 @@
+== READS (rules) ==
+GET admins/ZEN                                   founder=200  owner(zen)=200  anonymous=403
+GET admins/IRON (another org)                    founder=200  owner(zen)=403  anonymous=403
+LIST admins                                      founder=200  owner(zen)=403  anonymous=403
+QUERY trainers assignedBy=IRON                   founder=200  owner(zen)=403  anonymous=403
+QUERY clients adminId=IRON                       founder=200  owner(zen)=403  anonymous=403
+QUERY receipts adminUid=IRON                     founder=200  owner(zen)=403  anonymous=403
+QUERY audit_logs targetId=IRON                   founder=200  owner(zen)=403  anonymous=403
+QUERY access_requests provisionedOrgUid=IRON     founder=200  owner(zen)=403  anonymous=403
+GET quotaAlerts/org-big-gym                      founder=200  owner(zen)=403  anonymous=403
+QUERY ops_incidents correlationId=org-nosub-gym  founder=200  owner(zen)=403  anonymous=403
+GET organizationProfiles/IRON                    founder=200  owner(zen)=200  anonymous=403
+
+== DIRECT WRITES (rules) — every one must be 403 for everyone ==
+PATCH admins/ZEN status=active                   founder=403  owner(zen)=200  anonymous=403
+PATCH admins/ZEN isSubscriptionActive            founder=403  owner(zen)=200  anonymous=403
+PATCH admins/ZEN planExpiry                      founder=403  owner(zen)=403  anonymous=403
+PATCH admins/IRON status (other org)             founder=403  owner(zen)=403  anonymous=403
+DELETE admins/ZEN                                founder=403  owner(zen)=403  anonymous=403
+PATCH trainers/tr-iron-1 assignedBy=ZEN (steal)  founder=403  owner(zen)=403  anonymous=403
+PATCH clients/m-iron-1 adminId=ZEN (steal)       founder=403  owner(zen)=403  anonymous=403
+PATCH admin_payments_history/rc-zen-1 amount     founder=403  owner(zen)=403  anonymous=403
+POST audit_logs (forge)                          founder=403  owner(zen)=403  anonymous=403
+PATCH access_requests/ar-pulse provisionedOrgUid founder=403  owner(zen)=403  anonymous=403
+PATCH organizationProfiles/IRON orgActive        founder=403  owner(zen)=403  anonymous=403
+DELETE quotaAlerts/org-big-gym                   founder=403  owner(zen)=403  anonymous=403
+
+== CALLABLES ==
+setAdminStatus ZEN→warning (no-op-ish)           founder=200 OK  owner(zen)=403 PERMISSION_DENIED  anonymous=401 UNAUTHENTICATED
+setAdminStatus bogus status                      founder=400 INVALID_ARGUMENT  owner(zen)=403 PERMISSION_DENIED  anonymous=401 UNAUTHENTICATED
+setAdminStatus unknown org                       founder=404 NOT_FOUND  owner(zen)=403 PERMISSION_DENIED  anonymous=401 UNAUTHENTICATED
+grantSubscription reused reference               founder=400 FAILED_PRECONDITION  owner(zen)=403 PERMISSION_DENIED  anonymous=401 UNAUTHENTICATED
+grantSubscription blocked org                    founder=400 FAILED_PRECONDITION  owner(zen)=403 PERMISSION_DENIED  anonymous=401 UNAUTHENTICATED
+grantSubscription archived plan                  founder=400 FAILED_PRECONDITION  owner(zen)=403 PERMISSION_DENIED  anonymous=401 UNAUTHENTICATED
+grantSubscription months=0                       founder=400 INVALID_ARGUMENT  owner(zen)=403 PERMISSION_DENIED  anonymous=401 UNAUTHENTICATED
+grantSubscription negative amount                founder=400 INVALID_ARGUMENT  owner(zen)=403 PERMISSION_DENIED  anonymous=401 UNAUTHENTICATED
+refundPayment wrong historyDocId (other org's)   founder=400 FAILED_PRECONDITION  owner(zen)=403 PERMISSION_DENIED  anonymous=401 UNAUTHENTICATED
+refundPayment fractional amount                  founder=400 INVALID_ARGUMENT  owner(zen)=403 PERMISSION_DENIED  anonymous=401 UNAUTHENTICATED
+setRoleClaims (not exposed in UI)                founder=200 OK  owner(zen)=403 PERMISSION_DENIED  anonymous=401 UNAUTHENTICATED
+
+restore: 200 OK

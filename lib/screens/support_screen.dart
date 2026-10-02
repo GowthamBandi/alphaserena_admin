@@ -15,6 +15,7 @@ import 'package:intl/intl.dart';
 import '../controllers/support_controller.dart';
 import '../models/org_feedback_model.dart';
 import '../models/org_review_model.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/page_shell.dart';
 
 // Category accent colours (org feedback).
@@ -720,8 +721,17 @@ class _RespondDialogState extends State<_RespondDialog> {
                         onPressed: busy
                             ? null
                             : () async {
-                                await widget.ctrl.setResolved(f.id, false);
+                                // Pop FIRST, then report: the snackbar is a
+                                // GetX route and would swallow this Get.back().
+                                final ok = await widget.ctrl
+                                    .setResolved(f.id, false);
+                                if (!ok) return;
                                 Get.back();
+                                AppSnackbar.show(
+                                  title: 'Reopened',
+                                  message: 'The request is open again.',
+                                  background: Colors.green.shade700,
+                                );
                               },
                         style: OutlinedButton.styleFrom(
                           foregroundColor: _cOpen,
@@ -784,7 +794,19 @@ class _RespondDialogState extends State<_RespondDialog> {
           snackPosition: SnackPosition.BOTTOM);
       return;
     }
-    await widget.ctrl.respond(widget.feedback.id, response: text, resolve: resolve);
+    final ok = await widget.ctrl
+        .respond(widget.feedback.id, response: text, resolve: resolve);
+    // Keep the dialog — and the operator's typed reply — when the write failed.
+    // `respond` has already said why.
+    if (!ok) return;
+    // CLOSE BEFORE REPORTING. `AppSnackbar` raises a GetX snackbar, which is a
+    // ROUTE: raising it first makes this Get.back() pop the snackbar and leave
+    // the dialog open over a row that has already changed.
     Get.back();
+    AppSnackbar.show(
+      title: 'Sent',
+      message: resolve ? 'Reply sent · marked resolved' : 'Reply sent',
+      background: Colors.green.shade700,
+    );
   }
 }
